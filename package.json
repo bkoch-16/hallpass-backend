@@ -1,0 +1,15 @@
+{
+  "name": "hallpass-backend",
+  "private": true,
+  "packageManager": "pnpm@10.30.1",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "latest"
+  }
+}

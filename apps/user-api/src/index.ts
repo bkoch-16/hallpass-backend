@@ -1,0 +1,24 @@
+import "dotenv/config";
+import express from "express";
+import { auth, toNodeHandler } from "@hallpass/auth";
+import userRouter from "./routes/user";
+
+
+console.log("userRouter:", userRouter);
+
+const app = express();
+const PORT = process.env.PORT ?? 3001;
+
+app.use(express.json());
+
+app.all("/api/auth/*splat", toNodeHandler(auth));
+
+app.use("/api/users", userRouter);
+
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", service: "user-api" });
+});
+
+app.listen(PORT, () => {
+    console.log(`user-api running on port ${PORT}`);
+});

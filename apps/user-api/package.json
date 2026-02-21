@@ -1,0 +1,22 @@
+{
+  "name": "@hallpass/user-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@hallpass/auth": "workspace:*",
+    "@hallpass/db": "workspace:*",
+    "dotenv": "latest",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
