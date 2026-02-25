@@ -8,7 +8,6 @@ export function validateQuery(schema: ZodSchema) {
             res.status(400).json({ message: "Invalid query", errors: result.error.flatten() });
             return;
         }
-        req.query = result.data as Record<string, string>;
         next();
     };
 }

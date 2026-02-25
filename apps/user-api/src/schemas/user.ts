@@ -5,5 +5,5 @@ export const batchQuerySchema = z.object({
 });
 
 export const userIdSchema = z.object({
-    id: z.string().cuid("invalid user id"),
+    id: z.string().min(1, "id is required"),
 });

@@ -11,8 +11,8 @@ const router = Router();
 router.get(
     "/batch",
     requireAuth,
-    requireSelfOrRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
     validateQuery(batchQuerySchema),
+    requireRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
     async (req: Request, res: Response) => {
         const idList = (req.query.ids as string).split(",");
 
@@ -37,6 +37,7 @@ router.get(
     "/:id",
     requireAuth,
     validateParams(userIdSchema),
+    requireSelfOrRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
     async (req: Request, res: Response) => {
         const user = await prisma.user.findUnique({
             where: { id: req.params.id as string },

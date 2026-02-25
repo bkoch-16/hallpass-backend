@@ -12,10 +12,12 @@
     "@hallpass/db": "workspace:*",
     "dotenv": "latest",
     "express": "^5.2.1",
+    "morgan": "^1.10.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/express": "latest",
+    "@types/morgan": "^1.9.10",
     "@types/node": "latest",
     "tsx": "latest",
     "typescript": "latest"
