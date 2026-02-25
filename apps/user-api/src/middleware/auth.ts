@@ -7,9 +7,15 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ) {
-  const session = await auth.api.getSession({
-    headers: new Headers(req.headers as Record<string, string>),
-  });
+  let session;
+  try {
+    session = await auth.api.getSession({
+      headers: new Headers(req.headers as Record<string, string>),
+    });
+  } catch {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
 
   if (!session) {
     res.status(401).json({ message: "Unauthorized" });
