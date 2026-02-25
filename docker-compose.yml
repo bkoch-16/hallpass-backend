@@ -11,14 +11,5 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    container_name: hallpass-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/var/lib/redis/data
-
 volumes:
   postgres_data:
-  redis_data:
