@@ -11,7 +11,8 @@
     "@hallpass/auth": "workspace:*",
     "@hallpass/db": "workspace:*",
     "dotenv": "latest",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/express": "latest",

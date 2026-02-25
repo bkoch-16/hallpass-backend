@@ -3,9 +3,6 @@ import express from "express";
 import { auth, toNodeHandler } from "@hallpass/auth";
 import userRouter from "./routes/user";
 
-
-console.log("userRouter:", userRouter);
-
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 

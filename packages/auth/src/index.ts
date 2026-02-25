@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 // @ts-ignore
-import { toNodeHandler } from "better-auth/node";
+import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { prisma } from "@hallpass/db";
 
 export const auth = betterAuth({
@@ -19,5 +19,5 @@ export const auth = betterAuth({
     },
 });
 
-export { toNodeHandler };
+export { toNodeHandler, fromNodeHeaders };
 export type Session = typeof auth.$Infer.Session;
