@@ -15,9 +15,9 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use("/api/users", userRouter);
 
 app.get("/health", (req, res) => {
-    res.json({ status: "ok", service: "user-api" });
+  res.json({ status: "ok", service: "user-api" });
 });
 
 app.listen(PORT, () => {
-    console.log(`user-api running on port ${PORT}`);
+  console.log(`user-api running on port ${PORT}`);
 });

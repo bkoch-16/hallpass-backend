@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 export const batchQuerySchema = z.object({
-    ids: z.string().min(1, "ids is required"),
+  ids: z.string().min(1, "ids is required"),
 });
 
 export const userIdSchema = z.object({
-    id: z.string().min(1, "id is required"),
+  id: z.string().min(1, "id is required"),
 });
