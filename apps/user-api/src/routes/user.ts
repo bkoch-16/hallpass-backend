@@ -23,6 +23,7 @@ router.get(
     const users = await prisma.user.findMany({
       where: {
         id: { in: idList },
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -43,8 +44,8 @@ router.get(
   validateParams(userIdSchema),
   requireSelfOrRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findUnique({
-      where: { id: req.params.id as string },
+    const user = await prisma.user.findFirst({
+      where: { id: req.params.id as string, deletedAt: null },
       select: {
         id: true,
         email: true,
@@ -101,8 +102,8 @@ router.patch(
   validateBody(updateUserSchema),
   requireSelfOrRole(Role.ADMIN, Role.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findUnique({
-      where: { id: req.params.id as string },
+    const user = await prisma.user.findFirst({
+      where: { id: req.params.id as string, deletedAt: null },
     });
 
     if (!user) {
@@ -128,6 +129,35 @@ router.patch(
     });
 
     res.json(updated);
+  },
+);
+
+router.delete(
+  "/:id",
+  requireAuth,
+  validateParams(userIdSchema),
+  requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  async (req: Request, res: Response) => {
+    const user = await prisma.user.findFirst({
+      where: { id: req.params.id as string, deletedAt: null },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    if (roleRank(user.role as Role) >= roleRank(req.user!.role as Role)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: { deletedAt: new Date() },
+    });
+
+    res.status(204).send();
   },
 );
 

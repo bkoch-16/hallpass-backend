@@ -22,6 +22,7 @@ model User {
   role      Role      @default(STUDENT)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   sessions  Session[]
   accounts  Account[]
