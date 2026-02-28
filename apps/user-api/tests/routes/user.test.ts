@@ -7,6 +7,8 @@ vi.mock("@hallpass/db", () => ({
     user: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
   },
   Role: {
@@ -36,6 +38,8 @@ const mockPrisma = prisma as unknown as {
   user: {
     findUnique: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -198,5 +202,146 @@ describe("GET /api/users/batch", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
+  });
+});
+
+describe("POST /api/users", () => {
+  it("returns 403 when admin tries to create a super_admin", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User", role: "SUPER_ADMIN" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ message: "Forbidden" });
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("allows admin to create a student", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    const created = { id: "new-1", email: "new@test.com", name: "New User", role: "STUDENT", createdAt: new Date() };
+    mockPrisma.user.create.mockResolvedValue(created);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.email).toBe("new@test.com");
+  });
+
+  it("allows super_admin to create a super_admin", async () => {
+    const superAdmin = { ...fakeUser, id: "sa-1", role: "SUPER_ADMIN" };
+    authenticateAs(superAdmin);
+    const created = { id: "new-1", email: "new@test.com", name: "New User", role: "SUPER_ADMIN", createdAt: new Date() };
+    mockPrisma.user.create.mockResolvedValue(created);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User", role: "SUPER_ADMIN" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe("SUPER_ADMIN");
+  });
+
+  it("returns 403 when teacher tries to create a user", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("PATCH /api/users/:id", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await request(app).patch("/api/users/user-1").send({ name: "New Name" });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when body is empty", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findUnique.mockResolvedValueOnce(fakeUser);
+
+    const res = await request(app).patch("/api/users/user-1").send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  it("updates name successfully", async () => {
+    authenticateAs(fakeUser);
+    const updated = { ...fakeUser, name: "New Name" };
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce(fakeUser)  // requireAuth
+      .mockResolvedValueOnce(fakeUser); // route handler existence check
+    mockPrisma.user.update.mockResolvedValue(updated);
+
+    const res = await request(app).patch("/api/users/user-1").send({ name: "New Name" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("New Name");
+  });
+
+  it("updates email successfully", async () => {
+    authenticateAs(fakeUser);
+    const updated = { ...fakeUser, email: "new@test.com" };
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce(fakeUser)
+      .mockResolvedValueOnce(fakeUser);
+    mockPrisma.user.update.mockResolvedValue(updated);
+
+    const res = await request(app).patch("/api/users/user-1").send({ email: "new@test.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe("new@test.com");
+  });
+
+  it("returns 403 when promoting to a role above caller", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce(admin)
+      .mockResolvedValueOnce(fakeUser);
+
+    const res = await request(app).patch("/api/users/user-1").send({ role: "SUPER_ADMIN" });
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("allows admin to promote user to admin", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    const updated = { ...fakeUser, role: "ADMIN" };
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce(admin)
+      .mockResolvedValueOnce(fakeUser);
+    mockPrisma.user.update.mockResolvedValue(updated);
+
+    const res = await request(app).patch("/api/users/user-1").send({ role: "ADMIN" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe("ADMIN");
+  });
+
+  it("returns 404 when user does not exist", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce(admin)  // requireAuth
+      .mockResolvedValueOnce(null);  // route handler existence check
+
+    const res = await request(app).patch("/api/users/nonexistent").send({ name: "X" });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "User not found" });
   });
 });

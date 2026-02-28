@@ -1,9 +1,9 @@
 import { Router, Request, Response } from "express";
 import { prisma, Role } from "@hallpass/db";
 import { requireAuth } from "../middleware/auth";
-import { requireRole, requireSelfOrRole } from "../middleware/roleGuard";
-import { validateParams, validateQuery } from "../middleware/validate";
-import { batchQuerySchema, userIdSchema } from "../schemas/user";
+import { requireRole, requireSelfOrRole, roleRank } from "../middleware/roleGuard";
+import {validateBody, validateParams, validateQuery} from "../middleware/validate";
+import { batchQuerySchema, createUserSchema, updateUserSchema, userIdSchema } from "../schemas/user";
 
 const router = Router();
 
@@ -60,6 +60,74 @@ router.get(
     }
 
     res.json(user);
+  },
+);
+
+router.post(
+  "/",
+  requireAuth,
+  validateBody(createUserSchema),
+  requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  async (req: Request, res: Response) => {
+    const targetRole = req.body.role ?? Role.STUDENT;
+    if (roleRank(targetRole) > roleRank(req.user!.role as Role)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        email: req.body.email,
+        name: req.body.name,
+        role: targetRole,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    res.status(201).json(user);
+  },
+);
+
+router.patch(
+  "/:id",
+  requireAuth,
+  validateParams(userIdSchema),
+  validateBody(updateUserSchema),
+  requireSelfOrRole(Role.ADMIN, Role.SUPER_ADMIN),
+  async (req: Request, res: Response) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id as string },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    if (req.body.role && roleRank(req.body.role) > roleRank(req.user!.role as Role)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: req.body,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    res.json(updated);
   },
 );
 
