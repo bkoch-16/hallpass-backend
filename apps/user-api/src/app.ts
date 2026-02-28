@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import { auth, toNodeHandler } from "@hallpass/auth";
@@ -9,6 +10,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+app.use(helmet());
 // TODO: configure CORS_ORIGIN env var per environment and pass to cors({ origin, credentials: true })
 app.use(cors());
 app.use(morgan("dev"));
