@@ -6,6 +6,7 @@ const ROLE_RANK: Record<Role, number> = {
   [Role.TEACHER]: 1,
   [Role.ADMIN]: 2,
   [Role.SUPER_ADMIN]: 3,
+  [Role.SERVICE]: 4,
 };
 
 export function roleRank(role: Role): number {

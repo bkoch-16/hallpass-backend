@@ -10,6 +10,27 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  user-api:
+    build:
+      context: .
+      dockerfile: apps/user-api/Dockerfile
+    container_name: hallpass-user-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hallpass
+      PORT: "3001"
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

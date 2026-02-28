@@ -10,6 +10,9 @@
     "format:check": "prettier --check .",
     "test": "turbo test"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/engines", "esbuild", "prisma"]
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.2",
