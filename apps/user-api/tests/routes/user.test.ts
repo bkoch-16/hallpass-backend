@@ -25,6 +25,7 @@ vi.mock("@hallpass/auth", () => ({
     },
   },
   toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
 }));
 
 import app from "../../src/app";

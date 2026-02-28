@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { auth } from "@hallpass/auth";
+import { auth, fromNodeHeaders } from "@hallpass/auth";
 import { prisma } from "@hallpass/db";
 
 export async function requireAuth(
@@ -10,7 +10,7 @@ export async function requireAuth(
   let session;
   try {
     session = await auth.api.getSession({
-      headers: new Headers(req.headers as Record<string, string>),
+      headers: fromNodeHeaders(req.headers),
     });
   } catch {
     res.status(401).json({ message: "Unauthorized" });

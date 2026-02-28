@@ -10,3 +10,12 @@ describe("GET /health", () => {
     expect(res.body).toEqual({ status: "ok", service: "user-api" });
   });
 });
+
+describe("undefined routes", () => {
+  it("returns 404 with not found message", async () => {
+    const res = await request(app).get("/api/nonexistent");
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Not found" });
+  });
+});
