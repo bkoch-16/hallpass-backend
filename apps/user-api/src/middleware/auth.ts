@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { auth, fromNodeHeaders } from "@hallpass/auth";
+import { fromNodeHeaders } from "@hallpass/auth";
+import { auth } from "../auth";
 import { prisma } from "@hallpass/db";
 
 export async function requireAuth(
