@@ -40,20 +40,17 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
           cp ${BASE_REF}-context.md context.md
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git worktree add /tmp/base-wt origin/$BASE_REF
-          cp ${BASE_REF}-context.md /tmp/base-wt/
-          cd /tmp/base-wt
+          git checkout $HEAD_REF
           git add ${BASE_REF}-context.md
           git diff --cached --quiet || git commit -m "chore: update ${BASE_REF}-context.md [skip ci]"
-          git push origin HEAD:$BASE_REF
-          cd -
-          git worktree remove /tmp/base-wt
+          git push origin HEAD
 
       - name: Run AI review
         env:
