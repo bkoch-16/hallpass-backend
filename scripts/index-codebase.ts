@@ -181,6 +181,7 @@ async function main() {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(branch)) {
     throw new Error(`Invalid branch name for filesystem use: ${branch}`);
   }
+  const branchSlug = branch.replace(/\//g, "-");
   const fromRef = process.env.FROM_REF;
   if (fromRef !== undefined && !/^[a-zA-Z0-9/_.-]+$/.test(fromRef)) {
     throw new Error(`Invalid FROM_REF: ${fromRef}`);
@@ -191,7 +192,7 @@ async function main() {
   const allFiles = discoverFiles(fromRef);
   console.log(`Discovered ${allFiles.length} files matching glob patterns`);
 
-  const manifest = loadManifest(branch);
+  const manifest = loadManifest(branchSlug);
 
   // Per-file delta detection using blob SHAs
   const changed: string[] = [];
@@ -247,16 +248,16 @@ async function main() {
     }
   }
 
-  saveManifest(branch, manifest);
+  saveManifest(branchSlug, manifest);
 
-  const contextDoc = buildContextDoc(manifest, branch);
-  const outputFile = `docs/${branch}-context.md`;
+  const contextDoc = buildContextDoc(manifest, branchSlug);
+  const outputFile = `docs/${branchSlug}-context.md`;
   fs.writeFileSync(outputFile, contextDoc, "utf8");
 
   console.log(
     `Written ${Object.keys(manifest.files).length} file summaries to ${outputFile}`
   );
-  console.log(`Manifest saved to docs/${branch}-manifest.json`);
+  console.log(`Manifest saved to docs/${branchSlug}-manifest.json`);
 }
 
 main().catch((err) => {
