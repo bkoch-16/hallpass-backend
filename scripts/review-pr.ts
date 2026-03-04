@@ -50,7 +50,7 @@ async function main() {
       "## Codebase Context\n\n_Context file not yet available (indexing runs after first merge)._\n\n---\n\n";
   }
 
-  const userPrompt = `${contextSection}## PR Diff\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nPlease review this diff.`;
+  const userPrompt = `${contextSection}## PR Diff\n\n~~~diff\n${diff}\n~~~\n\nPlease review this diff.`;
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",

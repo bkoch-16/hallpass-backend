@@ -104,10 +104,13 @@ async function main() {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(branch)) {
     throw new Error(`Invalid branch name for filesystem use: ${branch}`);
   }
+  const fromRef = process.env.FROM_REF;
+  if (fromRef !== undefined && !/^[a-zA-Z0-9/_.-]+$/.test(fromRef)) {
+    throw new Error(`Invalid FROM_REF: ${fromRef}`);
+  }
   fs.mkdirSync("docs", { recursive: true });
   const outputFile = `docs/${branch}-context.md`;
   const shaFile = `docs/${branch}-index-sha`;
-  const fromRef = process.env.FROM_REF;
 
   const currentSha = getHeadSha(fromRef);
   const cachedSha = getCachedSha(branch);
