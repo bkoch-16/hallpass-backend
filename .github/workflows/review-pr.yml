@@ -39,6 +39,13 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: git diff origin/$BASE_REF...HEAD > pr.diff
 
+      - name: Restore index SHA cache
+        uses: actions/cache/restore@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+          restore-keys: index-sha-${{ github.base_ref }}-
+
       - name: Generate context
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

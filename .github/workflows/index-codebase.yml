@@ -9,11 +9,15 @@ jobs:
     name: Generate context document
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore index SHA cache
+        uses: actions/cache/restore@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: index-sha-${{ github.ref_name }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -32,10 +36,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm tsx scripts/index-codebase.ts
 
-      - name: Commit context file
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "docs/${GITHUB_REF_NAME}-context.md" "docs/${GITHUB_REF_NAME}-index-sha"
-          git diff --cached --quiet || git commit -m "chore: update docs/${GITHUB_REF_NAME}-context.md [skip ci]"
-          git push
+      - name: Save index SHA cache
+        uses: actions/cache/save@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
