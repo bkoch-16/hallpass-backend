@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import fg from "fast-glob";
+import micromatch from "micromatch";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
@@ -70,9 +71,7 @@ function discoverFiles(fromRef?: string): string[] {
       { encoding: "utf8" }
     ).trim();
     const allFiles = result ? result.split("\n") : [];
-    return allFiles.filter(
-      (f) => f.endsWith(".ts") || f.endsWith(".prisma")
-    );
+    return micromatch(allFiles, globPatterns);
   }
   return fg.sync(globPatterns);
 }
@@ -194,14 +193,14 @@ async function main() {
 
   const manifest = loadManifest(branchSlug);
 
-  // Per-file delta detection using blob SHAs
-  const changed: string[] = [];
+  // Per-file delta detection using blob SHAs — capture once, reuse later
+  const changedWithSha = new Map<string, string>(); // file -> blobSha
   const deleted: string[] = [];
 
   for (const file of allFiles) {
     const currentSha = getBlobSha(file, fromRef);
     if (currentSha && manifest.files[file]?.blobSha !== currentSha) {
-      changed.push(file);
+      changedWithSha.set(file, currentSha);
     }
   }
 
@@ -210,7 +209,7 @@ async function main() {
     if (!fileSet.has(file)) deleted.push(file);
   }
 
-  if (changed.length === 0 && deleted.length === 0) {
+  if (changedWithSha.size === 0 && deleted.length === 0) {
     console.log(
       `No changes to indexed files — skipping. (${allFiles.length} files up to date)`
     );
@@ -218,7 +217,7 @@ async function main() {
   }
 
   console.log(
-    `Changes detected: ${changed.length} changed/new, ${deleted.length} deleted`
+    `Changes detected: ${changedWithSha.size} changed/new, ${deleted.length} deleted`
   );
 
   // Remove deleted files from manifest
@@ -228,10 +227,11 @@ async function main() {
   }
 
   // Process changed files in batches
-  for (let i = 0; i < changed.length; i += BATCH_SIZE) {
-    const batch = changed.slice(i, i + BATCH_SIZE);
+  const changedFiles = [...changedWithSha.keys()];
+  for (let i = 0; i < changedFiles.length; i += BATCH_SIZE) {
+    const batch = changedFiles.slice(i, i + BATCH_SIZE);
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(changed.length / BATCH_SIZE);
+    const totalBatches = Math.ceil(changedFiles.length / BATCH_SIZE);
     console.log(
       `Indexing batch ${batchNum}/${totalBatches}: ${batch.length} files`
     );
@@ -239,11 +239,14 @@ async function main() {
     const summaries = await summarizeFiles(batch);
 
     for (const file of batch) {
-      const currentSha = getBlobSha(file, fromRef);
-      if (!currentSha) continue;
+      const summary = summaries[file];
+      if (!summary) {
+        console.warn(`Warning: no summary returned for ${file} — will retry on next run`);
+        continue;
+      }
       manifest.files[file] = {
-        blobSha: currentSha,
-        summary: summaries[file] ?? `No summary generated for ${file}.`,
+        blobSha: changedWithSha.get(file)!,
+        summary,
       };
     }
   }
