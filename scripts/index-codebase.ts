@@ -55,9 +55,6 @@ function getBranch(): string {
 function getFileContent(filePath: string): string | null {
   const fromRef = process.env.FROM_REF;
   if (fromRef) {
-    if (!/^[a-zA-Z0-9/_.-]+$/.test(fromRef)) {
-      throw new Error(`Invalid FROM_REF: ${fromRef}`);
-    }
     try {
       return execSync(`git show ${fromRef}:${filePath}`, { encoding: "utf8" });
     } catch {

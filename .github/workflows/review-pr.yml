@@ -67,9 +67,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if grep -q "Ship it" review.md; then
+          if grep -qE "^Ship it" review.md; then
             gh pr review $PR_NUMBER --approve --body-file review.md
-          elif grep -q "Request changes" review.md; then
+          elif grep -qE "^Request changes" review.md; then
             gh pr review $PR_NUMBER --request-changes --body-file review.md
           else
             gh pr review $PR_NUMBER --comment --body-file review.md
