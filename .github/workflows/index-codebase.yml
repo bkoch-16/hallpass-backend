@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: docs-index-${{ github.ref }}
-  cancel-in-progress: true
+  group: docs-index
+  cancel-in-progress: false
 
 jobs:
   index:
