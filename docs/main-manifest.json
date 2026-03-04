@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T22:12:03.699Z",
+  "files": {
+    "packages/db/prisma/schema.prisma": {
+      "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
+      "summary": "Defines the PostgreSQL database schema using Prisma ORM for the HallPass application. Contains a `Role` enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and three models: `User` (with soft-delete via `deletedAt`), `Session` (token-based with IP/user-agent tracking), and `Account` (multi-provider auth with optional password). Both Session and Account cascade-delete when their parent User is removed. Uses `cuid()` for all primary keys and includes standard `createdAt`/`updatedAt` timestamps. Developers adding models or fields must run Prisma migrations to keep the database in sync."
+    },
+    "apps/user-api/src/app.ts": {
+      "blobSha": "380efb23bd288392d2961e2b9d52916a6e4e2a0c",
+      "summary": "Configures and exports the main Express application for the user-api service. Sets up security middleware (helmet, CORS, rate limiting) and logging (morgan), with a stricter rate limiter (10 req/15min) on auth routes. Routes auth requests (`/api/auth/*`) through Better Auth's Node handler, mounts the user router at `/api/users`, and provides a `/health` endpoint. Includes a 404 catch-all and a global error handler. Note the TODO for configuring CORS origin per environment; `trust proxy` is enabled for correct client IP detection behind proxies."
+    },
+    "apps/user-api/src/auth.ts": {
+      "blobSha": "a9baa30042a55df1e1ff61cfff1247777a07e633",
+      "summary": "Creates and exports the Better Auth instance used throughout the user-api service. Delegates to `createAuth` from the `@hallpass/auth` package, configured with `baseURL` and `secret` from validated environment variables. This is the single auth instance imported by both the auth route handler in `app.ts` and the `requireAuth` middleware."
+    },
+    "apps/user-api/src/env.ts": {
+      "blobSha": "01a8dfb86aceab1de8a013388b3ee4d937ef3600",
+      "summary": "Validates and exports environment variables using a Zod schema, ensuring `DATABASE_URL`, `BETTER_AUTH_URL`, and `BETTER_AUTH_SECRET` are present at startup. `PORT` is optional. Parsing `process.env` through Zod provides fail-fast behavior if required variables are missing. Any new environment variables needed by the service must be added to `envSchema`."
+    },
+    "apps/user-api/src/express.d.ts": {
+      "blobSha": "95c5d0097fb1576c5e20750000e93e99a6302181",
+      "summary": "Augments the global Express `Request` interface to include an optional `user` property, typed to match the Prisma `User` model fields (id, email, name, emailVerified, role, createdAt, updatedAt). The `role` field uses the `Role` enum imported from `@hallpass/db`. This declaration enables type-safe access to `req.user` throughout middleware and route handlers without casting."
+    },
+    "apps/user-api/src/index.ts": {
+      "blobSha": "dfae02b9016fcce80d96d22d1c0802178fd96f43",
+      "summary": "Entry point for the user-api service. Loads environment variables via `dotenv/config`, starts the Express server on the configured PORT (defaulting to 3001), and registers global handlers for `unhandledRejection` and `uncaughtException` that log and force-exit the process. This file should remain minimal; application setup belongs in `app.ts`."
+    },
+    "apps/user-api/src/middleware/auth.ts": {
+      "blobSha": "52fae00338091709bb1142bea9054093fa0e4374",
+      "summary": "Exports `requireAuth`, an Express middleware that validates the session by calling Better Auth's `getSession` API with converted Node headers. On success, it fetches the full user record from Prisma (excluding soft-deleted users) and attaches it to `req.user`. Returns 401 if the session is invalid, missing, or the user is not found/deleted. Must be applied before any role-checking middleware since they depend on `req.user`."
+    },
+    "apps/user-api/src/middleware/roleGuard.ts": {
+      "blobSha": "9532f29e0344a3ff292feb2a17206e57b3faeb7f",
+      "summary": "Provides role-based authorization middleware and utilities. Defines a `ROLE_RANK` hierarchy (STUDENT=0 through SERVICE=4) and exports `roleRank()` for numeric comparison. `requireRole(...roles)` restricts access to users with any of the specified roles. `requireSelfOrRole(...roles)` additionally allows access when `req.params.id` matches the authenticated user's ID. All guards depend on `req.user` being set by `requireAuth` and return 401/403 as appropriate."
+    },
+    "apps/user-api/src/middleware/validate.ts": {
+      "blobSha": "4c57b3f6c35fbb8f815948a1ba600ddf03e58178",
+      "summary": "Exports three Express middleware factories—`validateQuery`, `validateBody`, and `validateParams`—that validate the respective request properties against a provided Zod schema. On failure, they return 400 with flattened Zod errors. `validateBody` replaces `req.body` with the parsed (and potentially transformed/stripped) data; `validateParams` similarly replaces `req.params`. These should be placed early in the middleware chain to ensure handlers receive clean, typed data."
+    },
+    "apps/user-api/src/routes/user.ts": {
+      "blobSha": "2563d87102a9a8c4dde22638e08f018699b7da89",
+      "summary": "Defines the Express router for CRUD user operations mounted at `/api/users`. Supports: GET `/batch` (bulk lookup by IDs, max 100, teacher+ access), GET `/:id` (self or teacher+), POST `/` (admin+ create with role escalation guard), PATCH `/:id` (self or admin+ update with role escalation guard), and DELETE `/:id` (soft-delete, admin+ only, cannot delete equal or higher rank). All routes require authentication and use Zod validation schemas. Uses Prisma for database access with soft-delete filtering (`deletedAt: null`) and consistent `select` projections. Route ordering matters—`/batch` is registered before `/:id` to avoid parameter capture conflicts."
+    },
+    "apps/user-api/src/schemas/user.ts": {
+      "blobSha": "653ab7279f6af79b7949867d6fdc92398111e9e2",
+      "summary": "Defines Zod validation schemas for user-related API endpoints. Exports `batchQuerySchema` (for querying multiple users by comma-separated IDs), `userIdSchema` (single user ID param), `updateUserSchema` (partial update requiring at least one field with a `.refine` check), and `createUserSchema` (requires email and name, optional role). All role fields are constrained to the enum `[\"STUDENT\", \"TEACHER\", \"ADMIN\", \"SUPER_ADMIN\"]`. Depends on the `zod` library; when modifying, ensure enum values stay in sync with the Prisma/database role definitions."
+    },
+    "packages/auth/src/index.ts": {
+      "blobSha": "ef9bc9b5ef24d8bf796130193e1ecb484e3e672e",
+      "summary": "Configures and exports a shared authentication setup using the `better-auth` library with a Prisma/PostgreSQL adapter from `@hallpass/db`. The `createAuth` factory function accepts a `baseURL` and `secret`, enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` inferred types, plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. This is a shared package consumed by multiple apps; changes to session config or auth settings will affect all downstream services."
+    }
+  }
+}
