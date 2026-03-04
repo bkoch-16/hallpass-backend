@@ -32,15 +32,30 @@ function getBranch(): string {
   return execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
 }
 
+function getFileContent(filePath: string): string | null {
+  const fromRef = process.env.FROM_REF;
+  if (fromRef) {
+    try {
+      return execSync(`git show ${fromRef}:${filePath}`, { encoding: "utf8" });
+    } catch {
+      console.warn(`Warning: ${filePath} not found in ${fromRef}, skipping`);
+      return null;
+    }
+  }
+  // Filesystem fallback (used by index-codebase.yml on direct push)
+  const fullPath = path.resolve(filePath);
+  if (!fs.existsSync(fullPath)) {
+    console.warn(`Warning: ${filePath} not found, skipping`);
+    return null;
+  }
+  return fs.readFileSync(fullPath, "utf8");
+}
+
 function buildFileContents(): string {
   return filesToIndex
     .map((filePath) => {
-      const fullPath = path.resolve(filePath);
-      if (!fs.existsSync(fullPath)) {
-        console.warn(`Warning: ${filePath} not found, skipping`);
-        return null;
-      }
-      const content = fs.readFileSync(fullPath, "utf8");
+      const content = getFileContent(filePath);
+      if (!content) return null;
       const ext = path.extname(filePath).replace(".", "") || "txt";
       return `### ${filePath}\n\`\`\`${ext}\n${content}\n\`\`\``;
     })

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
 
     steps:
@@ -36,11 +36,24 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: git diff origin/$BASE_REF...HEAD > pr.diff
 
-      - name: Get context file from base branch
+      - name: Generate and commit context
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          git show origin/$BASE_REF:${BASE_REF}-context.md > context.md 2>/dev/null || true
+          FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
+          cp ${BASE_REF}-context.md context.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git worktree add /tmp/base-wt origin/$BASE_REF
+          cp ${BASE_REF}-context.md /tmp/base-wt/
+          cd /tmp/base-wt
+          git add ${BASE_REF}-context.md
+          git diff --cached --quiet || git commit -m "chore: update ${BASE_REF}-context.md [skip ci]"
+          git push origin HEAD:$BASE_REF
+          cd -
+          git worktree remove /tmp/base-wt
 
       - name: Run AI review
         env:
