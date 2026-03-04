@@ -3,7 +3,7 @@ import fg from "fast-glob";
 import micromatch from "micromatch";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 
 const client = new Anthropic();
 
@@ -78,7 +78,7 @@ function discoverFiles(fromRef?: string): string[] {
 
 function getBlobSha(filePath: string, fromRef?: string): string | null {
   if (fromRef) {
-    const output = execSync(`git ls-tree ${fromRef} -- "${filePath}"`, {
+    const output = execFileSync("git", ["ls-tree", fromRef, "--", filePath], {
       encoding: "utf8",
     }).trim();
     if (!output) return null;
@@ -86,7 +86,7 @@ function getBlobSha(filePath: string, fromRef?: string): string | null {
     return output.split(/\s+/)[2] ?? null;
   }
   try {
-    return execSync(`git hash-object "${filePath}"`, {
+    return execFileSync("git", ["hash-object", filePath], {
       encoding: "utf8",
     }).trim();
   } catch {
@@ -150,6 +150,8 @@ async function summarizeFiles(
     })
     .filter(Boolean)
     .join("\n\n");
+
+  if (!fileContents) return {};
 
   const response = await client.messages.create({
     model: "claude-opus-4-6",
@@ -253,7 +255,7 @@ async function main() {
 
   saveManifest(branchSlug, manifest);
 
-  const contextDoc = buildContextDoc(manifest, branchSlug);
+  const contextDoc = buildContextDoc(manifest, branch);
   const outputFile = `docs/${branchSlug}-context.md`;
   fs.writeFileSync(outputFile, contextDoc, "utf8");
 
