@@ -4,168 +4,159 @@
 
 This is a **monorepo** with a microservice-oriented structure:
 
-- **`apps/user-api`** — Express-based REST API responsible for user CRUD and authentication. Identified as `"user-api"` in the health endpoint, implying other services exist or are planned.
-- **`packages/db`** — Shared Prisma client and schema (PostgreSQL). Exports `prisma` singleton and enums like `Role`.
-- **`packages/auth`** — Shared Better Auth configuration wrapping `better-auth` with Prisma adapter. Exports `createAuth`, `toNodeHandler`, and `fromNodeHeaders`.
+- **`apps/user-api`** — Express.js REST API responsible for user CRUD operations and authentication. This is the primary (possibly only) service currently.
+- **`packages/db`** — Shared Prisma client and schema, exported as `@hallpass/db`. Provides `prisma` client instance and the `Role` enum.
+- **`packages/auth`** — Shared authentication layer wrapping [better-auth](https://www.better-auth.com/), exported as `@hallpass/auth`. Provides `createAuth`, `toNodeHandler`, and `fromNodeHeaders`.
 
-The service boundary is clear: `user-api` owns user/session/account data. Other services would import `@hallpass/db` and `@hallpass/auth` as needed.
+The pattern is: **shared packages under `packages/`**, **deployable services under `apps/`**. Packages are imported via workspace aliases (`@hallpass/db`, `@hallpass/auth`).
+
+---
 
 ## Authentication and Authorization Patterns
 
-### Authentication: Better Auth + Session-based
+### Authentication: better-auth with session-based auth
 
-Auth is initialized once per service and mounted as a catch-all handler:
+Auth is initialized once per service via `createAuth()` and mounted as a catch-all Express handler:
 
 ```ts
-// apps/user-api/src/app.ts
 app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));
 ```
 
-Better Auth handles `/api/auth/*` routes (sign-up, sign-in, sign-out, etc.) internally. Email/password auth is enabled; sessions expire in 7 days with daily refresh.
+This delegates all `/api/auth/*` routes (sign-up, sign-in, sign-out, etc.) to better-auth internally. Email/password auth is enabled. Sessions expire in 7 days, refresh after 1 day.
 
-### Session Resolution Middleware
+### Session resolution in middleware
 
-`requireAuth` extracts session from request headers, then verifies the user exists and is not soft-deleted:
+The `requireAuth` middleware resolves the session from request headers, then loads the full user from the database (checking `deletedAt: null` for soft-delete):
 
 ```ts
 const session = await auth.api.getSession({
   headers: fromNodeHeaders(req.headers),
 });
 // Then: prisma.user.findFirst({ where: { id: session.user.id, deletedAt: null } })
-// Attaches to req.user
+// Then: req.user = user;
 ```
 
-**Key detail:** `req.user` is augmented on the Express `Request` type (implied by `req.user = user`). There must be a type augmentation somewhere (e.g., `express.d.ts`) adding `user` to `Request`.
+The authenticated user is attached to `req.user` (implies a custom type augmentation on `Express.Request`).
 
-### Authorization: Role-based Guards
+### Authorization: Role-based with rank hierarchy
 
-Two role guard patterns, always applied **after** `requireAuth`:
+Roles have a strict numeric rank:
+```
+STUDENT(0) < TEACHER(1) < ADMIN(2) < SUPER_ADMIN(3) < SERVICE(4)
+```
 
+Two role guard middlewares:
+
+| Guard | Usage |
+|-------|-------|
+| `requireRole(...roles)` | User must have one of the listed roles |
+| `requireSelfOrRole(...roles)` | User is accessing their own resource (`req.params.id === req.user.id`) OR has one of the listed roles |
+
+**Escalation prevention pattern** — used inline in route handlers, not middleware:
 ```ts
-// Exact role match — user must have one of the listed roles
-requireRole(Role.ADMIN, Role.SUPER_ADMIN)
-
-// Self-access OR role match — user can access their own resource, or must have a listed role
-requireSelfOrRole(Role.ADMIN, Role.SUPER_ADMIN)  // checks req.params.id === req.user.id
+if (roleRank(targetRole) > roleRank(req.user!.role as Role)) {
+  res.status(403).json({ message: "Forbidden" });
+  return;
+}
 ```
+This prevents users from creating/updating users with a higher role than their own, or deleting users at or above their rank.
 
-### Role Hierarchy (numeric rank)
-
-```ts
-STUDENT: 0, TEACHER: 1, ADMIN: 2, SUPER_ADMIN: 3, SERVICE: 4
-```
-
-Used for **escalation prevention** — you cannot assign/update a role higher than your own, and cannot delete users at or above your rank:
-
-```ts
-// Creating user: cannot assign role above your own
-if (roleRank(targetRole) > roleRank(req.user!.role)) → 403
-
-// Deleting user: cannot delete same rank or above
-if (roleRank(user.role) >= roleRank(req.user!.role)) → 403
-```
+---
 
 ## Route and Controller Conventions
 
-### Pattern: Inline async handlers in route files
+Routes are defined directly in router files (no separate controller layer). Pattern:
 
-Routes are defined in `src/routes/*.ts` as Express `Router` instances, mounted in `app.ts`:
+```ts
+router.method(
+  "/path",
+  requireAuth,                          // 1. auth
+  validateParams(schema),               // 2. validate input
+  validateBody(schema),
+  requireRole(Role.X, Role.Y),          // 3. authorize
+  async (req: Request, res: Response) => {  // 4. handler
+    // business logic inline
+  },
+);
+```
 
+**Middleware ordering is consistent**: `requireAuth` → `validate*` → `requireRole`/`requireSelfOrRole` → handler.
+
+**Route mounting** follows the pattern:
 ```ts
 app.use("/api/users", userRouter);
 ```
 
-### Middleware chain order (consistent across all routes):
-
-```
-requireAuth → validateParams/validateQuery/validateBody → requireRole/requireSelfOrRole → handler
-```
-
-Example:
-```ts
-router.patch(
-  "/:id",
-  requireAuth,
-  validateParams(userIdSchema),
-  validateBody(updateUserSchema),
-  requireSelfOrRole(Role.ADMIN, Role.SUPER_ADMIN),
-  async (req: Request, res: Response) => { ... }
-);
-```
-
-### Response conventions:
-
+**Response conventions**:
 | Scenario | Status | Body |
-|---|---|---|
-| Success (read/update) | 200 | JSON entity |
-| Success (create) | 201 | JSON entity |
+|----------|--------|------|
+| Success (read/update) | 200 | JSON object/array |
+| Success (create) | 201 | JSON object |
 | Success (delete) | 204 | Empty |
-| Validation error | 400 | `{ message, errors: ZodFlattenedError }` |
-| Unauthenticated | 401 | `{ message: "Unauthorized" }` |
-| Insufficient role | 403 | `{ message: "Forbidden" }` |
+| Validation error | 400 | `{ message, errors: zodFlattened }` |
+| Not authenticated | 401 | `{ message: "Unauthorized" }` |
+| Not authorized | 403 | `{ message: "Forbidden" }` |
 | Not found | 404 | `{ message: "User not found" }` or `{ message: "Not found" }` |
 | Server error | 500 | `{ message: "Internal server error" }` |
 
-### Select projection — consistent field whitelist for user responses:
+**Important**: Static routes like `/batch` are registered before parameterized routes like `/:id` to avoid conflicts.
 
+**Select pattern**: All user queries use explicit `select` to avoid leaking sensitive fields:
 ```ts
-select: { id: true, email: true, name: true, role: true, createdAt: true }
+select: {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  createdAt: true,
+},
 ```
 
-This is repeated on every query. `updatedAt`, `deletedAt`, `emailVerified` are never exposed.
+---
 
-### Important routing note:
+## Database / Migration Patterns and Conventions
 
-```ts
-// "/batch" must come before "/:id" to avoid /:id capturing "batch" as an id
-router.get("/batch", ...);
-router.get("/:id", ...);
-```
+**ORM**: Prisma with PostgreSQL.
 
-## Database / Migration Patterns
+**Shared Prisma client**: Instantiated in `@hallpass/db`, imported everywhere as `import { prisma } from "@hallpass/db"`.
 
-### Prisma with PostgreSQL
-
-- IDs: `cuid()` strings (not UUIDs, not autoincrement)
-- Timestamps: `createdAt` (default `now()`), `updatedAt` (`@updatedAt`), `deletedAt` (nullable — soft delete)
-- Enums defined at database level (`enum Role`)
-- Cascade deletes on `Session` and `Account` when `User` is deleted
-
-### Soft Delete Pattern
-
-Deletes set `deletedAt` rather than removing rows:
-
+**Soft deletes**: Users have a `deletedAt DateTime?` field. All queries filter with `deletedAt: null`. Deletes are implemented as:
 ```ts
 await prisma.user.update({
-  where: { id: req.params.id },
+  where: { id },
   data: { deletedAt: new Date() },
 });
 ```
 
-**All read queries must filter `deletedAt: null`** — this is done manually on every query, not via Prisma middleware:
+**ID strategy**: `cuid()` for all primary keys.
 
-```ts
-prisma.user.findFirst({ where: { id, deletedAt: null } })
-```
+**Timestamps**: All models have `createdAt` (auto) and `updatedAt` (`@updatedAt`). User also has optional `deletedAt`.
 
-### Shared Prisma instance
+**Cascade deletes**: Sessions and Accounts cascade-delete when a User is deleted (hard delete at DB level), though the app only soft-deletes users.
 
-`@hallpass/db` exports a singleton `prisma` client used by both `@hallpass/auth` (via adapter) and route handlers directly.
+**Schema conventions**:
+- Enums are defined in Prisma and re-exported from `@hallpass/db`
+- `@unique` on `email` (User) and `token` (Session)
+- No composite indexes defined yet
+
+---
 
 ## Error Handling Patterns
 
-### Validation errors (Zod)
-
+**Validation errors** use Zod's `safeParse` + `error.flatten()`:
 ```ts
 res.status(400).json({ message: "Invalid body", errors: result.error.flatten() });
 ```
 
-`validateBody` replaces `req.body` with parsed data on success (sanitizing unknown fields). `validateQuery` and `validateParams` do **not** replace their respective objects — they only validate.
+**Auth/authz errors** return early with `return` (no `throw`):
+```ts
+if (!session) {
+  res.status(401).json({ message: "Unauthorized" });
+  return;
+}
+```
 
-### No try/catch in route handlers
-
-Route handlers do **not** wrap Prisma calls in try/catch. Unhandled errors fall through to the global error handler:
-
+**Route handlers do NOT wrap logic in try/catch** — they rely on the global error handler:
 ```ts
 app.use((err: Error, _req, res, _next) => {
   console.error(err);
@@ -173,42 +164,53 @@ app.use((err: Error, _req, res, _next) => {
 });
 ```
 
-This means Prisma unique constraint violations (e.g., duplicate email on user create) will return a generic 500 rather than a descriptive 400.
+**Note**: Since route handlers are `async` but Express 4 doesn't auto-catch async errors, unhandled promise rejections in route handlers will NOT reach the global error handler. This is a known gap — there's no `express-async-errors` or wrapper in use.
+
+---
 
 ## Key Dependencies and Why They're Used
 
-| Package | Purpose |
-|---|---|
-| `better-auth` | Session-based auth with built-in email/password, session management, adapters |
-| `prisma` / `@prisma/client` | Type-safe ORM, shared across packages via `@hallpass/db` |
-| `zod` | Request validation (body, query, params) and env var validation |
-| `express-rate-limit` | Two tiers: 100 req/15min global, 10 req/15min on `/api/auth/*` |
+| Dependency | Purpose |
+|-----------|---------|
+| `express` | HTTP framework |
+| `better-auth` | Session-based auth (email/password), mounted as Express handler |
+| `prisma` | ORM/database access (PostgreSQL) |
+| `zod` | Schema validation for env vars, request params/body/query |
 | `helmet` | Security headers |
-| `cors` | CORS (currently permissive — `cors()` with no origin restriction, marked TODO) |
-| `morgan` | Request logging (`"dev"` format) |
+| `cors` | Cross-origin requests (currently open — TODO to restrict) |
+| `express-rate-limit` | Rate limiting (100 req/15min general, 10 req/15min for auth) |
+| `morgan` | Request logging (`dev` format) |
+
+---
 
 ## Environment Variable and Config Conventions
 
-All env vars validated at startup with Zod — the process will crash immediately if any required var is missing:
+All env vars are validated at startup using Zod. If any are missing/invalid, the process crashes immediately:
 
 ```ts
 const envSchema = z.object({
-  DATABASE_URL: z.string(),       // Prisma connection string
-  BETTER_AUTH_URL: z.string(),    // Base URL for auth (e.g., http://localhost:3000)
-  BETTER_AUTH_SECRET: z.string(), // Signing secret for sessions
-  PORT: z.string().optional(),    // Server port, optional with fallback
+  DATABASE_URL: z.string(),
+  BETTER_AUTH_URL: z.string(),
+  BETTER_AUTH_SECRET: z.string(),
+  PORT: z.string().optional(),
 });
 export const env = envSchema.parse(process.env);
 ```
 
-No `.env` loading is shown — presumably handled by the runtime environment or a top-level dotenv config.
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | Prisma PostgreSQL connection string |
+| `BETTER_AUTH_URL` | Yes | Base URL for better-auth (e.g. `http://localhost:3000`) |
+| `BETTER_AUTH_SECRET` | Yes | Secret key for session signing |
+| `PORT` | No | Server listen port |
 
-## Notable Patterns and Potential Review Focus Areas
+**Config is not centralized** beyond env — rate limit values, session TTL, etc. are hardcoded inline.
 
-1. **`validateBody` mutates `req.body`** with Zod output (strips unknown fields); `validateQuery`/`validateParams` do not — inconsistent behavior.
-2. **No async error wrapping** — Express 4 does not catch rejected promises from `async` handlers automatically. If this is Express 4, unhandled rejections may crash the process rather than hitting the error handler. Express 5 fixes this.
-3. **Soft delete filter is manual** — easy to forget `deletedAt: null` on new queries.
-4. **`req.user!` non-null assertions** — used in handlers after `requireAuth`, which is safe by convention but not type-enforced.
-5. **CORS is wide open** — noted with a TODO in source.
-6. **`trust proxy` is set to 1** — required for rate limiting behind a reverse proxy.
-7. **SERVICE role (rank 4)** exists in the enum and rank map but is never assignable through the API (not in the `createUserSchema` or `updateUserSchema` enums), suggesting it's reserved for service-to-service auth.
+---
+
+## Notable TODOs and Known Gaps
+
+1. **CORS is wide open** — marked with a TODO to configure per environment.
+2. **Async error handling gap** — async route handlers without try/catch in Express 4 will produce unhandled rejections rather than 500 responses.
+3. **`req.user` type augmentation** — the code assigns `req.user = user` but the type declaration file for `Express.Request` is not shown; it presumably exists elsewhere.
+4. **`SERVICE` role exists in the enum but is excluded** from `createUserSchema` and `updateUserSchema` role enums — it cannot be assigned via the API, suggesting it's reserved for machine-to-machine auth.
