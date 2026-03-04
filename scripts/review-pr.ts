@@ -16,13 +16,15 @@ Structure your review as:
 Brief description of what the PR changes.
 
 ## Issues
-List any bugs, security concerns, or convention violations. If none, say "None found."
+List any bugs, security concerns, or convention violations. If none, say "None found." Do not include anything that belongs in Unverified Claims — if you cannot verify a claim from the diff or context file, it goes in Unverified Claims, not Issues.
 
 ## Unverified Claims
 List any observations that depend on knowledge of external APIs, library versions, or third-party identifiers (e.g., model names, package versions, API behavior) that cannot be confirmed from the diff or context file alone. Do not include claims about code, flags, or behavior that is directly visible in the diff. These are flagged for human review and do not affect the verdict.
 
 ## Verdict
-Either "Ship it" or "Request changes" with one sentence explaining why.`;
+Start the line with either "Ship it" or "Request changes" (no prefix, no emoji), followed by " — " and one sentence explaining why. Example: "Ship it — no issues found."
+
+Do not use the phrases "Ship it" or "Request changes" anywhere else in your response.`;
 
 async function main() {
   const contextFile = process.env.CONTEXT_FILE;
