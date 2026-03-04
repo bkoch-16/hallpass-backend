@@ -9,7 +9,7 @@ jobs:
   review:
     name: Review with Claude
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && github.event.pull_request.user.login == 'bkoch-16'
 
     env:
       HUSKY: 0
