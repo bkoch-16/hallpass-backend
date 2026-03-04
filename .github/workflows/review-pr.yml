@@ -39,28 +39,14 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: git diff origin/$BASE_REF...HEAD > pr.diff
 
-      - name: Restore index SHA cache
-        id: cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
-          restore-keys: index-sha-${{ github.base_ref }}-
-
-      - name: Generate context
+      - name: Fetch context doc
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
-          cp "docs/${BASE_REF}-context.md" context.md
-
-      - name: Save index SHA cache
-        if: steps.cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+          git fetch origin docs/index 2>/dev/null || true
+          SLUG=$(echo "$BASE_REF" | tr '/' '-')
+          git show origin/docs/index:"docs/${SLUG}-context.md" > context.md 2>/dev/null || \
+            echo "_Context not yet available (indexing runs on push to ${BASE_REF})._" > context.md
 
 
       - name: Run AI review
