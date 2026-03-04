@@ -34,9 +34,16 @@ jobs:
       - name: Get PR diff
         run: git diff origin/${{ github.base_ref }}...HEAD > pr.diff
 
-      - name: Get context file from base branch
+      - name: Get context file (generate if missing)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           git show origin/${{ github.base_ref }}:${{ github.base_ref }}-context.md > context.md 2>/dev/null || true
+          if [ ! -s context.md ]; then
+            echo "No context file found for ${{ github.base_ref }}, generating..."
+            GITHUB_REF_NAME=${{ github.base_ref }} pnpm tsx scripts/index-codebase.ts
+            mv ${{ github.base_ref }}-context.md context.md
+          fi
 
       - name: Run AI review
         env:
