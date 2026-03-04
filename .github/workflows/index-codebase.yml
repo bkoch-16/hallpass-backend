@@ -32,6 +32,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore manifest from docs/index
+        run: |
+          git fetch origin docs/index 2>/dev/null || true
+          if git show-ref --verify --quiet refs/remotes/origin/docs/index; then
+            BRANCH_SLUG="${GITHUB_REF_NAME//\//-}"
+            mkdir -p docs
+            git show origin/docs/index:docs/${BRANCH_SLUG}-manifest.json > docs/${BRANCH_SLUG}-manifest.json 2>/dev/null || true
+          fi
+
       - name: Run indexer
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -45,6 +54,7 @@ jobs:
 
           mkdir -p /tmp/docs-generated
           cp -r docs/. /tmp/docs-generated/
+          rm -rf docs/
 
           git fetch origin docs/index 2>/dev/null || true
 
