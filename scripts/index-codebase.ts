@@ -78,7 +78,8 @@ Be specific and concrete. Prefer examples over descriptions. If you see a patter
 
 async function main() {
   const branch = getBranch();
-  const outputFile = `${branch}-context.md`;
+  fs.mkdirSync("docs", { recursive: true });
+  const outputFile = `docs/${branch}-context.md`;
 
   console.log(`Indexing codebase for branch: ${branch}`);
   console.log(`Output: ${outputFile}`);
