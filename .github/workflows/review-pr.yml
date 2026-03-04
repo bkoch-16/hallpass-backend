@@ -32,18 +32,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Get PR diff
-        run: git diff origin/${{ github.base_ref }}...HEAD > pr.diff
-
-      - name: Get context file (generate if missing)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE_REF: ${{ github.base_ref }}
+        run: git diff origin/$BASE_REF...HEAD > pr.diff
+
+      - name: Get context file from base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git show origin/${{ github.base_ref }}:${{ github.base_ref }}-context.md > context.md 2>/dev/null || true
-          if [ ! -s context.md ]; then
-            echo "No context file found for ${{ github.base_ref }}, generating..."
-            GITHUB_REF_NAME=${{ github.base_ref }} pnpm tsx scripts/index-codebase.ts
-            mv ${{ github.base_ref }}-context.md context.md
-          fi
+          git show origin/$BASE_REF:${BASE_REF}-context.md > context.md 2>/dev/null || true
 
       - name: Run AI review
         env:
@@ -52,8 +49,15 @@ jobs:
           DIFF_FILE: pr.diff
         run: pnpm tsx scripts/review-pr.ts > review.md
 
-      - name: Post review comment
+      - name: Submit PR review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
+          if grep -q "✅ Ship it" review.md; then
+            gh pr review $PR_NUMBER --approve --body-file review.md
+          elif grep -q "🔄 Request changes" review.md; then
+            gh pr review $PR_NUMBER --request-changes --body-file review.md
+          else
+            gh pr review $PR_NUMBER --comment --body-file review.md
+          fi
