@@ -40,6 +40,7 @@ jobs:
         run: git diff origin/$BASE_REF...HEAD > pr.diff
 
       - name: Restore index SHA cache
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: docs
@@ -55,6 +56,7 @@ jobs:
           cp "docs/${BASE_REF}-context.md" context.md
 
       - name: Save index SHA cache
+        if: steps.cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: docs
