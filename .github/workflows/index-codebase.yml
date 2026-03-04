@@ -4,20 +4,21 @@ on:
   push:
     branches: [develop, main]
 
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-index
+  cancel-in-progress: false
+
 jobs:
   index:
     name: Generate context document
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Restore index SHA cache
-        uses: actions/cache/restore@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
-          restore-keys: index-sha-${{ github.ref_name }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -36,8 +37,29 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm tsx scripts/index-codebase.ts
 
-      - name: Save index SHA cache
-        uses: actions/cache/save@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
+      - name: Push docs to docs/index branch
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p /tmp/docs-generated
+          cp -r docs/. /tmp/docs-generated/
+
+          git fetch origin docs/index 2>/dev/null || true
+
+          if git show-ref --verify --quiet refs/remotes/origin/docs/index; then
+            git checkout -B docs/index origin/docs/index
+          else
+            git checkout --orphan docs/index
+            git rm -rf . --quiet 2>/dev/null || true
+          fi
+
+          mkdir -p docs
+          cp -r /tmp/docs-generated/. docs/
+
+          git add docs/
+          git diff --staged --quiet || {
+            git commit -m "chore: update codebase index [skip ci]"
+            git push origin docs/index
+          }
