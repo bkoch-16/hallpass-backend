@@ -1,0 +1,84 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [develop, main]
+
+jobs:
+  review:
+    name: Review with Claude
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]' && github.event.pull_request.user.login == 'bkoch-16'
+
+    env:
+      HUSKY: 0
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Get PR diff
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git diff origin/$BASE_REF...HEAD > pr.diff
+
+      - name: Restore index SHA cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+          restore-keys: index-sha-${{ github.base_ref }}-
+
+      - name: Generate context
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
+          cp "docs/${BASE_REF}-context.md" context.md
+
+      - name: Save index SHA cache
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+
+
+      - name: Run AI review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONTEXT_FILE: context.md
+          DIFF_FILE: pr.diff
+        run: pnpm tsx scripts/review-pr.ts > review.md
+
+      - name: Submit PR review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if grep -qE "^Ship it" review.md; then
+            gh pr review $PR_NUMBER --approve --body-file review.md
+          elif grep -qE "^Request changes" review.md; then
+            gh pr review $PR_NUMBER --request-changes --body-file review.md
+          else
+            gh pr review $PR_NUMBER --comment --body-file review.md
+          fi
