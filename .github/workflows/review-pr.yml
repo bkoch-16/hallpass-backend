@@ -51,8 +51,8 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout "$HEAD_REF"
           git add "docs/${BASE_REF}-context.md" "docs/${BASE_REF}-index-sha"
+          git checkout "$HEAD_REF"
           git diff --cached --quiet || git commit -m "chore: update ${BASE_REF}-context.md [skip ci]"
           git push origin HEAD
 
