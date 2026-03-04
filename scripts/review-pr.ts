@@ -1,0 +1,66 @@
+import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+
+const client = new Anthropic();
+
+const systemPrompt = `You are an expert code reviewer with full knowledge of this codebase. Review the diff against the project conventions documented in the context file provided.
+
+Flag real issues only — do not nitpick style or formatting that Prettier and ESLint already enforce.
+
+Structure your review as:
+## Summary
+Brief description of what the PR changes.
+
+## Issues
+List any bugs, security concerns, or convention violations. If none, say "None found."
+
+## Verdict
+Either "✅ Ship it" or "🔄 Request changes" with one sentence explaining why.`;
+
+async function main() {
+  const contextFile = process.env.CONTEXT_FILE;
+  const diffFile = process.env.DIFF_FILE;
+
+  if (!diffFile || !fs.existsSync(diffFile)) {
+    process.stdout.write("No diff file found — nothing to review.\n");
+    return;
+  }
+
+  const diff = fs.readFileSync(diffFile, "utf8").trim();
+  if (!diff) {
+    process.stdout.write("No code changes detected — nothing to review.\n");
+    return;
+  }
+
+  let contextSection = "";
+  if (contextFile && fs.existsSync(contextFile)) {
+    const context = fs.readFileSync(contextFile, "utf8").trim();
+    if (context) {
+      contextSection = `## Codebase Context\n\n${context}\n\n---\n\n`;
+    }
+  } else {
+    contextSection =
+      "## Codebase Context\n\n_Context file not yet available (indexing runs after first merge)._\n\n---\n\n";
+  }
+
+  const userPrompt = `${contextSection}## PR Diff\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nPlease review this diff.`;
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") {
+    throw new Error(`Unexpected response type: ${content.type}`);
+  }
+
+  process.stdout.write(`<!-- ai-review -->\n${content.text}\n`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
