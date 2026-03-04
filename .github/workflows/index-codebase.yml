@@ -39,7 +39,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          cp -r docs/ /tmp/docs-generated/
+          mkdir -p /tmp/docs-generated
+          cp -r docs/. /tmp/docs-generated/
 
           git fetch origin docs/index 2>/dev/null || true
 

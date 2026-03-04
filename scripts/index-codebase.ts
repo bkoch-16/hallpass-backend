@@ -18,9 +18,11 @@ const globPatterns = [
 // Covers the root directories git ls-tree needs to find all matching files.
 const globDirs = [
   ...new Set(
-    globPatterns.map((p) =>
-      p.slice(0, p.search(/[*?[]/)).replace(/[^/]*$/, "")
-    )
+    globPatterns.map((p) => {
+      const globIdx = p.search(/[*?[]/);
+      const prefix = globIdx === -1 ? p : p.slice(0, globIdx);
+      return prefix.replace(/[^/]*$/, "");
+    })
   ),
 ].filter(Boolean);
 
