@@ -7,6 +7,10 @@ const systemPrompt = `You are an expert code reviewer with full knowledge of thi
 
 Flag real issues only — do not nitpick style or formatting that Prettier and ESLint already enforce.
 
+Before flagging a security issue, scan the full diff for existing guards, conditions, or restrictions that already mitigate it. If a mitigation exists, acknowledge it and adjust your severity accordingly.
+
+For every issue you raise, reference the specific file and line number(s) from the diff.
+
 Structure your review as:
 ## Summary
 Brief description of what the PR changes.
@@ -14,8 +18,11 @@ Brief description of what the PR changes.
 ## Issues
 List any bugs, security concerns, or convention violations. If none, say "None found."
 
+## Unverified Claims
+List any observations that depend on knowledge of external APIs, library versions, or third-party identifiers (e.g., model names, package versions, API behavior) that cannot be confirmed from the diff or context file alone. These are flagged for human review and do not affect the verdict.
+
 ## Verdict
-Either "✅ Ship it" or "🔄 Request changes" with one sentence explaining why.`;
+Either "Ship it" or "Request changes" with one sentence explaining why.`;
 
 async function main() {
   const contextFile = process.env.CONTEXT_FILE;
