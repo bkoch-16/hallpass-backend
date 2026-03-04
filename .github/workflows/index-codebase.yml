@@ -4,10 +4,14 @@ on:
   push:
     branches: [develop, main]
 
+permissions:
+  contents: write
+
 jobs:
   index:
     name: Generate context document
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -34,9 +38,9 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase
           git add docs/
           git diff --staged --quiet || {
             git commit -m "chore: update codebase index [skip ci]"
-            git pull --rebase
             git push
           }

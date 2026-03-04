@@ -14,15 +14,18 @@ const globPatterns = [
   "packages/auth/src/**/*.ts",
 ];
 
-// Directories to search when listing files from a git ref (must cover globPatterns)
+// Derived automatically from globPatterns — do not edit manually.
+// Covers the root directories git ls-tree needs to find all matching files.
 const globDirs = [
-  "apps/user-api/src/",
-  "packages/db/prisma/",
-  "packages/auth/src/",
-];
+  ...new Set(
+    globPatterns.map((p) =>
+      p.slice(0, p.search(/[*?[]/)).replace(/[^/]*$/, "")
+    )
+  ),
+].filter(Boolean);
 
 // Max files per Claude batch (to stay within token limits)
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 10;
 
 interface FileEntry {
   blobSha: string;
@@ -50,7 +53,7 @@ function getFileContent(filePath: string): string | null {
   const fromRef = process.env.FROM_REF;
   if (fromRef) {
     try {
-      return execSync(`git show ${fromRef}:${filePath}`, { encoding: "utf8" });
+      return execFileSync("git", ["show", `${fromRef}:${filePath}`], { encoding: "utf8" });
     } catch {
       console.warn(`Warning: ${filePath} not found in ${fromRef}, skipping`);
       return null;
@@ -66,8 +69,9 @@ function getFileContent(filePath: string): string | null {
 
 function discoverFiles(fromRef?: string): string[] {
   if (fromRef) {
-    const result = execSync(
-      `git ls-tree --name-only -r ${fromRef} -- ${globDirs.join(" ")}`,
+    const result = execFileSync(
+      "git",
+      ["ls-tree", "--name-only", "-r", fromRef, "--", ...globDirs],
       { encoding: "utf8" }
     ).trim();
     const allFiles = result ? result.split("\n") : [];
@@ -136,7 +140,8 @@ const perFileSummaryPrompt = `For each file below, write a concise technical sum
 - Important patterns, conventions, or dependencies used
 - Anything a developer needs to know when modifying this file
 
-Return a JSON object where each key is the exact file path and the value is the summary string. Do not wrap the JSON in code fences.`;
+Return a JSON object where each key is the exact file path and the value is the summary string.
+Wrap the JSON in <json> and </json> tags. Do not include any other content outside the tags.`;
 
 async function summarizeFiles(
   files: string[]
@@ -155,7 +160,7 @@ async function summarizeFiles(
 
   const response = await client.messages.create({
     model: "claude-opus-4-6",
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [
       {
         role: "user",
@@ -169,12 +174,12 @@ async function summarizeFiles(
     throw new Error(`Unexpected response type: ${content.type}`);
   }
   const raw = content.text;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
+  const start = raw.indexOf("<json>");
+  const end = raw.indexOf("</json>");
   if (start === -1 || end === -1) {
-    throw new Error(`No JSON object found in response: ${raw.slice(0, 200)}`);
+    throw new Error(`No <json> block found in response: ${raw.slice(0, 200)}`);
   }
-  return JSON.parse(raw.slice(start, end + 1)) as Record<string, string>;
+  return JSON.parse(raw.slice(start + 6, end).trim()) as Record<string, string>;
 }
 
 async function main() {
@@ -251,9 +256,9 @@ async function main() {
         summary,
       };
     }
-  }
 
-  saveManifest(branchSlug, manifest);
+    saveManifest(branchSlug, manifest);
+  }
 
   const contextDoc = buildContextDoc(manifest, branch);
   const outputFile = `docs/${branchSlug}-context.md`;
@@ -269,5 +274,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
-
