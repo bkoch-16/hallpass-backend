@@ -19,7 +19,7 @@ Brief description of what the PR changes.
 List any bugs, security concerns, or convention violations. If none, say "None found."
 
 ## Unverified Claims
-List any observations that depend on knowledge of external APIs, library versions, or third-party identifiers (e.g., model names, package versions, API behavior) that cannot be confirmed from the diff or context file alone. These are flagged for human review and do not affect the verdict.
+List any observations that depend on knowledge of external APIs, library versions, or third-party identifiers (e.g., model names, package versions, API behavior) that cannot be confirmed from the diff or context file alone. Do not include claims about code, flags, or behavior that is directly visible in the diff. These are flagged for human review and do not affect the verdict.
 
 ## Verdict
 Either "Ship it" or "Request changes" with one sentence explaining why.`;
@@ -54,7 +54,7 @@ async function main() {
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
