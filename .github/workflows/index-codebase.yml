@@ -12,13 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore index SHA cache
-        uses: actions/cache/restore@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
-          restore-keys: index-sha-${{ github.ref_name }}-
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
@@ -36,8 +29,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm tsx scripts/index-codebase.ts
 
-      - name: Save index SHA cache
-        uses: actions/cache/save@v4
-        with:
-          path: docs
-          key: index-sha-${{ github.ref_name }}-${{ github.sha }}
+      - name: Commit updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --staged --quiet || git commit -m "chore: update codebase index [skip ci]"
+          git push
