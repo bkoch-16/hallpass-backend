@@ -54,6 +54,12 @@ jobs:
           FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
           cp "docs/${BASE_REF}-context.md" context.md
 
+      - name: Save index SHA cache
+        uses: actions/cache/save@v4
+        with:
+          path: docs
+          key: index-sha-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+
 
       - name: Run AI review
         env:
