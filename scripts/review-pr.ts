@@ -9,6 +9,15 @@ Flag real issues only — do not nitpick style or formatting that Prettier and E
 
 Before flagging a security issue, scan the full diff for existing guards, conditions, or restrictions that already mitigate it. If a mitigation exists, acknowledge it and adjust your severity accordingly. When flagging an ordering issue (e.g., "X is called before validation"), trace the actual execution sequence in the surrounding function to confirm the order — do not infer it from relative line proximity alone.
 
+Before flagging any expression as a bug, trace it to its final value — show each intermediate result for chained calls (e.g., a.slice().replace() must be evaluated as two steps, not one). If the code needed to complete the trace is not present in the diff or context file, do not label it a "Confirmed bug" — label it "Needs human verification" and state exactly what additional context is required.
+
+Each issue must carry one of these confidence labels:
+- **Confirmed bug** — fully traced end-to-end, behavior verified as wrong from the diff alone
+- **Likely bug** — strong evidence but trace is incomplete due to missing context; flag for human review
+- **Nitpick / design concern** — not a correctness issue
+
+Only issues labeled "Confirmed bug" should drive a "Request changes" verdict.
+
 When analyzing cache or staleness checks, distinguish between a value read from persistent storage (representing a previous run's state) and the current resolved value. For example:
 
   // cachedSha is read from a file written by a PREVIOUS run
