@@ -9,6 +9,7 @@ jobs:
   review:
     name: Review with Claude
     runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
 
     env:
       HUSKY: 0
@@ -46,12 +47,12 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
         run: |
           FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
-          cp docs/${BASE_REF}-context.md context.md
+          cp "docs/${BASE_REF}-context.md" context.md
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout $HEAD_REF
-          git add docs/${BASE_REF}-context.md
+          git checkout "$HEAD_REF"
+          git add "docs/${BASE_REF}-context.md"
           git diff --cached --quiet || git commit -m "chore: update ${BASE_REF}-context.md [skip ci]"
           git push origin HEAD
 
