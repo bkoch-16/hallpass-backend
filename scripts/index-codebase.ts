@@ -112,6 +112,9 @@ async function main() {
   const currentSha = getHeadSha(fromRef);
   const cachedSha = getCachedSha(branch);
 
+  if (cachedSha && !/^[0-9a-f]{40,64}$/.test(cachedSha)) {
+    throw new Error(`Invalid cached SHA: ${cachedSha}`);
+  }
   if (cachedSha && !indexedFilesChangedSince(cachedSha, fromRef)) {
     console.log(`No changes to indexed files since ${cachedSha} — skipping.`);
     return;
