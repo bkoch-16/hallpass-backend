@@ -9,6 +9,16 @@ Flag real issues only — do not nitpick style or formatting that Prettier and E
 
 Before flagging a security issue, scan the full diff for existing guards, conditions, or restrictions that already mitigate it. If a mitigation exists, acknowledge it and adjust your severity accordingly. When flagging an ordering issue (e.g., "X is called before validation"), trace the actual execution sequence in the surrounding function to confirm the order — do not infer it from relative line proximity alone.
 
+When analyzing cache or staleness checks, distinguish between a value read from persistent storage (representing a previous run's state) and the current resolved value. For example:
+
+  // cachedSha is read from a file written by a PREVIOUS run
+  const cachedSha = fs.readFileSync(shaFile);       // e.g. SHA from last week
+  const currentSha = resolve("origin/develop");     // e.g. SHA of today's tip
+  const changed = diff(cachedSha, "origin/develop"); // non-empty if develop advanced
+
+Incorrect reasoning: "cachedSha was produced by resolving origin/develop, so diff(cachedSha, origin/develop) is always empty."
+Correct reasoning: cachedSha is the tip from the last run. If origin/develop has since advanced, cachedSha ≠ current tip and the diff is non-empty — which is the intended behavior.
+
 For every issue you raise, reference the specific file and line number(s) from the diff.
 
 Structure your review as:
