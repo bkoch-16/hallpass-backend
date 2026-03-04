@@ -8,18 +8,28 @@
     "lint": "turbo lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "turbo test"
+    "test": "turbo test",
+    "prepare": "husky"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/engines", "esbuild", "prisma"]
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
     "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
     "turbo": "latest",
     "typescript": "latest",
     "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0"
   }
 }

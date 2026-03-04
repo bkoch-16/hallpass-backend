@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
+const { mockGetSession } = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+}));
+
 // Mock @hallpass/db before importing app
 vi.mock("@hallpass/db", () => ({
   prisma: {
@@ -23,18 +27,15 @@ vi.mock("@hallpass/db", () => ({
 
 // Mock @hallpass/auth before importing app
 vi.mock("@hallpass/auth", () => ({
-  auth: {
-    api: {
-      getSession: vi.fn(),
-    },
-  },
+  createAuth: vi.fn(() => ({
+    api: { getSession: mockGetSession },
+  })),
   toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
 }));
 
 import app from "../../src/app";
 import { prisma } from "@hallpass/db";
-import { auth } from "@hallpass/auth";
 
 const mockPrisma = prisma as unknown as {
   user: {
@@ -46,8 +47,6 @@ const mockPrisma = prisma as unknown as {
     delete: ReturnType<typeof vi.fn>;
   };
 };
-
-const mockGetSession = auth.api.getSession as unknown as ReturnType<typeof vi.fn>;
 
 interface FakeUser {
   id: string;

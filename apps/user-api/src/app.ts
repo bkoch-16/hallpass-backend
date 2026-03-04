@@ -3,7 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import morgan from "morgan";
-import { auth, toNodeHandler } from "@hallpass/auth";
+import { toNodeHandler } from "@hallpass/auth";
+import { auth } from "./auth";
 import userRouter from "./routes/user";
 
 const app = express();
