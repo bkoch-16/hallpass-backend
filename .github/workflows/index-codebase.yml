@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: docs-index-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   index:
     name: Generate context document
