@@ -2,9 +2,8 @@ name: Main CI/CD
 
 on:
   push:
-    branches: ["**"]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
 
 jobs:
   ci:
