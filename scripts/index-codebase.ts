@@ -18,6 +18,26 @@ const filesToIndex = [
   "packages/auth/src/index.ts",
 ];
 
+function getHeadSha(ref?: string): string {
+  const target = ref ?? "HEAD";
+  return execSync(`git rev-parse ${target}`).toString().trim();
+}
+
+function getCachedSha(branch: string): string | null {
+  const cacheFile = `docs/${branch}-index-sha`;
+  if (!fs.existsSync(cacheFile)) return null;
+  return fs.readFileSync(cacheFile, "utf8").trim() || null;
+}
+
+function indexedFilesChangedSince(sha: string, fromRef?: string): boolean {
+  const head = fromRef ?? "HEAD";
+  const changed = execSync(
+    `git diff --name-only ${sha}..${head} -- ${filesToIndex.map((f) => `"${f}"`).join(" ")}`,
+    { encoding: "utf8" }
+  ).trim();
+  return changed.length > 0;
+}
+
 function getBranch(): string {
   // 1. CLI arg: --branch <name>
   const argIdx = process.argv.indexOf("--branch");
@@ -81,8 +101,21 @@ Be specific and concrete. Prefer examples over descriptions. If you see a patter
 
 async function main() {
   const branch = getBranch();
+  if (!/^[a-zA-Z0-9._-]+$/.test(branch)) {
+    throw new Error(`Invalid branch name for filesystem use: ${branch}`);
+  }
   fs.mkdirSync("docs", { recursive: true });
   const outputFile = `docs/${branch}-context.md`;
+  const shaFile = `docs/${branch}-index-sha`;
+  const fromRef = process.env.FROM_REF;
+
+  const currentSha = getHeadSha(fromRef);
+  const cachedSha = getCachedSha(branch);
+
+  if (cachedSha && !indexedFilesChangedSince(cachedSha, fromRef)) {
+    console.log(`No changes to indexed files since ${cachedSha} — skipping.`);
+    return;
+  }
 
   console.log(`Indexing codebase for branch: ${branch}`);
   console.log(`Output: ${outputFile}`);
@@ -106,7 +139,9 @@ ${fileContents}`;
   }
 
   fs.writeFileSync(outputFile, content.text, "utf8");
+  fs.writeFileSync(shaFile, currentSha, "utf8");
   console.log(`Written to ${outputFile}`);
+  console.log(`Cached SHA ${currentSha} to ${shaFile}`);
 }
 
 main().catch((err) => {
