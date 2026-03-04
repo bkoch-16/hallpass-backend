@@ -101,7 +101,7 @@ Be specific and concrete. Prefer examples over descriptions. If you see a patter
 
 async function main() {
   const branch = getBranch();
-  if (!/^[a-zA-Z0-9._-]+$/.test(branch)) {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(branch)) {
     throw new Error(`Invalid branch name for filesystem use: ${branch}`);
   }
   fs.mkdirSync("docs", { recursive: true });

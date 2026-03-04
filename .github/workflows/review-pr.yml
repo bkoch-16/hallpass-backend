@@ -15,7 +15,6 @@ jobs:
       HUSKY: 0
 
     permissions:
-      contents: write
       pull-requests: write
 
     steps:
@@ -40,21 +39,14 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: git diff origin/$BASE_REF...HEAD > pr.diff
 
-      - name: Generate and commit context
+      - name: Generate context
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
-          HEAD_REF: ${{ github.head_ref }}
         run: |
           FROM_REF=origin/$BASE_REF GITHUB_REF_NAME=$BASE_REF pnpm tsx scripts/index-codebase.ts
           cp "docs/${BASE_REF}-context.md" context.md
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "docs/${BASE_REF}-context.md" "docs/${BASE_REF}-index-sha"
-          git checkout "$HEAD_REF"
-          git diff --cached --quiet || git commit -m "chore: update ${BASE_REF}-context.md [skip ci]"
-          git push origin HEAD
 
       - name: Run AI review
         env:
