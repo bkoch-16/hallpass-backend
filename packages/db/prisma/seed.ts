@@ -60,8 +60,9 @@ async function main() {
           userId: user.id,
         },
       });
+
+      console.log(`Seeded ${user.role}: ${user.email}`);
     });
-    console.log(`Seeded ${user.role}: ${user.email}`);
   }
 }
 
