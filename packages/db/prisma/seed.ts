@@ -4,7 +4,11 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { scryptAsync } from "@noble/hashes/scrypt";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 // Must match better-auth's password hashing config exactly (dist/crypto/password.mjs)
@@ -33,39 +37,48 @@ async function main() {
   const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
   for (const userData of seedUsers) {
-    await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx) => {
       const user = await tx.user.upsert({
         where: { email: userData.email },
-        update: {},
+        update: { name: userData.name, role: userData.role },
         create: {
           email: userData.email,
           name: userData.name,
           role: userData.role,
-          emailVerified: true,
+          emailVerified: false,
         },
       });
 
-      await tx.account.upsert({
-        where: {
-          accountId_providerId: {
+      const existingAccount = await tx.account.findFirst({
+        where: { accountId: userData.email, providerId: "credential" },
+      });
+
+      if (!existingAccount) {
+        await tx.account.create({
+          data: {
             accountId: userData.email,
             providerId: "credential",
+            password: hashedPassword,
+            userId: user.id,
           },
-        },
-        update: { password: hashedPassword },
-        create: {
-          accountId: userData.email,
-          providerId: "credential",
-          password: hashedPassword,
-          userId: user.id,
-        },
-      });
+        });
+      } else {
+        await tx.account.update({
+          where: { id: existingAccount.id },
+          data: { password: hashedPassword },
+        });
+      }
 
-      console.log(`Seeded ${user.role}: ${user.email}`);
+      return user;
     });
+
+    console.log(`Seeded ${user.role}: ${user.email}`);
   }
 }
 
 main()
-  .catch(console.error)
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());
