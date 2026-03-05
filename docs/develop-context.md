@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-05T03:11:07.880Z — 12 files indexed_
+_Generated: 2026-03-05T05:16:41.240Z — 12 files indexed_
 
 ## File Summaries
 
@@ -38,7 +38,7 @@ Provides three Zod-based validation middleware factories for Express: validateQu
 
 ### `apps/user-api/src/routes/user.ts`
 
-Defines the Express router for user CRUD operations mounted at /api/users. All routes require authentication; GET /batch (up to 100 IDs) and GET /:id support teacher+ roles or self-access. POST / creates users (admin+) with role escalation prevention via roleRank comparison. PATCH /:id allows self or admin+ to update users with role escalation checks. DELETE /:id performs soft-delete (admin+) and prevents deleting users of equal or higher rank. Uses Prisma with select projections to limit exposed fields. Imports validation schemas from ../schemas/user (not shown). Route ordering matters: /batch is registered before /:id to avoid param capture.
+Express router defining CRUD endpoints for user management: batch GET (`/batch`), single GET (`/:id`), POST (`/`), PATCH (`/:id`), and DELETE (`/:id`). Uses Prisma ORM for database operations with soft-delete pattern (filtering/setting `deletedAt`). All routes require authentication via `requireAuth`, with role-based authorization (`requireRole`, `requireSelfOrRole`) and input validation (`validateBody`, `validateParams`, `validateQuery`) applied as middleware. Role hierarchy is enforced using `roleRank` to prevent users from creating, updating, or deleting users of equal or higher privilege. The batch endpoint limits queries to 100 IDs and all read queries use a consistent `select` projection (id, email, name, role, createdAt). The `/batch` route is deliberately registered before `/:id` to avoid route parameter conflicts.
 
 ### `apps/user-api/src/schemas/user.ts`
 

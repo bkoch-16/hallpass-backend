@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-05T03:11:07.880Z",
+  "generatedAt": "2026-03-05T05:16:41.240Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -39,8 +39,8 @@
       "summary": "Provides three Zod-based validation middleware factories for Express: validateQuery, validateBody, and validateParams. Each takes a ZodSchema, runs safeParse on the corresponding request property, and returns a 400 response with flattened Zod errors on failure. validateBody replaces req.body with the parsed (cleaned) data on success. validateParams casts the result to Record<string, string>. These are composable and used inline in route definitions."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "2563d87102a9a8c4dde22638e08f018699b7da89",
-      "summary": "Defines the Express router for user CRUD operations mounted at /api/users. All routes require authentication; GET /batch (up to 100 IDs) and GET /:id support teacher+ roles or self-access. POST / creates users (admin+) with role escalation prevention via roleRank comparison. PATCH /:id allows self or admin+ to update users with role escalation checks. DELETE /:id performs soft-delete (admin+) and prevents deleting users of equal or higher rank. Uses Prisma with select projections to limit exposed fields. Imports validation schemas from ../schemas/user (not shown). Route ordering matters: /batch is registered before /:id to avoid param capture."
+      "blobSha": "9eb09399c84af9ada8f9f88dbb286cc115bf6a30",
+      "summary": "Express router defining CRUD endpoints for user management: batch GET (`/batch`), single GET (`/:id`), POST (`/`), PATCH (`/:id`), and DELETE (`/:id`). Uses Prisma ORM for database operations with soft-delete pattern (filtering/setting `deletedAt`). All routes require authentication via `requireAuth`, with role-based authorization (`requireRole`, `requireSelfOrRole`) and input validation (`validateBody`, `validateParams`, `validateQuery`) applied as middleware. Role hierarchy is enforced using `roleRank` to prevent users from creating, updating, or deleting users of equal or higher privilege. The batch endpoint limits queries to 100 IDs and all read queries use a consistent `select` projection (id, email, name, role, createdAt). The `/batch` route is deliberately registered before `/:id` to avoid route parameter conflicts."
     },
     "apps/user-api/src/schemas/user.ts": {
       "blobSha": "653ab7279f6af79b7949867d6fdc92398111e9e2",
