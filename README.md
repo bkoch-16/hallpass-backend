@@ -62,3 +62,37 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 - The cloud database is [Neon](https://neon.tech) (serverless PostgreSQL that scales to zero), matching the Cloud Run deployment model
 - The `DATABASE_URL` is configured as a secret on each Cloud Run service
 
+## Postman
+
+A Postman collection and environments are checked into `postman/` and kept in sync with the Postman workspace via the `sync-postman.yml` GitHub Action on every push to `develop` or `main`. To use them, request access to the Postman workspace or import the files directly from the repo.
+
+## Seed Users
+
+These users exist on the dev cloud environment and are created locally when you run the seed script.
+
+| Email | Password | Role |
+|---|---|---|
+| `student@hallpass.dev` | `password` | `STUDENT` |
+| `teacher@hallpass.dev` | `password` | `TEACHER` |
+| `admin@hallpass.dev` | `password` | `ADMIN` |
+| `superadmin@hallpass.dev` | `password` | `SUPER_ADMIN` |
+
+## Local Development
+
+```bash
+# Start the local database
+docker-compose up -d
+
+# Install dependencies
+pnpm install
+
+# Run migrations
+pnpm --filter @hallpass/db exec prisma migrate dev
+
+# Seed sample users
+pnpm --filter @hallpass/db db:seed
+
+# Start the API
+pnpm dev
+```
+

@@ -1,0 +1,39 @@
+name: Sync Postman
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "postman/**"
+
+jobs:
+  sync:
+    name: Sync collections and environments
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync collection
+        run: |
+          curl --fail-with-body -X PUT \
+            "https://api.getpostman.com/collections/a72110b1-2dba-4f0c-b687-0dfa088d848d" \
+            -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"collection\": $(cat postman/collections/hallpass.postman_collection.json)}"
+
+      - name: Sync dev environment
+        run: |
+          curl --fail-with-body -X PUT \
+            "https://api.getpostman.com/environments/11239bd3-e655-449a-8c30-e40528e7462c" \
+            -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"environment\": $(cat 'postman/environments/Hallpass User Api Cloud Dev.postman_environment.json')}"
+
+      - name: Sync prod environment
+        run: |
+          curl --fail-with-body -X PUT \
+            "https://api.getpostman.com/environments/98f0454e-7f85-4dad-8670-41c34867c659" \
+            -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"environment\": $(cat 'postman/environments/Hallpass User Api Cloud Prod.postman_environment.json')}"
