@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-05T19:27:15.263Z — 18 files indexed_
+_Generated: 2026-03-05T19:27:15.263Z — 17 files indexed_
 
 ## File Summaries
 
@@ -15,10 +15,6 @@ Automated workflow that generates a codebase context document on pushes to devel
 ### `.github/workflows/review-pr.yml`
 
 AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI.
-
-### `.github/workflows/sync-postman.yml`
-
-GitHub Actions workflow that automatically syncs Postman collections and environments when changes are pushed to main or develop branches under the `postman/` directory. It uploads the Hallpass Postman collection and two environments (dev and prod) to the Postman API using PUT requests with specific collection/environment UUIDs. Uses `jq` to wrap the JSON files in the required Postman API payload format and `curl` with `--fail-with-body` for error handling. Depends on the `POSTMAN_API_KEY` secret for authentication; modifying this file requires knowledge of the Postman API and the hardcoded resource UUIDs that map to specific Postman workspace assets.
 
 ### `apps/user-api/Dockerfile`
 
