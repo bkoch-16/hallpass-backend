@@ -1,12 +1,12 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-04T22:42:44.734Z — 12 files indexed_
+_Generated: 2026-03-05T03:11:07.880Z — 12 files indexed_
 
 ## File Summaries
 
 ### `apps/user-api/src/app.ts`
 
-Configures and exports the Express application instance for the user-api service. Sets up security middleware (helmet, CORS, rate limiting) and request logging (morgan). Routes auth requests to Better Auth via toNodeHandler at /api/auth/*splat with a stricter rate limit (10 req/15min), mounts user CRUD routes at /api/users, and provides a /health endpoint. Includes a 404 catch-all and a global error handler. CORS origin configuration is marked as a TODO for per-environment setup. Trust proxy is enabled for running behind a reverse proxy.
+Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` via `toNodeHandler` from `@hallpass/auth`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Includes a 404 catch-all and a global error handler that logs errors and returns 500. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, as well as local `auth` config and `env` validation. The `trust proxy` setting is enabled for correct rate-limiting behind reverse proxies.
 
 ### `apps/user-api/src/auth.ts`
 
@@ -14,7 +14,7 @@ Creates and exports the Better Auth instance using the @hallpass/auth package's 
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports environment variables using a Zod schema. Requires DATABASE_URL, BETTER_AUTH_URL, and BETTER_AUTH_SECRET as mandatory strings; PORT is optional. Parsing runs at import time, so the process will crash immediately on startup if required variables are missing. All env access throughout the app should use the exported env object rather than process.env directly.
+Environment variable validation and export using Zod schemas. Defines required variables `DATABASE_URL`, `BETTER_AUTH_URL`, and `BETTER_AUTH_SECRET`, an optional `PORT`, and `CORS_ORIGIN` defaulting to `"*"`. Parses `process.env` at module load time, so the app will fail fast on startup if required variables are missing. The exported `env` object is the single typed source of truth for configuration used throughout the user-api service.
 
 ### `apps/user-api/src/express.d.ts`
 
