@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{Base}}/api/users/batch?ids=id1,id2"
+method: GET
+queryParams:
+  ids: id1,id2
+order: 1000
