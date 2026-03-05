@@ -53,10 +53,10 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 
 ## Environments
 
-| Environment | Branch | Cloud Run Service |
-|---|---|---|
-| Dev | `develop` | `user-api-dev` |
-| Prod | `main` | `user-api` |
+| Environment | Branch | Cloud Run Service | URL |
+|---|---|---|---|
+| Dev | `develop` | `user-api-dev` | [Backend User API](https://user-api-dev-509242588558.us-west1.run.app) |
+| Prod | `main` | `user-api` | — |
 
 - Images are stored in GCP Artifact Registry at `us-west1-docker.pkg.dev/{project}/hallpass/`
 - The cloud database is [Neon](https://neon.tech) (serverless PostgreSQL that scales to zero), matching the Cloud Run deployment model
