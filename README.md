@@ -64,7 +64,7 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 
 ## Postman
 
-A Postman collection and environments are checked into `postman/` and kept in sync with the Postman workspace via the `sync-postman.yml` GitHub Action on every push to `develop` or `main`. To use them, request access to the Postman workspace or import the files directly from the repo.
+A Postman collection and environments are checked into `postman/` and synced automatically with the Postman workspace via Postman's native Git integration. To use them, either request access to the Postman workspace or import the `postman/` directory manually via Postman → Import (note: manual imports are a one-time snapshot and won't receive future updates).
 
 ## Seed Users
 
