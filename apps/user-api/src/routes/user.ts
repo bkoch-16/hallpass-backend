@@ -14,7 +14,7 @@ router.get(
   validateQuery(batchQuerySchema),
   requireRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
     async (req: Request, res: Response) => {
-    const idList = (req.query.ids as string).split(",").filter(Boolean);
+    const idList = (req.query.ids as string).split(",").map((id) => id.trim()).filter(Boolean);
     if (idList.length > 100) {
       res.status(400).json({ message: "Too many IDs (max 100)" });
       return;
