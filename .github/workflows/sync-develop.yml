@@ -36,7 +36,8 @@ jobs:
 
           BRANCH="sync/main-to-develop"
           if git show-ref --quiet --verify "refs/remotes/origin/$BRANCH"; then
-            git checkout "$BRANCH"
+            git checkout -b "$BRANCH" "origin/$BRANCH"
+            git reset --hard origin/develop
           else
             git checkout -b "$BRANCH" origin/develop
           fi
