@@ -122,6 +122,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@prisma/adapter-pg':
         specifier: ^7.4.1
         version: 7.4.1
