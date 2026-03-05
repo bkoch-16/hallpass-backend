@@ -271,7 +271,7 @@ Indexes are defined inline above on each model. Summary of rationale:
 - `Destination(schoolId)` — list destinations for school
 - `ScheduleType(schoolId)` — list schedule types for school
 
-The `slots:school` and `slots:destination` Redis counters exist specifically to avoid `COUNT(*)` queries on `Pass` at request time. The indexes above back the DB queries used only during cold-start initialization of those counters.
+The `slots:school` and `slots:destination` Redis counters avoid `COUNT(*)` queries for concurrent slot tracking at request time. The `maxPerInterval` limit is intentionally kept as a direct DB `COUNT(*)` — pass requests are infrequent enough that an indexed query is acceptable and avoids stale-counter risk. The indexes above back both the cold-start counter initialization queries and the `maxPerInterval` interval count query.
 
 ---
 
@@ -450,6 +450,8 @@ HTTP REST and WebSocket served from the same Express server.
 ## Pass Expiry Mechanism
 
 Uses **BullMQ** (Redis-backed delayed job queue on the same Upstash instance — no additional infrastructure). Jobs are scheduled per-period, not per-pass.
+
+> **TODO: Verify before building:** Upstash has historically had compatibility gaps with BullMQ (Lua scripting, stream commands). Confirm BullMQ works against Upstash instance before committing to this approach — test job scheduling, delayed execution, and retries early. If Upstash proves incompatible, alternatives are a dedicated Redis instance or replacing BullMQ with Cloud Tasks for job scheduling.
 
 **Job scheduling:** Two Cloud Scheduler jobs fire daily — at **5am UTC** and **5pm UTC**. Each run iterates all schools, resolves each school's timezone to compute the correct wall-clock `endTime` for each period, reads that day's `SchoolCalendar` entry, and upserts one BullMQ job per period delayed until the period's absolute UTC timestamp. Jobs use a deterministic ID (e.g. `period-expiry:{schoolId}:{periodId}:{date}`) so the operation is **idempotent** — re-runs and mid-day calendar/period updates safely overwrite the existing job with no duplicates. BullMQ retries failed jobs with exponential backoff; after the retry limit is exhausted the job moves to a dead-letter queue and an alert should fire.
 
