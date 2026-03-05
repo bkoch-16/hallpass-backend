@@ -1,0 +1,52 @@
+name: Sync develop with main
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    name: Merge main into develop
+    runs-on: ubuntu-latest
+    # Only run on direct pushes (hotfixes), not PR merge commits
+    if: github.event.head_commit.message != '' && !startsWith(github.event.head_commit.message, 'Merge pull request')
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge main into develop
+        id: merge
+        run: |
+          git checkout develop
+          if git merge origin/main --no-edit; then
+            git push origin develop
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            git merge --abort
+            echo "result=conflict" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Open PR if conflict
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          BRANCH="sync-main-to-develop-$(date +%Y%m%d%H%M%S)"
+          git checkout -b $BRANCH origin/main
+          gh pr create \
+            --base develop \
+            --head $BRANCH \
+            --title "Sync main into develop (conflict — manual resolution required)" \
+            --body "A direct push to \`main\` could not be automatically merged into \`develop\`. Please resolve the conflict and merge this PR."
