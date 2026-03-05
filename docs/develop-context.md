@@ -1,8 +1,24 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-05T05:16:41.240Z — 12 files indexed_
+_Generated: 2026-03-05T18:43:54.206Z — 17 files indexed_
 
 ## File Summaries
+
+### `.github/workflows/deploy.yml`
+
+CI/CD workflow triggered on pushes to main/develop and pull requests, with three jobs: validate (lint, build, test), deploy-dev (develop branch → Cloud Run dev), and deploy-prod (main branch → Cloud Run prod). The validate job uses dummy environment variables since tests mock the DB, generates the Prisma client, and runs pnpm lint/build/test. Deploy jobs authenticate to GCP, build and push Docker images to Artifact Registry with GitHub Actions cache, and deploy to Cloud Run in us-west1. Environment variables and secrets on Cloud Run are managed externally via GCP Secret Manager, not passed in the workflow. Requires GCP_PROJECT_ID and GCP_SA_KEY GitHub secrets.
+
+### `.github/workflows/index-codebase.yml`
+
+Automated workflow that generates a codebase context document on pushes to develop/main, storing results on a dedicated orphan branch (docs/index). It restores a previous manifest from that branch for incremental indexing, runs a TypeScript indexer script (scripts/index-codebase.ts) powered by the Anthropic API, then commits and pushes updated docs. Uses concurrency control to prevent parallel runs and the [skip ci] commit message convention to avoid recursive triggers. Requires the ANTHROPIC_API_KEY secret and has write permissions on contents.
+
+### `.github/workflows/review-pr.yml`
+
+AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI.
+
+### `apps/user-api/Dockerfile`
+
+Multi-stage Docker build for the user-api service in a pnpm monorepo. It copies package manifests first to optimize layer caching, then installs dependencies, copies source code, generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect), and builds packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (docker-entrypoint.sh) that likely handles runtime setup such as database migrations. When modifying, be aware that build order matters due to inter-package dependencies, and any new workspace package consumed by user-api needs its package.json copied in the manifest stage.
 
 ### `apps/user-api/src/app.ts`
 
@@ -43,6 +59,10 @@ Express router defining CRUD endpoints for user management: batch GET (`/batch`)
 ### `apps/user-api/src/schemas/user.ts`
 
 Defines Zod validation schemas for user-related API endpoints in the user-api service. Exports four schemas: `batchQuerySchema` for validating batch user queries by IDs, `userIdSchema` for single user ID validation, `updateUserSchema` for partial user updates (requiring at least one field via `.refine()`), and `createUserSchema` for user creation with required email/name and optional role. The role field is constrained to an enum of "STUDENT", "TEACHER", "ADMIN", and "SUPER_ADMIN". Depends on the `zod` library for runtime validation; these schemas are likely used with a middleware or controller layer to validate incoming request data.
+
+### `docker-compose.yml`
+
+Local development Docker Compose configuration defining two services: a PostgreSQL 16 database and the user-api application. Postgres uses a named volume for data persistence and includes a health check; the user-api service depends on Postgres being healthy before starting. Environment variables BETTER_AUTH_SECRET and BETTER_AUTH_URL are expected from the host environment (or .env file), while DATABASE_URL is hardcoded to the internal Docker network. The user-api is exposed on port 3001 and built from the monorepo root context using the Dockerfile in apps/user-api/.
 
 ### `packages/auth/src/index.ts`
 

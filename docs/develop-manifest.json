@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-05T05:16:41.240Z",
+  "generatedAt": "2026-03-05T18:43:54.206Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -49,6 +49,26 @@
     "packages/auth/src/index.ts": {
       "blobSha": "ef9bc9b5ef24d8bf796130193e1ecb484e3e672e",
       "summary": "Provides a shared authentication configuration factory using the `better-auth` library for the @hallpass monorepo. The `createAuth` function accepts a `baseURL` and `secret`, configures a Prisma adapter with PostgreSQL (via `@hallpass/db`), enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` types inferred from the auth instance, as well as `toNodeHandler` and `fromNodeHeaders` utilities for integrating with Node.js HTTP servers. Consumers instantiate auth by calling `createAuth` with environment-specific config; modifying session strategy or auth plugins should be done here as this is the centralized auth setup."
+    },
+    "apps/user-api/Dockerfile": {
+      "blobSha": "9851b639b25c247312b073fb5e02ddae5fc35093",
+      "summary": "Multi-stage Docker build for the user-api service in a pnpm monorepo. It copies package manifests first to optimize layer caching, then installs dependencies, copies source code, generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect), and builds packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (docker-entrypoint.sh) that likely handles runtime setup such as database migrations. When modifying, be aware that build order matters due to inter-package dependencies, and any new workspace package consumed by user-api needs its package.json copied in the manifest stage."
+    },
+    "docker-compose.yml": {
+      "blobSha": "4eb51d7ddac7a768aec4f808a76118633ccb0431",
+      "summary": "Local development Docker Compose configuration defining two services: a PostgreSQL 16 database and the user-api application. Postgres uses a named volume for data persistence and includes a health check; the user-api service depends on Postgres being healthy before starting. Environment variables BETTER_AUTH_SECRET and BETTER_AUTH_URL are expected from the host environment (or .env file), while DATABASE_URL is hardcoded to the internal Docker network. The user-api is exposed on port 3001 and built from the monorepo root context using the Dockerfile in apps/user-api/."
+    },
+    ".github/workflows/deploy.yml": {
+      "blobSha": "380f372fd62963d8157b4a0e2d74524e49d7e508",
+      "summary": "CI/CD workflow triggered on pushes to main/develop and pull requests, with three jobs: validate (lint, build, test), deploy-dev (develop branch → Cloud Run dev), and deploy-prod (main branch → Cloud Run prod). The validate job uses dummy environment variables since tests mock the DB, generates the Prisma client, and runs pnpm lint/build/test. Deploy jobs authenticate to GCP, build and push Docker images to Artifact Registry with GitHub Actions cache, and deploy to Cloud Run in us-west1. Environment variables and secrets on Cloud Run are managed externally via GCP Secret Manager, not passed in the workflow. Requires GCP_PROJECT_ID and GCP_SA_KEY GitHub secrets."
+    },
+    ".github/workflows/index-codebase.yml": {
+      "blobSha": "1a9373bfbfc9e890060fbfb8423e24b47334f479",
+      "summary": "Automated workflow that generates a codebase context document on pushes to develop/main, storing results on a dedicated orphan branch (docs/index). It restores a previous manifest from that branch for incremental indexing, runs a TypeScript indexer script (scripts/index-codebase.ts) powered by the Anthropic API, then commits and pushes updated docs. Uses concurrency control to prevent parallel runs and the [skip ci] commit message convention to avoid recursive triggers. Requires the ANTHROPIC_API_KEY secret and has write permissions on contents."
+    },
+    ".github/workflows/review-pr.yml": {
+      "blobSha": "09cf7117148922a933aa34f721e96510549ee4fd",
+      "summary": "AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI."
     }
   }
 }
