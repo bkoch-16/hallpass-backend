@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-05T18:43:54.206Z",
+  "generatedAt": "2026-03-05T19:27:15.263Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -69,6 +69,10 @@
     ".github/workflows/review-pr.yml": {
       "blobSha": "09cf7117148922a933aa34f721e96510549ee4fd",
       "summary": "AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI."
+    },
+    ".github/workflows/sync-postman.yml": {
+      "blobSha": "2f3d2e2f2f0bdd8d3d209ccd2fc10e2c88a3304e",
+      "summary": "GitHub Actions workflow that automatically syncs Postman collections and environments when changes are pushed to main or develop branches under the `postman/` directory. It uploads the Hallpass Postman collection and two environments (dev and prod) to the Postman API using PUT requests with specific collection/environment UUIDs. Uses `jq` to wrap the JSON files in the required Postman API payload format and `curl` with `--fail-with-body` for error handling. Depends on the `POSTMAN_API_KEY` secret for authentication; modifying this file requires knowledge of the Postman API and the hardcoded resource UUIDs that map to specific Postman workspace assets."
     }
   }
 }
