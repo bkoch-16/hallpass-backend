@@ -95,4 +95,3 @@ pnpm --filter @hallpass/db db:seed
 # Start the API
 pnpm dev
 ```
-
