@@ -2,9 +2,11 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import morgan from "morgan";
 import { toNodeHandler } from "@hallpass/auth";
+import { logger, httpLogger } from "@hallpass/logger";
+import { prisma } from "@hallpass/db";
 import { auth } from "./auth";
+import { env } from "./env";
 import userRouter from "./routes/user";
 
 const app = express();
@@ -12,9 +14,14 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
-// TODO: configure CORS_ORIGIN env var per environment and pass to cors({ origin, credentials: true })
-app.use(cors());
-app.use(morgan("dev"));
+
+const corsOrigins =
+  env.CORS_ORIGIN === "*"
+    ? "*"
+    : env.CORS_ORIGIN.split(",").map((o) => o.trim());
+app.use(cors({ origin: corsOrigins, credentials: true }));
+
+app.use(httpLogger);
 app.use(express.json());
 
 const limiter = rateLimit({
@@ -38,8 +45,13 @@ app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));
 
 app.use("/api/users", userRouter);
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "user-api" });
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "user-api" });
+  } catch {
+    res.status(503).json({ status: "error", service: "user-api" });
+  }
 });
 
 app.use((_req, res) => {
@@ -53,7 +65,7 @@ app.use(
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ message: "Internal server error" });
   },
 );
