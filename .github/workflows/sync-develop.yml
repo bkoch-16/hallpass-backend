@@ -8,7 +8,7 @@ jobs:
   sync:
     name: Merge main into develop
     runs-on: ubuntu-latest
-    # Only run on direct pushes (hotfixes), not PR merge commits
+    # Only run on direct pushes (hotfixes), not PR merge commits. PRs are set to merge only
     if: github.event.head_commit.message != '' && !startsWith(github.event.head_commit.message, 'Merge pull request')
 
     permissions:
@@ -45,6 +45,7 @@ jobs:
         run: |
           BRANCH="sync-main-to-develop-$(date +%Y%m%d%H%M%S)"
           git checkout -b $BRANCH origin/main
+          git push origin $BRANCH
           gh pr create \
             --base develop \
             --head $BRANCH \
