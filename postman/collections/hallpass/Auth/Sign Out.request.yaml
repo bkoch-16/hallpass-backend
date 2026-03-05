@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{Base}}/api/auth/sign-out"
+method: POST
+headers:
+  Origin: "{{Base}}"
+order: 3000

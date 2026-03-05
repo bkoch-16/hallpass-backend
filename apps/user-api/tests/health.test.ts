@@ -8,7 +8,10 @@ vi.mock("@hallpass/auth", () => ({
 }));
 
 vi.mock("@hallpass/db", () => ({
-  prisma: { user: { findFirst: vi.fn() } },
+  prisma: {
+    user: { findFirst: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue([{ 1: 1 }]),
+  },
   Role: {
     STUDENT: "STUDENT",
     TEACHER: "TEACHER",

@@ -1,0 +1,231 @@
+{
+  "info": {
+    "_postman_id": "a72110b1-2dba-4f0c-b687-0dfa088d848d",
+    "name": "hallpass",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User-API",
+      "item": [
+        {
+          "name": "Batch User",
+          "id": "25de6113-39b5-49f6-83a8-bc61461d8591",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{Base}}/api/users/batch?ids=id1,id2",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "batch"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "id1,id2"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User",
+          "id": "2cb89399-533a-4ca5-a646-82036c35c0eb",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{Base}}/api/users/:id",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User",
+          "id": "d21f8a45-8b13-4d65-93fd-cd8cdb0812f2",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{Base}}/api/users/:id",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User",
+          "id": "b26bb476-cc85-4927-a62f-4d54465412cb",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{Base}}/api/users/:id",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "b1af9e78-d4ae-4e18-a013-63326d53cafa"
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Sign Up",
+          "id": "3cb7e302-4199-4faa-b515-41b78786d948",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password\",\n  \"name\": \"Test User\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{Base}}/api/auth/sign-up/email",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sign-up",
+                "email"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sign In",
+          "id": "837fb648-4f32-407d-b103-1fa55f8d647f",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{Base}}/api/auth/sign-in/email",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sign-in",
+                "email"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sign Out",
+          "id": "0a1a9e1b-1e4a-42e1-871f-fb710ecc3198",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{Base}}/api/auth/sign-out",
+              "host": [
+                "{{Base}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sign-out"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "057bb5c1-f04d-4249-a8c0-599eb80c6458"
+    },
+    {
+      "name": "Health",
+      "id": "966affb0-e099-43c0-b8ae-94fd7ab2fcc2",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{Base}}/health",
+          "host": [
+            "{{Base}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "cbd0199c-fb70-4fea-9a40-d0a8776a6f98",
+      "key": "Base",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
