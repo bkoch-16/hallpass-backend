@@ -31,14 +31,15 @@ jobs:
         run: |
           BRANCH="sync-main-to-develop-$(date +%Y%m%d%H%M%S)"
           git checkout -b $BRANCH origin/develop
-          git merge origin/main || true
-          git push origin $BRANCH
-
-          if git diff --name-only --diff-filter=U | grep -q .; then
-            BODY="A direct push to \`main\` introduced conflicts that require manual resolution. Please resolve the conflicts and merge this PR."
-          else
+          if git merge origin/main; then
             BODY="A direct push to \`main\` has been automatically merged into this branch. Review and merge to keep \`develop\` in sync."
+          else
+            git add -A
+            git commit -m "Merge main into develop (conflicts need resolution)"
+            BODY="A direct push to \`main\` introduced conflicts that require manual resolution. Please resolve the conflicts and merge this PR."
           fi
+
+          git push origin $BRANCH
 
           gh pr create \
             --base develop \
