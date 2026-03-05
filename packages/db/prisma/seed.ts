@@ -41,13 +41,22 @@ async function main() {
         name: userData.name,
         role: userData.role,
         emailVerified: true,
-        accounts: {
-          create: {
-            accountId: userData.email,
-            providerId: "credential",
-            password: hashedPassword,
-          },
+      },
+    });
+
+    await prisma.account.upsert({
+      where: {
+        accountId_providerId: {
+          accountId: userData.email,
+          providerId: "credential",
         },
+      },
+      update: { password: hashedPassword },
+      create: {
+        accountId: userData.email,
+        providerId: "credential",
+        password: hashedPassword,
+        userId: user.id,
       },
     });
     console.log(`Seeded ${user.role}: ${user.email}`);
