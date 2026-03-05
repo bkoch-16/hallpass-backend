@@ -19,7 +19,12 @@ const corsOrigins =
   env.CORS_ORIGIN === "*"
     ? "*"
     : env.CORS_ORIGIN.split(",").map((o) => o.trim());
-app.use(cors({ origin: corsOrigins, credentials: true }));
+app.use(
+  cors({
+    origin: corsOrigins,
+    credentials: corsOrigins !== "*",
+  }),
+);
 
 app.use(httpLogger);
 app.use(express.json());
