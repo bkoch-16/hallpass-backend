@@ -14,6 +14,7 @@ Every user belongs to exactly one school. Nullable to allow SUPER_ADMIN users wh
 model User {
   // ...existing fields...
   schoolId  String?
+  deletedAt DateTime? // soft delete — deleted users cannot authenticate; set by DELETE /users/:id
 
   school          School?  @relation(fields: [schoolId], references: [id])
   passes          Pass[]   @relation("StudentPasses")
@@ -54,13 +55,22 @@ enum PolicyInterval {
   WEEK
   MONTH
 }
+```
 
+Interval boundaries (all computed in the school's timezone, not rolling windows):
+- `DAY` — current calendar day (midnight-to-midnight)
+- `WEEK` — current calendar week (Monday 00:00 → Sunday 23:59, 7-day window)
+- `MONTH` — current calendar month (1st 00:00 → last day 23:59)
+
+Calendar boundaries match how schools think about limits and avoid penalizing students for passes made late the previous day or week.
+
+```prisma
 model PassPolicy {
   id              String         @id @default(cuid())
   schoolId        String         @unique
 
   maxActivePasses Int?            // max concurrent ACTIVE passes school-wide
-  interval        PolicyInterval? // the rolling window for maxPerInterval
+  interval        PolicyInterval? // the interval window for maxPerInterval
   maxPerInterval  Int?            // max passes a student can request per interval
 
   createdAt       DateTime       @default(now())
@@ -70,9 +80,17 @@ model PassPolicy {
 }
 ```
 
-`maxActivePasses` blocks approval into `WAITING`. `maxPerInterval` is a hard block — the pass is rejected at request time if the student has hit the limit within the current rolling window. `interval` and `maxPerInterval` must be set together or not at all.
+`maxActivePasses` blocks approval into `WAITING`. `maxPerInterval` is a hard block — the pass is rejected at request time if the student has hit the limit within the current interval window. `interval` and `maxPerInterval` must be set together or not at all — enforced at the application layer on `PUT /schools/:schoolId/policy`; no DB-level constraint exists.
 
-**Temporal limit counting:** counts passes in statuses `PENDING`, `WAITING`, `ACTIVE`, and `COMPLETED` within the rolling window. `CANCELLED`, `DENIED`, and `EXPIRED` are excluded — `EXPIRED` is not counted because it indicates the pass was auto-terminated by the system (e.g. student was still PENDING or WAITING when the period ended), not a real hall pass usage.
+**Temporal limit counting:** counts passes in statuses `PENDING`, `WAITING`, `ACTIVE`, and `COMPLETED` within the current interval window. `CANCELLED`, `DENIED`, and `EXPIRED` are excluded — `EXPIRED` is not counted because it indicates the pass was auto-terminated by the system (e.g. student was still PENDING or WAITING when the period ended), not a real hall pass usage.
+
+**How the limit is checked:** At pass request time, a single `COUNT(*)` query checks the student's pass count within the current interval:
+```sql
+SELECT COUNT(*) FROM "Pass"
+WHERE "studentId" = ? AND "status" IN ('PENDING', 'WAITING', 'ACTIVE', 'COMPLETED')
+  AND "createdAt" >= [intervalStart]
+```
+`intervalStart` is computed from the school's timezone using the interval boundaries above. The `Pass(studentId, status)` index narrows the scan to one student's passes with matching statuses; Postgres applies the `createdAt` filter as a post-scan. For a student with many `COMPLETED` passes over a long interval this scan grows, but in practice a student has at most a few passes per day making this negligible. A `(studentId, createdAt)` index would serve this query optimally if this ever becomes a bottleneck. No Redis counter is maintained — pass requests are infrequent enough that an indexed DB query is acceptable and avoids stale-counter risk.
 
 ### `ScheduleType`
 
@@ -86,12 +104,15 @@ model ScheduleType {
   startBuffer Int      @default(0) // minutes after period start during which passes cannot be requested
   endBuffer   Int      @default(0) // minutes before period end during which passes cannot be requested
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete — hard deletes are blocked at the application layer when any SchoolCalendar references the record
 
   school    School           @relation(fields: [schoolId], references: [id])
   periods   Period[]
   calendar  SchoolCalendar[]
+
+  @@index([schoolId])
 }
 ```
 
@@ -130,6 +151,7 @@ model Period {
 
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    // soft delete — hard deletes are blocked at the application layer when any Pass references the record
 
   school         School       @relation(fields: [schoolId], references: [id])
   scheduleType   ScheduleType @relation(fields: [scheduleTypeId], references: [id])
@@ -154,6 +176,8 @@ model Destination {
 
   school       School    @relation(fields: [schoolId], references: [id])
   passes       Pass[]
+
+  @@index([schoolId])
 }
 ```
 
@@ -194,7 +218,7 @@ model Pass {
   schoolId      String
   studentId     String
   destinationId String
-  periodId      String?    // period active at request time; used for audit and expiry targeting
+  periodId      String     // always set — pass requests are rejected before creation if no period is active
   requestedById String     // student or teacher who created the request
   approvedById  String?
   deniedById    String?
@@ -219,12 +243,13 @@ model Pass {
   deniedBy     User?       @relation("DeniedPasses",    fields: [deniedById],    references: [id])
   cancelledBy  User?       @relation("CancelledPasses", fields: [cancelledById], references: [id])
   destination  Destination @relation(fields: [destinationId], references: [id])
-  period       Period?     @relation(fields: [periodId], references: [id])
+  period       Period      @relation(fields: [periodId], references: [id])
 
-  @@index([schoolId, status])     // teacher board: filter by school + status
-  @@index([studentId, status])    // one-pass check: student's current non-terminal pass
-  @@index([schoolId, createdAt])  // WAITING queue: oldest-first promotion ordering
-  @@index([destinationId, status]) // destination occupancy count on cold start
+  @@index([schoolId, status])              // teacher board: filter by school + status
+  @@index([studentId, status])             // one-pass check: student's current non-terminal pass
+  @@index([schoolId, status, createdAt])   // WAITING queue: filters status = 'WAITING' within a school, ordered oldest-first
+  @@index([destinationId, status, createdAt]) // WAITING promotion per destination + cold-start occupancy count
+  @@index([periodId, status])              // expiry job: find all PENDING/WAITING passes for a period at period end; compound avoids post-scan status filter
 }
 ```
 
@@ -238,10 +263,13 @@ Indexes are defined inline above on each model. Summary of rationale:
 
 - `Pass(schoolId, status)` — every teacher query scopes to school + status
 - `Pass(studentId, status)` — one-pass-at-a-time enforcement and student's own pass lookup
-- `Pass(schoolId, createdAt)` — WAITING queue is ordered oldest-first within a school
-- `Pass(destinationId, status)` — destination occupancy count during cold-start counter initialization
+- `Pass(schoolId, status, createdAt)` — WAITING queue: filters `status = 'WAITING'` within a school, ordered oldest-first — `status` must be in the index to avoid a post-scan filter
+- `Pass(destinationId, status, createdAt)` — WAITING promotion per destination (find oldest WAITING pass for a specific destination); also used for cold-start destination occupancy count
+- `Pass(periodId, status)` — expiry job queries all PENDING/WAITING passes for a given period; compound index avoids a post-scan status filter
 - `Period(scheduleTypeId)` — period lookups when resolving today's schedule
 - `SchoolCalendar(schoolId, date)` — covered by the `@@unique` constraint already
+- `Destination(schoolId)` — list destinations for school
+- `ScheduleType(schoolId)` — list schedule types for school
 
 The `slots:school` and `slots:destination` Redis counters exist specifically to avoid `COUNT(*)` queries on `Pass` at request time. The indexes above back the DB queries used only during cold-start initialization of those counters.
 
@@ -259,6 +287,13 @@ The `slots:school` and `slots:destination` Redis counters exist specifically to 
 | Auto-expire pass | System (BullMQ) |
 
 - A student may only have one non-terminal pass (PENDING, WAITING, ACTIVE) at a time — enforced at the API layer and backed by a DB unique partial index on `(studentId)` where `status IN ('PENDING', 'WAITING', 'ACTIVE')` as a safety net if Redis is unavailable
+
+> **Note:** Prisma's `@@unique` does not support `WHERE` clauses. This index must be created via a raw SQL migration:
+> ```sql
+> CREATE UNIQUE INDEX one_active_pass_per_student
+>   ON "Pass" ("studentId")
+>   WHERE status IN ('PENDING', 'WAITING', 'ACTIVE');
+> ```
 - Pass requests are rejected if the current time falls within `startBuffer` minutes of a period starting or `endBuffer` minutes of a period ending
 - If no period is currently active (between periods, after school), pass requests are rejected
 - `periodId` is resolved and stored at request time; it is not recomputed after creation
@@ -276,7 +311,7 @@ The `slots:school` and `slots:destination` Redis counters exist specifically to 
 | POST | `/users` | ADMIN+ | Create single user. |
 | POST | `/users/bulk` | ADMIN+ | Bulk create users for school onboarding. Accepts array. Returns `{ created: N, failed: [...] }`. |
 | GET | `/users/:id` | self or TEACHER+ | Fetch single user. |
-| PATCH | `/users/:id` | self or ADMIN+ | Update user. |
+| PATCH | `/users/:id` | self or ADMIN+ | Update user. Role changes are restricted to ADMIN+ — a user cannot elevate their own role. `schoolId` changes are restricted to SUPER_ADMIN. |
 | DELETE | `/users/:id` | ADMIN+ | Soft delete. |
 
 ### `apps/schools-api`
@@ -289,13 +324,15 @@ Covers schools, schedule types, periods, calendar, and destinations.
 | POST | `/schools` | SUPER_ADMIN | |
 | GET/PATCH/DELETE | `/schools/:id` | ADMIN+ / SUPER_ADMIN write | |
 | GET/POST | `/schools/:schoolId/schedule-types` | GET: authenticated; POST: ADMIN+ | |
-| PATCH/DELETE | `/schools/:schoolId/schedule-types/:id` | ADMIN+ | |
+| PATCH/DELETE | `/schools/:schoolId/schedule-types/:id` | ADMIN+ | Hard DELETE is blocked by FK if any SchoolCalendar entry references this ScheduleType. Soft DELETE is allowed — marks the type as deprecated. New calendar entries are blocked from referencing a soft-deleted type at the application layer. Existing calendar entries that reference a soft-deleted type are treated as a configuration error at schedule resolution time: log and return a 422 so the admin can reassign those dates. |
 | GET/POST | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods` | GET: authenticated; POST: ADMIN+ | |
-| PATCH/DELETE | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id` | ADMIN+ | |
+| PATCH/DELETE | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id` | ADMIN+ | If `startTime` or `endTime` changes, the BullMQ expiry job for that period was scheduled against the old time. The corrected job is upserted at the next Cloud Scheduler run (up to 12 hours away) — mid-day period time edits may not take effect until the following scheduler cycle. |
 | GET/POST | `/schools/:schoolId/calendar` | GET: authenticated; POST: ADMIN+ | POST accepts a single `CalendarEntry` or an array for bulk import. Upserts on `(schoolId, date)` — idempotent. Returns `{ created: N, updated: N }`. A full academic year is ~180 entries; bulk is required for school setup. |
 | PATCH/DELETE | `/schools/:schoolId/calendar/:id` | ADMIN+ | |
-| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | |
-| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | |
+| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | On POST, if `maxOccupancy` is set, immediately initialize `slots:destination:{destinationId}` to `maxOccupancy` — do not wait for cold start. Without this, the cap is silently bypassed until the next service restart. |
+| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | If `maxOccupancy` changes, delete and re-initialize `slots:destination:{destinationId}` using the same distributed lock pattern as cold start. If `maxOccupancy` is removed (set to null), delete the key entirely. On soft DELETE, immediately expire all WAITING passes for that destination — they will never be promoted since approvals to a deleted destination are blocked, and waiting for period-end expiry leaves students stuck. |
+| GET | `/schools/:schoolId/policy` | authenticated | Returns the school's PassPolicy, or 404 if none set |
+| PUT | `/schools/:schoolId/policy` | ADMIN+ | Create or replace policy (upsert on `schoolId`). On first creation or update of `maxActivePasses`, immediately initialize `slots:school:{schoolId}` — do not wait for cold start. On subsequent update, delete and re-initialize using the distributed lock pattern. If `maxActivePasses` is removed, delete the key entirely. |
 
 ### `apps/passes-api`
 
@@ -303,13 +340,13 @@ Pass lifecycle + Socket.io real-time.
 
 | Method | Route | Auth | Notes |
 |---|---|---|---|
-| POST | `/passes` | STUDENT (self) or TEACHER+ | |
+| POST | `/passes` | STUDENT (self) or TEACHER+ | Body: `{ studentId, destinationId, note? }`. For STUDENT, `studentId` is ignored — always set to `req.user.id`. For TEACHER+, `studentId` is required and must belong to the same school. Returns 201 with the created pass. Errors: 409 if student already has a non-terminal pass; 422 if no period is currently active, current time is within a buffer window, or `maxPerInterval` is exceeded. |
 | GET | `/passes` | STUDENT (own) or TEACHER+ | Cursor-paginated (`?cursor=<lastId>&limit=50`). STUDENT sees only their own passes. TEACHER+ sees all passes for the school. Filterable by `?status=` and `?date=` (defaults to today). |
 | GET | `/passes/:id` | STUDENT (own) or TEACHER+ | |
-| POST | `/passes/:id/approve` | TEACHER+ | |
-| POST | `/passes/:id/deny` | TEACHER+ | |
-| POST | `/passes/:id/return` | STUDENT (own) or TEACHER+ | |
-| POST | `/passes/:id/cancel` | STUDENT (own) or TEACHER+ | |
+| POST | `/passes/:id/approve` | TEACHER+ | Returns 409 if pass is not PENDING. |
+| POST | `/passes/:id/deny` | TEACHER+ | Returns 409 if pass is not PENDING. |
+| POST | `/passes/:id/return` | STUDENT (own) or TEACHER+ | Returns 409 if pass is not ACTIVE. |
+| POST | `/passes/:id/cancel` | STUDENT (own) or TEACHER+ | Returns 409 if pass is not PENDING or WAITING. |
 
 ---
 
@@ -322,8 +359,8 @@ Serverless Redis — matches the Cloud Run + Neon zero-scale model.
 | `slots:school:{schoolId}` | — | Available school-wide slots (`maxActivePasses - current ACTIVE count`) |
 | `slots:destination:{destinationId}` | — | Available occupancy slots for a destination (`maxOccupancy - current ACTIVE count`). Only tracked if `maxOccupancy` is set |
 | `slots:init:{schoolId}` | 30s | Distributed lock for cold-start counter initialization |
-| `pass:current:{studentId}` | — | Plain string (`SET key passId`). Current pass ID in a non-terminal state (PENDING, WAITING, ACTIVE); enforces one-at-a-time. Deleted after the terminal Socket.io event is emitted. |
-| `session:{token}` | session expiry | Caches `requireAuth` DB lookup |
+| `pass:current:{studentId}` | 24h | Plain string (`SET key passId`). Current pass ID in a non-terminal state (PENDING, WAITING, ACTIVE); enforces one-at-a-time. Deletion order: update DB → delete this key → emit Socket.io event. Deleting before emitting ensures a new pass request cannot race in between receiving the event and the key being cleared. On crash recovery, if the pass referenced by this key is already in a terminal state in DB, the API deletes the stale key and proceeds. The 24h TTL acts as a safety net so stale keys self-expire overnight even without an explicit recovery path (no school day exceeds 24h). |
+| `session:{token}` | session expiry | Caches `requireAuth` DB lookup. On logout, the key is explicitly deleted so invalidated sessions are not served from cache. Without this, a logged-out session remains valid until TTL expires. |
 | Socket.io adapter | — | `@socket.io/redis-adapter` for fan-out across Cloud Run instances |
 
 **Slot counter rules:**
@@ -332,13 +369,15 @@ Serverless Redis — matches the Cloud Run + Neon zero-scale model.
 - Counters are initialized from DB on service cold start using a distributed lock (see below)
 - `slots:school` only tracked if `PassPolicy.maxActivePasses` is set; `slots:destination` only tracked if `Destination.maxOccupancy` is set
 
+**Policy changes require counter re-sync.** If `PassPolicy.maxActivePasses` is updated mid-day, the `slots:school:{schoolId}` counter is stale. The `PUT /schools/:schoolId/policy` endpoint must delete and re-initialize `slots:school:{schoolId}` using the same distributed lock pattern as cold start. Failure to do this leaves WAITING passes stranded until next cold start. If `maxActivePasses` is removed (set to null), delete `slots:school:{schoolId}` entirely — the school no longer has a cap and the key must not linger with a stale value.
+
 **Cold-start counter initialization (distributed lock):**
 
 Cloud Run scales horizontally — multiple instances can cold-start simultaneously and race to initialize counters. To prevent double-counting:
 
 1. Attempt `SET slots:init:{schoolId} 1 NX EX 30` (acquire lock)
 2. If acquired: initialize counters from DB, then delete the lock key
-3. If not acquired: poll until `slots:init:{schoolId}` no longer exists, then proceed — polling on the lock key rather than a counter key because schools without `maxActivePasses` never write `slots:school`, which would cause an infinite wait
+3. If not acquired: poll every 100ms until `slots:init:{schoolId}` no longer exists, then proceed — polling on the lock key rather than a counter key because schools without `maxActivePasses` never write `slots:school`, which would cause an infinite wait. The 30s TTL guarantees the lock expires even if the holder crashes before deleting it.
 
 This ensures exactly one instance writes counters per school per cold-start event.
 
@@ -347,22 +386,35 @@ This ensures exactly one instance writes counters per school per cold-start even
 When any slot frees (school or destination), promote the next in line. The check-and-decrement is wrapped in a **Redis Lua script** to be fully atomic — without this, two concurrent slot-free events would both see `> 0` and double-promote (TOCTOU race):
 
 ```lua
--- Called once per WAITING candidate, oldest first. Returns 1 if promoted, 0 if not.
+-- Called once per WAITING candidate. Returns:
+--   1  = promoted (both slots available and decremented)
+--   0  = school slot exhausted — stop all promotion
+--  -1  = destination slot exhausted — skip this destination, try next
+-- nil means that slot type is unlimited (not tracked) — treated as always available.
 local school = tonumber(redis.call('GET', KEYS[1]))  -- slots:school:{schoolId}
 local dest   = tonumber(redis.call('GET', KEYS[2]))  -- slots:destination:{destinationId}
-if school > 0 and dest > 0 then
-  redis.call('DECR', KEYS[1])
-  redis.call('DECR', KEYS[2])
+if (school == nil or school > 0) and (dest == nil or dest > 0) then
+  if school ~= nil then redis.call('DECR', KEYS[1]) end
+  if dest   ~= nil then redis.call('DECR', KEYS[2]) end
   return 1
 end
-return 0
+if school ~= nil and school <= 0 then return 0 end  -- school exhausted
+return -1  -- destination exhausted
 ```
 
-Promotion loop:
-1. Query `WAITING` passes for that school ordered by `createdAt ASC` — oldest first
-2. For each candidate, execute the Lua script with its school and destination keys
-3. On return `1`: set status to `ACTIVE`, set `issuedAt`, emit `pass:approved` — stop
-4. On return `0`: try next candidate
+Promotion loop (destination-grouped — prevents a full destination from starving passes going elsewhere):
+1. Query all distinct `destinationId`s that have WAITING passes for this school
+2. For each destination, check `slots:destination:{destinationId}` — skip if tracked and `= 0`
+3. For each eligible destination, find the oldest WAITING pass (`ORDER BY createdAt ASC LIMIT 1` using `Pass(destinationId, status, createdAt)` index)
+4. Execute the Lua script for that candidate:
+   - Return `1`: promote (set `ACTIVE`, set `issuedAt`, emit `pass:approved`), stop
+   - Return `0`: school slot exhausted (raced by concurrent promoter) — stop entirely, no point trying other destinations
+   - Return `-1`: destination slot raced to 0 since step 2 — skip this destination, continue to next
+5. If no destination had a promotable candidate: no-op
+
+**Trigger:** Promotion runs as a non-blocking async call immediately after the handler responds — not a BullMQ job. The handler updates pass status and returns 200; promotion runs in the background. This keeps the response fast while promotion (typically 1–2 Lua calls) completes asynchronously.
+
+**Crash recovery:** If the process crashes between decrementing the slot counter and completing promotion, the counter shows available slots with no corresponding ACTIVE pass. Cold-start counter initialization (which recomputes from DB) corrects this on next restart. WAITING passes are not permanently stranded — the next slot-free event retries promotion, and period-end expiry clears any remaining WAITING passes at period end.
 
 ---
 
@@ -391,13 +443,17 @@ HTTP REST and WebSocket served from the same Express server.
 | `pass:cancelled` | `school:{schoolId}`, `user:{studentId}` |
 | `pass:expired` | `school:{schoolId}`, `user:{studentId}` |
 
+**Reconnection:** If a client's Socket.io connection drops and reconnects, in-flight events are not replayed. Clients must call `GET /passes/:id` (or `GET /passes?status=PENDING,WAITING,ACTIVE`) on reconnect to resync their current pass state. The REST API is the source of truth; Socket.io events are delivery-only optimizations.
+
 ---
 
 ## Pass Expiry Mechanism
 
 Uses **BullMQ** (Redis-backed delayed job queue on the same Upstash instance — no additional infrastructure). Jobs are scheduled per-period, not per-pass.
 
-**Job scheduling:** Two Cloud Scheduler jobs fire daily — at **5am UTC** and **5pm UTC**. Each run iterates all schools, resolves each school's timezone to compute the correct wall-clock `endTime` for each period, reads that day's `SchoolCalendar` entry, and upserts one BullMQ job per period delayed until the period's absolute UTC timestamp. Jobs use a deterministic ID (e.g. `period-expiry:{schoolId}:{periodId}:{date}`) so the operation is **idempotent** — re-runs and mid-day calendar/period updates safely overwrite the existing job with no duplicates.
+**Job scheduling:** Two Cloud Scheduler jobs fire daily — at **5am UTC** and **5pm UTC**. Each run iterates all schools, resolves each school's timezone to compute the correct wall-clock `endTime` for each period, reads that day's `SchoolCalendar` entry, and upserts one BullMQ job per period delayed until the period's absolute UTC timestamp. Jobs use a deterministic ID (e.g. `period-expiry:{schoolId}:{periodId}:{date}`) so the operation is **idempotent** — re-runs and mid-day calendar/period updates safely overwrite the existing job with no duplicates. BullMQ retries failed jobs with exponential backoff; after the retry limit is exhausted the job moves to a dead-letter queue and an alert should fire.
+
+**Scale consideration:** At 100k schools with ~8 periods each, each scheduler run upserts up to 800k BullMQ jobs. The scheduler job must paginate schools (e.g. 1k at a time) and either process batches sequentially or fan out to parallel workers via Cloud Tasks. A single synchronous loop over all schools will exhaust memory and timeout.
 
 **Period-end job (mid-day):**
 - Bulk expire `PENDING` and `WAITING` passes for the school — no point approving or queuing when the period is over
