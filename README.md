@@ -14,6 +14,10 @@ Designed as a microservice deployment with separate APIs for Users, Passes, Scho
 - **Infrastructure**: Google Cloud Run, GCP Artifact Registry, GCP Secret Manager
 - **CI/CD**: GitHub Actions
 
+## Architecture & Roadmap
+
+See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API design, and planned services.
+
 ## Structure
 
 - `apps/user-api` - User management REST API (Express)
@@ -58,14 +62,3 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 - The cloud database is [Neon](https://neon.tech) (serverless PostgreSQL that scales to zero), matching the Cloud Run deployment model
 - The `DATABASE_URL` is configured as a secret on each Cloud Run service
 
-## Upcoming
-
-- Live links for dev and prod APIs
-- APIs to be built:
-  - passes-api
-  - schools-api
-  - schedules-api
-  - destinations-api
-- **`packages/logger`** - Shared logging package for use across APIs
-- **`packages/types`** - Shared type definitions for use across APIs
-- **Redis** - Coordinate state across Cloud Run instances
