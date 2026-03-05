@@ -12,6 +12,9 @@ const globPatterns = [
   "apps/user-api/src/**/*.ts",
   "packages/db/prisma/schema.prisma",
   "packages/auth/src/**/*.ts",
+  "apps/user-api/Dockerfile",
+  "docker-compose.yml",
+  ".github/workflows/*.yml",
 ];
 
 // Derived automatically from globPatterns — do not edit manually.
