@@ -1,6 +1,7 @@
 $kind: http-request
 url: "{{Base}}/api/auth/sign-up/email"
 method: POST
+description: Register a new account with email and password. Returns the created user and sets a session cookie.
 body:
   type: json
   content: |-

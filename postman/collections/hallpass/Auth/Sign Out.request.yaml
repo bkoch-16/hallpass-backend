@@ -1,6 +1,5 @@
 $kind: http-request
 url: "{{Base}}/api/auth/sign-out"
 method: POST
-headers:
-  Origin: "{{Base}}"
+description: Sign out the current session. Clears the session cookie.
 order: 3000

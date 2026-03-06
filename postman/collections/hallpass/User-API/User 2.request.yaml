@@ -1,7 +1,0 @@
-$kind: http-request
-name: User
-url: "{{Base}}/api/users/:id"
-method: DELETE
-pathVariables:
-  id: ""
-order: 4000
