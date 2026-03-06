@@ -1,12 +1,12 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-06T23:23:48.900Z — 20 files indexed_
+_Generated: 2026-03-06T23:29:48.265Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages whenever changes to Postman collections or the demo generation script are pushed to `main` or `develop` branches. It uses pnpm (v10.30.1) and Node.js 22 to install dependencies and run `pnpm demo:generate`, then deploys the output from `./apps/demo-ui` to the `gh-pages` branch via the `peaceiris/actions-gh-pages` action. The workflow is path-filtered to only trigger on relevant file changes (`postman/collections/**` and `scripts/generate-demo.ts`). Developers should note the publish directory and branch conventions, and that the workflow relies on `GITHUB_TOKEN` for deployment permissions.
+GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggered on pushes to `main` or `develop` branches, but only when Postman collections or the demo generation script change. Uses pnpm 10.30.1 and Node 22 to install dependencies and run `pnpm demo:generate`, then deploys the output from `./apps/demo-ui` to the `gh-pages` branch via `peaceiris/actions-gh-pages`. Requires `contents: write` permission for the GitHub token to push to the deployment branch. Developers modifying this should note the path filters and ensure any new source paths for the demo are added to the trigger list.
 
 ### `.github/workflows/deploy.yml`
 
