@@ -5,5 +5,5 @@ method: GET
 description: Get a single user by ID. Users can fetch their own profile; TEACHER role or higher can fetch any user.
 pathVariables:
   - key: id
-    value: ""
+    value: cmmdth7vq0000k50msye6albt
 order: 2000
