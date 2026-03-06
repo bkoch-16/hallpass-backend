@@ -5,6 +5,11 @@ Search for existing patterns before proposing new ones — never reinvent someth
 Do not explore files outside the scope of the task. Map first, then read only what's relevant.
 Check package.json before suggesting new dependencies.
 
+When a plan already exists and new instructions arrive, assess the impact before acting:
+- **Discard**: New instructions change the goal or approach fundamentally — start a fresh plan.
+- **Edit**: New instructions refine, constrain, or extend the existing plan — update only affected sections.
+- **Keep**: New instructions are unrelated or confirm the current plan — leave it unchanged.
+
 ## Subagents
 
 Each subagent should have a focused, scoped question. Never spawn a subagent for broad exploration.
