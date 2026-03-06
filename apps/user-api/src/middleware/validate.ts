@@ -10,6 +10,11 @@ export function validateQuery(schema: ZodSchema) {
         .json({ message: "Invalid query", errors: result.error.flatten() });
       return;
     }
+    Object.defineProperty(req, "query", {
+      value: result.data,
+      writable: true,
+      configurable: true,
+    });
     next();
   };
 }
