@@ -121,7 +121,7 @@ function makeFieldRow(id, key, defaultValue) {
 
 function buildUrl(ep) {
   const base = getBaseUrl();
-  let url = ep.url.replace('{{Base}}', base).split('?')[0];
+  let url = ep.url.replace('{{Base}}', base);
 
   for (const pv of ep.pathVariables) {
     const input = document.getElementById('path-' + pv.key);

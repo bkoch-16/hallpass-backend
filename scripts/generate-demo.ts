@@ -95,11 +95,13 @@ function stemName(filePath: string): string {
 
 function parseEnvironments(): Environment[] {
   const files = fg.sync(abs("postman/environments/*.environment.yaml"));
-  return files.map((f) => {
-    const env = readYaml<EnvironmentYaml>(f);
-    const baseEntry = env.values.find((v) => v.key === "Base");
-    return { label: env.name, baseUrl: baseEntry?.value ?? "" };
-  });
+  return files
+    .map((f) => {
+      const env = readYaml<EnvironmentYaml>(f);
+      const baseEntry = env.values.find((v) => v.key === "Base");
+      return { label: env.name, baseUrl: baseEntry?.value ?? "" };
+    })
+    .filter((env) => !/prod/i.test(env.label));
 }
 
 // ---------------------------------------------------------------------------
