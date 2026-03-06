@@ -1,0 +1,38 @@
+name: Deploy Demo UI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'postman/collections/**'
+      - 'scripts/generate-demo.ts'
+
+jobs:
+  deploy-demo:
+    name: Generate & Deploy Demo UI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate demo HTML
+        run: pnpm demo:generate
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apps/demo-ui
+          publish_branch: gh-pages

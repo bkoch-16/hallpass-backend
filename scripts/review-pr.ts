@@ -28,6 +28,8 @@ When analyzing cache or staleness checks, distinguish between a value read from 
 Incorrect reasoning: "cachedSha was produced by resolving origin/develop, so diff(cachedSha, origin/develop) is always empty."
 Correct reasoning: cachedSha is the tip from the last run. If origin/develop has since advanced, cachedSha ≠ current tip and the diff is non-empty — which is the intended behavior.
 
+Before flagging a missing or undeclared dependency, check whether \`package.json\` appears in the codebase context. If it does, verify the dependency is listed there before raising an issue. If \`package.json\` is not available in the context or diff, move the concern to **Unverified Claims** — not Issues.
+
 For every issue you raise, reference the specific file and line number(s) from the diff.
 
 Structure your review as:
