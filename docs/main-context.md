@@ -1,12 +1,32 @@
 # Codebase Context — main
 
-_Generated: 2026-03-04T22:12:03.699Z — 12 files indexed_
+_Generated: 2026-03-06T02:37:52.949Z — 18 files indexed_
 
 ## File Summaries
 
+### `.github/workflows/deploy.yml`
+
+CI/CD pipeline for the backend with three jobs: `validate` (lint, build, test on all branches/PRs), `deploy-dev` (pushes to `develop` deploy to Cloud Run dev), and `deploy-prod` (pushes to `main` deploy to Cloud Run prod). The validate job uses dummy environment variables since tests mock the DB. Docker images are built with Buildx, pushed to GCP Artifact Registry with both SHA and `latest` tags, and use GitHub Actions cache for layer reuse. Cloud Run environment variables and secrets are managed directly on the service via GCP Secret Manager rather than being passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
+
+### `.github/workflows/index-codebase.yml`
+
+Automated codebase indexing workflow that runs on pushes to `develop` and `main`, generating context documents for AI-assisted development. It restores a previous manifest from the `docs/index` orphan branch (for incremental indexing), runs `scripts/index-codebase.ts` using the Anthropic API, and pushes generated docs back to the `docs/index` branch. Uses concurrency control (`cancel-in-progress: false`) to prevent parallel runs from conflicting. The branch-slug naming convention allows separate context documents per branch. Requires the `ANTHROPIC_API_KEY` secret.
+
+### `.github/workflows/review-pr.yml`
+
+AI-powered pull request review workflow using Claude (Anthropic API) that triggers on PR open/sync/reopen against `develop` or `main`. It's restricted to PRs authored by `bkoch-16` (not bot-authored). It generates a diff against the base branch, fetches the codebase context document from the `docs/index` branch, and runs `scripts/review-pr.ts` to produce a review. The review action (approve, request-changes, or comment) is determined by parsing the first line of the AI output. Requires `ANTHROPIC_API_KEY` secret and uses the default `GITHUB_TOKEN` for PR review submission.
+
+### `.github/workflows/sync-develop.yml`
+
+Automated workflow to keep the `develop` branch in sync with `main` after every push to main. It attempts a no-fast-forward merge of main into a `sync/main-to-develop` branch, then opens (or updates) a PR targeting develop. If merge conflicts occur, it aborts and posts a comment on the original PR or commit notifying of the conflict. The workflow includes smart skip logic: it exits early if develop already contains all main commits, or if there are no content differences after merge. Uses force-with-lease for safe branch updates and avoids creating duplicate PRs.
+
+### `apps/user-api/Dockerfile`
+
+Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm 10. It uses a layer-caching strategy by copying package manifests first, then source code, to avoid busting the dependency install layer on code-only changes. After installing dependencies, it generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect to a DB) and builds internal packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (`docker-entrypoint.sh`), and the service listens on port 3001. Developers modifying this file should ensure any new workspace packages have their package.json copied in the manifest layer and are added to the build chain.
+
 ### `apps/user-api/src/app.ts`
 
-Configures and exports the main Express application for the user-api service. Sets up security middleware (helmet, CORS, rate limiting) and logging (morgan), with a stricter rate limiter (10 req/15min) on auth routes. Routes auth requests (`/api/auth/*`) through Better Auth's Node handler, mounts the user router at `/api/users`, and provides a `/health` endpoint. Includes a 404 catch-all and a global error handler. Note the TODO for configuring CORS origin per environment; `trust proxy` is enabled for correct client IP detection behind proxies.
+Main Express application setup for the user-api service, responsible for wiring all middleware and routes. It configures helmet (security headers), CORS (configurable origins via env), pino HTTP logging, JSON body parsing, and two rate limiters (general 100 req/15min, auth 10 req/15min). Routes include BetterAuth handler at `/api/auth/*splat`, user CRUD at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. It includes a 404 catch-all and a global error handler. The `trust proxy` setting is enabled for deployment behind a reverse proxy (Cloud Run).
 
 ### `apps/user-api/src/auth.ts`
 
@@ -14,7 +34,7 @@ Creates and exports the Better Auth instance used throughout the user-api servic
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports environment variables using a Zod schema, ensuring `DATABASE_URL`, `BETTER_AUTH_URL`, and `BETTER_AUTH_SECRET` are present at startup. `PORT` is optional. Parsing `process.env` through Zod provides fail-fast behavior if required variables are missing. Any new environment variables needed by the service must be added to `envSchema`.
+Environment variable validation module using Zod schema parsing. It requires DATABASE_URL, BETTER_AUTH_URL, and BETTER_AUTH_SECRET to be present, with PORT as optional and CORS_ORIGIN defaulting to "*". The validated `env` object is exported for type-safe access throughout the application. This file will throw at startup if required environment variables are missing, which is intentional for fail-fast behavior.
 
 ### `apps/user-api/src/express.d.ts`
 
@@ -38,11 +58,15 @@ Exports three Express middleware factories—`validateQuery`, `validateBody`, an
 
 ### `apps/user-api/src/routes/user.ts`
 
-Defines the Express router for CRUD user operations mounted at `/api/users`. Supports: GET `/batch` (bulk lookup by IDs, max 100, teacher+ access), GET `/:id` (self or teacher+), POST `/` (admin+ create with role escalation guard), PATCH `/:id` (self or admin+ update with role escalation guard), and DELETE `/:id` (soft-delete, admin+ only, cannot delete equal or higher rank). All routes require authentication and use Zod validation schemas. Uses Prisma for database access with soft-delete filtering (`deletedAt: null`) and consistent `select` projections. Route ordering matters—`/batch` is registered before `/:id` to avoid parameter capture conflicts.
+Express router implementing CRUD endpoints for user management with role-based access control. Exports a Router with GET `/batch` (multi-user lookup, max 100 IDs), GET `/:id`, POST `/`, PATCH `/:id`, and DELETE `/:id` (soft delete via `deletedAt`). All routes require authentication via `requireAuth` middleware, with role guards (`requireRole`, `requireSelfOrRole`) enforcing hierarchical permissions using `roleRank` — users cannot create/assign roles above their own rank, and cannot delete users at or above their rank. Request validation uses Zod schemas through `validateBody`, `validateParams`, and `validateQuery` middleware. The batch route is intentionally placed before `/:id` to avoid route parameter conflicts.
 
 ### `apps/user-api/src/schemas/user.ts`
 
 Defines Zod validation schemas for user-related API endpoints. Exports `batchQuerySchema` (for querying multiple users by comma-separated IDs), `userIdSchema` (single user ID param), `updateUserSchema` (partial update requiring at least one field with a `.refine` check), and `createUserSchema` (requires email and name, optional role). All role fields are constrained to the enum `["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]`. Depends on the `zod` library; when modifying, ensure enum values stay in sync with the Prisma/database role definitions.
+
+### `docker-compose.yml`
+
+Docker Compose configuration for local development defining two services: a PostgreSQL 16 database and the user-api application. PostgreSQL uses a named volume for data persistence and has a health check that user-api depends on before starting. The user-api service is built from the repository root using the user-api Dockerfile, with environment variables for database connection, port, and BetterAuth configuration (secret and URL sourced from `.env` or defaults). Developers should ensure BETTER_AUTH_SECRET is set in their environment or `.env` file.
 
 ### `packages/auth/src/index.ts`
 
