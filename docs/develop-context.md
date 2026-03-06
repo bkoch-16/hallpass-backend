@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-06T02:42:51.615Z — 18 files indexed_
+_Generated: 2026-03-06T18:41:47.629Z — 18 files indexed_
 
 ## File Summaries
 
@@ -54,15 +54,15 @@ Provides role-based authorization middleware and utilities. Defines a ROLE_RANK 
 
 ### `apps/user-api/src/middleware/validate.ts`
 
-Provides three Zod-based validation middleware factories for Express: validateQuery, validateBody, and validateParams. Each takes a ZodSchema, runs safeParse on the corresponding request property, and returns a 400 response with flattened Zod errors on failure. validateBody replaces req.body with the parsed (cleaned) data on success. validateParams casts the result to Record<string, string>. These are composable and used inline in route definitions.
+Express middleware factory functions for validating request query parameters, body, and route params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each accepting a `ZodSchema` and returning middleware that returns a 400 response with flattened Zod errors on validation failure. On success, the parsed (and potentially transformed/defaulted) data replaces the original `req.query`, `req.body`, or `req.params`. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it is normally read-only, while body and params are assigned directly.
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router defining CRUD endpoints for user management: batch GET (`/batch`), single GET (`/:id`), POST (`/`), PATCH (`/:id`), and DELETE (`/:id`). Uses Prisma ORM for database operations with soft-delete pattern (filtering/setting `deletedAt`). All routes require authentication via `requireAuth`, with role-based authorization (`requireRole`, `requireSelfOrRole`) and input validation (`validateBody`, `validateParams`, `validateQuery`) applied as middleware. Role hierarchy is enforced using `roleRank` to prevent users from creating, updating, or deleting users of equal or higher privilege. The batch endpoint limits queries to 100 IDs and all read queries use a consistent `select` projection (id, email, name, role, createdAt). The `/batch` route is deliberately registered before `/:id` to avoid route parameter conflicts.
+Defines the Express router for all user CRUD endpoints including GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (single create), POST /bulk (bulk create), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Uses middleware chains of `requireAuth`, role-based guards (`requireRole`, `requireSelfOrRole`), and Zod validation (`validateBody`, `validateParams`, `validateQuery`) from sibling middleware/schema modules. Role hierarchy is enforced via `roleRank` to prevent privilege escalation on create, update, and delete operations. Depends on `@hallpass/db` for Prisma client and Role enum; all queries filter on `deletedAt: null` and select a consistent subset of user fields. Handles Prisma unique constraint errors (P2002) for email conflicts.
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Defines Zod validation schemas for user-related API endpoints in the user-api service. Exports four schemas: `batchQuerySchema` for validating batch user queries by IDs, `userIdSchema` for single user ID validation, `updateUserSchema` for partial user updates (requiring at least one field via `.refine()`), and `createUserSchema` for user creation with required email/name and optional role. The role field is constrained to an enum of "STUDENT", "TEACHER", "ADMIN", and "SUPER_ADMIN". Depends on the `zod` library for runtime validation; these schemas are likely used with a middleware or controller layer to validate incoming request data.
+Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes.
 
 ### `docker-compose.yml`
 

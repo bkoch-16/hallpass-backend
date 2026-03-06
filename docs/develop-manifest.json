@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T02:42:51.615Z",
+  "generatedAt": "2026-03-06T18:41:47.629Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -35,16 +35,16 @@
       "summary": "Provides role-based authorization middleware and utilities. Defines a ROLE_RANK hierarchy (STUDENT=0 through SERVICE=4) with a roleRank() helper for comparing privilege levels. Exports requireRole() which checks if req.user.role is in the allowed set, and requireSelfOrRole() which additionally permits access if the route param :id matches the authenticated user's ID. Both return 401 if no user is present and 403 if authorization fails. Must be used after requireAuth middleware."
     },
     "apps/user-api/src/middleware/validate.ts": {
-      "blobSha": "4c57b3f6c35fbb8f815948a1ba600ddf03e58178",
-      "summary": "Provides three Zod-based validation middleware factories for Express: validateQuery, validateBody, and validateParams. Each takes a ZodSchema, runs safeParse on the corresponding request property, and returns a 400 response with flattened Zod errors on failure. validateBody replaces req.body with the parsed (cleaned) data on success. validateParams casts the result to Record<string, string>. These are composable and used inline in route definitions."
+      "blobSha": "fe303ff6aae657cb70cbe09fb53df207b7bf3df1",
+      "summary": "Express middleware factory functions for validating request query parameters, body, and route params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each accepting a `ZodSchema` and returning middleware that returns a 400 response with flattened Zod errors on validation failure. On success, the parsed (and potentially transformed/defaulted) data replaces the original `req.query`, `req.body`, or `req.params`. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it is normally read-only, while body and params are assigned directly."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "9eb09399c84af9ada8f9f88dbb286cc115bf6a30",
-      "summary": "Express router defining CRUD endpoints for user management: batch GET (`/batch`), single GET (`/:id`), POST (`/`), PATCH (`/:id`), and DELETE (`/:id`). Uses Prisma ORM for database operations with soft-delete pattern (filtering/setting `deletedAt`). All routes require authentication via `requireAuth`, with role-based authorization (`requireRole`, `requireSelfOrRole`) and input validation (`validateBody`, `validateParams`, `validateQuery`) applied as middleware. Role hierarchy is enforced using `roleRank` to prevent users from creating, updating, or deleting users of equal or higher privilege. The batch endpoint limits queries to 100 IDs and all read queries use a consistent `select` projection (id, email, name, role, createdAt). The `/batch` route is deliberately registered before `/:id` to avoid route parameter conflicts."
+      "blobSha": "52a1632d0b2d408ca96d6cc76610be1b0d8170de",
+      "summary": "Defines the Express router for all user CRUD endpoints including GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (single create), POST /bulk (bulk create), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Uses middleware chains of `requireAuth`, role-based guards (`requireRole`, `requireSelfOrRole`), and Zod validation (`validateBody`, `validateParams`, `validateQuery`) from sibling middleware/schema modules. Role hierarchy is enforced via `roleRank` to prevent privilege escalation on create, update, and delete operations. Depends on `@hallpass/db` for Prisma client and Role enum; all queries filter on `deletedAt: null` and select a consistent subset of user fields. Handles Prisma unique constraint errors (P2002) for email conflicts."
     },
     "apps/user-api/src/schemas/user.ts": {
-      "blobSha": "653ab7279f6af79b7949867d6fdc92398111e9e2",
-      "summary": "Defines Zod validation schemas for user-related API endpoints in the user-api service. Exports four schemas: `batchQuerySchema` for validating batch user queries by IDs, `userIdSchema` for single user ID validation, `updateUserSchema` for partial user updates (requiring at least one field via `.refine()`), and `createUserSchema` for user creation with required email/name and optional role. The role field is constrained to an enum of \"STUDENT\", \"TEACHER\", \"ADMIN\", and \"SUPER_ADMIN\". Depends on the `zod` library for runtime validation; these schemas are likely used with a middleware or controller layer to validate incoming request data."
+      "blobSha": "7f00f8e84240018af9fab441b13df9bf967c2b4b",
+      "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes."
     },
     "packages/auth/src/index.ts": {
       "blobSha": "ef9bc9b5ef24d8bf796130193e1ecb484e3e672e",
