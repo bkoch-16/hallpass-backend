@@ -1,6 +1,9 @@
 $kind: http-request
 url: "{{Base}}/api/auth/sign-in/email"
 method: POST
+headers:
+  - key: Origin
+    value: "{{Base}}"
 description: Sign in with email and password. Sets a session cookie used by all protected endpoints. Seed accounts — student@hallpass.dev, teacher@hallpass.dev, admin@hallpass.dev, superadmin@hallpass.dev (password "password").
 body:
   type: json
