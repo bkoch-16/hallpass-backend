@@ -15,7 +15,8 @@ const router = Router();
 
 // GET /me — must come before /:id
 router.get("/me", requireAuth, (req: Request, res: Response) => {
-  res.json(req.user);
+  const { id, email, name, role, createdAt } = req.user!;
+  res.json({ id, email, name, role, createdAt });
 });
 
 // GET / — cursor-paginated list; ?ids= replaces the former /batch endpoint
@@ -97,20 +98,27 @@ router.post(
       return;
     }
 
-    const user = await prisma.user.create({
-      data: { email: req.body.email, name: req.body.name, role: targetRole },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
-
-    res.status(201).json(user);
+    try {
+      const user = await prisma.user.create({
+        data: { email: req.body.email, name: req.body.name, role: targetRole },
+        select: { id: true, email: true, name: true, role: true, createdAt: true },
+      });
+      res.status(201).json(user);
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+        res.status(409).json({ message: "Email already in use" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
 router.post(
   "/bulk",
   requireAuth,
-  validateBody(bulkCreateSchema),
   requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  validateBody(bulkCreateSchema),
   async (req: Request, res: Response) => {
     const users: Array<{ email: string; name: string; role?: string }> = req.body;
     const callerRank = roleRank(req.user!.role as Role);

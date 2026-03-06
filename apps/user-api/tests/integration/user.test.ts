@@ -69,6 +69,17 @@ describe("GET /api/users/me (integration)", () => {
     expect(res.body.email).toBe(user.email);
   });
 
+  it("does not expose deletedAt or emailVerified", async () => {
+    const user = await seedUser({ role: "TEACHER" });
+    authenticateAs(user);
+
+    const res = await request(app).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty("deletedAt");
+    expect(res.body).not.toHaveProperty("emailVerified");
+  });
+
   it("returns 401 for a soft-deleted user", async () => {
     const user = await seedUser({ deletedAt: new Date() });
     // getSession returns the user ID, but requireAuth's findFirst
@@ -164,7 +175,7 @@ describe("POST /api/users (integration)", () => {
     expect(inDb?.email).toBe("new@test.com");
   });
 
-  it("returns 500 on unique constraint violation (duplicate email)", async () => {
+  it("returns 409 on unique constraint violation (duplicate email)", async () => {
     const admin = await seedUser({ role: "ADMIN" });
     await seedUser({ email: "dup@test.com", role: "STUDENT" });
     authenticateAs(admin);
@@ -173,7 +184,8 @@ describe("POST /api/users (integration)", () => {
       .post("/api/users")
       .send({ email: "dup@test.com", name: "Duplicate" });
 
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Email already in use" });
   });
 
   it("response does not expose deletedAt or emailVerified", async () => {

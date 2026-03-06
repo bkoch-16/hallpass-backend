@@ -188,6 +188,15 @@ describe("GET /api/users/me", () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(fakeUser.id);
   });
+
+  it("does not expose deletedAt or emailVerified", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(app).get("/api/users/me");
+
+    expect(res.body).not.toHaveProperty("deletedAt");
+    expect(res.body).not.toHaveProperty("emailVerified");
+  });
 });
 
 describe("GET /api/users", () => {
@@ -528,14 +537,28 @@ describe("POST /api/users/bulk", () => {
     expect(mockPrisma.user.create).not.toHaveBeenCalled();
   });
 
-  it("returns 500 when prisma.user.create throws (e.g. unique constraint)", async () => {
+  it("returns 409 when email already exists (unique constraint violation)", async () => {
     const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.create.mockRejectedValue(new Error("Unique constraint failed"));
+    const error = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    mockPrisma.user.create.mockRejectedValue(error);
 
     const res = await request(app)
       .post("/api/users")
       .send({ email: "dup@test.com", name: "Dup User" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Email already in use" });
+  });
+
+  it("returns 500 when prisma.user.create throws an unexpected error", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.create.mockRejectedValue(new Error("unexpected DB error"));
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ message: "Internal server error" });
