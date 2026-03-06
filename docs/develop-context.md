@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-06T01:13:23.958Z — 18 files indexed_
+_Generated: 2026-03-06T01:44:31.915Z — 18 files indexed_
 
 ## File Summaries
 
@@ -18,7 +18,7 @@ AI-powered pull request review workflow that runs on PR open/sync/reopen against
 
 ### `.github/workflows/sync-develop.yml`
 
-GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a PR after every push to `main`. It uses a dedicated `sync/main-to-develop` branch, performs a `--no-ff` merge of main into develop, and either creates a new PR or reuses an existing open one. If the merge encounters conflicts, it aborts and posts a comment on the originating PR (or commit) alerting developers to resolve manually, then exits with failure. The workflow includes early-exit optimizations: it skips if develop already contains all main commits, or if the merge produces no content differences. Requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR management.
+GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a pull request whenever new commits are pushed to `main`. It first checks if `develop` already contains all of `main`'s commits (early exit), then creates or resets a `sync/main-to-develop` branch, attempts a no-fast-forward merge, and opens a PR targeting `develop`. If a merge conflict occurs, it aborts and posts a comment on the originating PR or commit alerting developers to resolve manually, then exits with failure. The workflow requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR creation, listing, and commenting. Developers modifying this should be aware of the force-with-lease push on the sync branch and the idempotent PR check that avoids duplicate open PRs.
 
 ### `apps/user-api/Dockerfile`
 

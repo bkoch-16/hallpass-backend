@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T01:13:23.958Z",
+  "generatedAt": "2026-03-06T01:44:31.915Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -71,8 +71,8 @@
       "summary": "AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI."
     },
     ".github/workflows/sync-develop.yml": {
-      "blobSha": "c0ec6466005df2e818e5f79efade05a0a8f4d039",
-      "summary": "GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a PR after every push to `main`. It uses a dedicated `sync/main-to-develop` branch, performs a `--no-ff` merge of main into develop, and either creates a new PR or reuses an existing open one. If the merge encounters conflicts, it aborts and posts a comment on the originating PR (or commit) alerting developers to resolve manually, then exits with failure. The workflow includes early-exit optimizations: it skips if develop already contains all main commits, or if the merge produces no content differences. Requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR management."
+      "blobSha": "1a279048f34a53a0bd7e275b2dd5a00bbffb6ad6",
+      "summary": "GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a pull request whenever new commits are pushed to `main`. It first checks if `develop` already contains all of `main`'s commits (early exit), then creates or resets a `sync/main-to-develop` branch, attempts a no-fast-forward merge, and opens a PR targeting `develop`. If a merge conflict occurs, it aborts and posts a comment on the originating PR or commit alerting developers to resolve manually, then exits with failure. The workflow requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR creation, listing, and commenting. Developers modifying this should be aware of the force-with-lease push on the sync branch and the idempotent PR check that avoids duplicate open PRs."
     }
   }
 }
