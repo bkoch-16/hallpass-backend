@@ -46,6 +46,7 @@ interface EnvironmentYaml {
 
 interface Endpoint {
   name: string;
+  order: number;
   method: string;
   url: string;
   description: string;
@@ -145,6 +146,7 @@ function parseGroups(): Group[] {
     const req = readYaml<RequestYaml>(filePath);
     const endpoint: Endpoint = {
       name: req.name ?? stemName(filePath),
+      order: req.order ?? 9999,
       method: (req.method ?? "GET").toUpperCase(),
       url: (req.url ?? "").split("?")[0],
       description: req.description ?? "",
@@ -158,10 +160,10 @@ function parseGroups(): Group[] {
   }
 
   for (const group of groupMap.values()) {
-    group.endpoints.sort((a, b) => a.name.localeCompare(b.name));
+    group.endpoints.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }
 
-  return [...groupMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...groupMap.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
 }
 
 // ---------------------------------------------------------------------------
