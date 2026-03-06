@@ -41,7 +41,7 @@ jobs:
           else
             git checkout -b "$BRANCH" origin/develop
           fi
-          if ! git merge --no-ff origin/main; then
+          if ! git merge --no-ff --log origin/main; then
             echo "::error::Merge conflict detected — manually sync main into develop."
             git merge --abort
             MAIN_SHA=$(git rev-parse origin/main)
