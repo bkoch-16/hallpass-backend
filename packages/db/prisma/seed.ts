@@ -40,7 +40,7 @@ async function main() {
     const user = await prisma.$transaction(async (tx) => {
       const user = await tx.user.upsert({
         where: { email: userData.email },
-        update: { name: userData.name, role: userData.role },
+        update: {},
         create: {
           email: userData.email,
           name: userData.name,
@@ -61,11 +61,6 @@ async function main() {
             password: hashedPassword,
             userId: user.id,
           },
-        });
-      } else {
-        await tx.account.update({
-          where: { id: existingAccount.id },
-          data: { password: hashedPassword },
         });
       }
 

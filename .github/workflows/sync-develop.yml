@@ -45,7 +45,7 @@ jobs:
             echo "::error::Merge conflict detected — manually sync main into develop."
             git merge --abort
             MAIN_SHA=$(git rev-parse origin/main)
-            PR_NUMBER=$(gh api repos/${{ github.repository }}/commits/$MAIN_SHA/pulls --jq '.[0].number' 2>/dev/null)
+            PR_NUMBER=$(gh api repos/${{ github.repository }}/commits/$MAIN_SHA/pulls --jq '[.[] | select(.base.ref == "main")] | .[0].number' 2>/dev/null)
             if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
               gh pr comment $PR_NUMBER \
                 --body "**Sync conflict**: automatic merge of \`main\` into \`develop\` failed due to conflicts. Please resolve manually."
