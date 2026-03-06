@@ -54,7 +54,8 @@ app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: "ok", service: "user-api" });
-  } catch {
+  } catch (err) {
+    logger.error(err, "Health check failed");
     res.status(503).json({ status: "error", service: "user-api" });
   }
 });
