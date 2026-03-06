@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-03-06T02:37:52.949Z — 18 files indexed_
+_Generated: 2026-03-06T02:41:45.950Z — 18 files indexed_
 
 ## File Summaries
 
@@ -18,7 +18,7 @@ AI-powered pull request review workflow using Claude (Anthropic API) that trigge
 
 ### `.github/workflows/sync-develop.yml`
 
-Automated workflow to keep the `develop` branch in sync with `main` after every push to main. It attempts a no-fast-forward merge of main into a `sync/main-to-develop` branch, then opens (or updates) a PR targeting develop. If merge conflicts occur, it aborts and posts a comment on the original PR or commit notifying of the conflict. The workflow includes smart skip logic: it exits early if develop already contains all main commits, or if there are no content differences after merge. Uses force-with-lease for safe branch updates and avoids creating duplicate PRs.
+GitHub Actions workflow that automatically syncs the `develop` branch with `main` after every push to `main`. It creates a `sync/main-to-develop` branch, attempts a no-fast-forward merge of `main` into `develop`, and opens a pull request if there are differences. If the merge encounters conflicts, it aborts, posts a comment on the originating PR or commit notifying of the failure, and exits with an error. The workflow uses force-with-lease pushes to update the sync branch and avoids creating duplicate PRs by checking for existing open sync PRs. Requires `contents: write` and `pull-requests: write` permissions; developers should be aware that merge conflicts require manual resolution and that the sync branch is reset to `origin/develop` on each run if it already exists.
 
 ### `apps/user-api/Dockerfile`
 
