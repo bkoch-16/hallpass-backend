@@ -55,7 +55,7 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 
 | Environment | Branch | Cloud Run Service | URL |
 |---|---|---|---|
-| Dev | `develop` | `user-api-dev` | [Backend User API](https://user-api-dev-509242588558.us-west1.run.app) |
+| Dev | `develop` | `user-api-dev` | [user-api-dev](https://user-api-dev-509242588558.us-west1.run.app) — use Postman or append `/health` to verify |
 | Prod | `main` | `user-api` | — |
 
 - Images are stored in GCP Artifact Registry at `us-west1-docker.pkg.dev/{project}/hallpass/`
