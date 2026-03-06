@@ -45,7 +45,7 @@ async function main() {
           email: userData.email,
           name: userData.name,
           role: userData.role,
-          emailVerified: false,
+          emailVerified: true,
         },
       });
 
