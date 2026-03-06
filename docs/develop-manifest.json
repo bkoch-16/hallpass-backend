@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-05T19:27:15.263Z",
+  "generatedAt": "2026-03-06T01:13:23.958Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
       "summary": "Defines the PostgreSQL database schema using Prisma ORM for the HallPass application. Contains a Role enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and three models: User (with soft-delete via deletedAt), Session (token-based with IP/user-agent tracking), and Account (multi-provider auth support with optional password). Sessions and Accounts cascade-delete when their parent User is removed. IDs use cuid() generation. Any schema changes here require a Prisma migration and will affect the generated Prisma client used throughout the monorepo via @hallpass/db."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "38a59313a045da55218c7a26e25fc89d6011bb05",
-      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` via `toNodeHandler` from `@hallpass/auth`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Includes a 404 catch-all and a global error handler that logs errors and returns 500. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, as well as local `auth` config and `env` validation. The `trust proxy` setting is enabled for correct rate-limiting behind reverse proxies."
+      "blobSha": "47d7bd37349c0a440bbff0d12325b216597917b5",
+      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters—a general 100 req/15min limit and a stricter 10 req/15min limit for auth routes. Routes include Better Auth integration at `/api/auth/*splat`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth`, `env`, and `userRouter` modules. Includes a 404 catch-all and a global error handler that logs errors and returns 500. The `trust proxy` setting is enabled for running behind a reverse proxy (important for rate limiting accuracy)."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "a9baa30042a55df1e1ff61cfff1247777a07e633",
@@ -70,9 +70,9 @@
       "blobSha": "09cf7117148922a933aa34f721e96510549ee4fd",
       "summary": "AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI."
     },
-    ".github/workflows/sync-postman.yml": {
-      "blobSha": "2f3d2e2f2f0bdd8d3d209ccd2fc10e2c88a3304e",
-      "summary": "GitHub Actions workflow that automatically syncs Postman collections and environments when changes are pushed to main or develop branches under the `postman/` directory. It uploads the Hallpass Postman collection and two environments (dev and prod) to the Postman API using PUT requests with specific collection/environment UUIDs. Uses `jq` to wrap the JSON files in the required Postman API payload format and `curl` with `--fail-with-body` for error handling. Depends on the `POSTMAN_API_KEY` secret for authentication; modifying this file requires knowledge of the Postman API and the hardcoded resource UUIDs that map to specific Postman workspace assets."
+    ".github/workflows/sync-develop.yml": {
+      "blobSha": "c0ec6466005df2e818e5f79efade05a0a8f4d039",
+      "summary": "GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a PR after every push to `main`. It uses a dedicated `sync/main-to-develop` branch, performs a `--no-ff` merge of main into develop, and either creates a new PR or reuses an existing open one. If the merge encounters conflicts, it aborts and posts a comment on the originating PR (or commit) alerting developers to resolve manually, then exits with failure. The workflow includes early-exit optimizations: it skips if develop already contains all main commits, or if the merge produces no content differences. Requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR management."
     }
   }
 }

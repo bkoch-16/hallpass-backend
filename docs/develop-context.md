@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-05T19:27:15.263Z — 17 files indexed_
+_Generated: 2026-03-06T01:13:23.958Z — 18 files indexed_
 
 ## File Summaries
 
@@ -16,13 +16,17 @@ Automated workflow that generates a codebase context document on pushes to devel
 
 AI-powered pull request review workflow that runs on PR open/sync/reopen against develop or main. It is restricted to PRs authored by 'bkoch-16' and not by bots. The workflow fetches the full git diff, retrieves the previously generated context document from the docs/index branch, then runs a TypeScript review script (scripts/review-pr.ts) using the Anthropic API. Based on the review output prefix ('Ship it', 'Request changes', or other), it submits a GitHub PR review as approve, request-changes, or comment respectively. HUSKY is disabled to skip git hooks during CI.
 
+### `.github/workflows/sync-develop.yml`
+
+GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a PR after every push to `main`. It uses a dedicated `sync/main-to-develop` branch, performs a `--no-ff` merge of main into develop, and either creates a new PR or reuses an existing open one. If the merge encounters conflicts, it aborts and posts a comment on the originating PR (or commit) alerting developers to resolve manually, then exits with failure. The workflow includes early-exit optimizations: it skips if develop already contains all main commits, or if the merge produces no content differences. Requires `contents: write` and `pull-requests: write` permissions and uses `gh` CLI extensively for PR management.
+
 ### `apps/user-api/Dockerfile`
 
 Multi-stage Docker build for the user-api service in a pnpm monorepo. It copies package manifests first to optimize layer caching, then installs dependencies, copies source code, generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect), and builds packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (docker-entrypoint.sh) that likely handles runtime setup such as database migrations. When modifying, be aware that build order matters due to inter-package dependencies, and any new workspace package consumed by user-api needs its package.json copied in the manifest stage.
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` via `toNodeHandler` from `@hallpass/auth`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Includes a 404 catch-all and a global error handler that logs errors and returns 500. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, as well as local `auth` config and `env` validation. The `trust proxy` setting is enabled for correct rate-limiting behind reverse proxies.
+Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters—a general 100 req/15min limit and a stricter 10 req/15min limit for auth routes. Routes include Better Auth integration at `/api/auth/*splat`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth`, `env`, and `userRouter` modules. Includes a 404 catch-all and a global error handler that logs errors and returns 500. The `trust proxy` setting is enabled for running behind a reverse proxy (important for rate limiting accuracy).
 
 ### `apps/user-api/src/auth.ts`
 
