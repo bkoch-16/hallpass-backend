@@ -9,6 +9,7 @@ const client = new Anthropic();
 
 // Glob patterns for file discovery (relative to repo root)
 const globPatterns = [
+  "package.json",
   "apps/user-api/src/**/*.ts",
   "packages/db/prisma/schema.prisma",
   "packages/auth/src/**/*.ts",
@@ -24,10 +25,9 @@ const globDirs = [
     globPatterns.map((p) => {
       const globIdx = p.search(/[*?[]/);
       const prefix = globIdx === -1 ? p : p.slice(0, globIdx);
-      return prefix.replace(/[^/]*$/, "");
+      return prefix.replace(/[^/]*$/, "") || ".";
     })
-  ),
-].filter(Boolean);
+  ),];
 
 // Max files per Claude batch (to stay within token limits)
 const BATCH_SIZE = 10;
