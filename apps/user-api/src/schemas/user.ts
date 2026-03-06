@@ -1,19 +1,14 @@
 import { z } from "zod";
 
-export const batchQuerySchema = z.object({
-  ids: z.string().min(1, "ids is required"),
-});
-
 export const userIdSchema = z.object({
   id: z.string().min(1, "id is required"),
 });
 
-export const updateUserSchema = z.object({
-  name: z.string().min(1).optional(),
-  email: z.string().email("Invalid email").optional(),
+export const listUsersSchema = z.object({
   role: z.enum(["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]).optional(),
-}).refine(data => Object.keys(data).length > 0, {
-  message: "At least one field is required",
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  ids: z.string().optional(),
 });
 
 export const createUserSchema = z.object({
@@ -21,3 +16,15 @@ export const createUserSchema = z.object({
   name: z.string().min(1, "name is required"),
   role: z.enum(["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]).optional(),
 });
+
+export const bulkCreateSchema = z.array(createUserSchema).min(1).max(100);
+
+export const updateUserSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    email: z.string().email("Invalid email").optional(),
+    role: z.enum(["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field is required",
+  });
