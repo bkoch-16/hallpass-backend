@@ -1,8 +1,12 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-06T18:41:47.629Z — 18 files indexed_
+_Generated: 2026-03-06T23:23:48.900Z — 20 files indexed_
 
 ## File Summaries
+
+### `.github/workflows/demo.yml`
+
+GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages whenever changes to Postman collections or the demo generation script are pushed to `main` or `develop` branches. It uses pnpm (v10.30.1) and Node.js 22 to install dependencies and run `pnpm demo:generate`, then deploys the output from `./apps/demo-ui` to the `gh-pages` branch via the `peaceiris/actions-gh-pages` action. The workflow is path-filtered to only trigger on relevant file changes (`postman/collections/**` and `scripts/generate-demo.ts`). Developers should note the publish directory and branch conventions, and that the workflow relies on `GITHUB_TOKEN` for deployment permissions.
 
 ### `.github/workflows/deploy.yml`
 
@@ -67,6 +71,10 @@ Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (r
 ### `docker-compose.yml`
 
 Local development Docker Compose configuration defining two services: a PostgreSQL 16 database and the user-api application. Postgres uses a named volume for data persistence and includes a health check; the user-api service depends on Postgres being healthy before starting. Environment variables BETTER_AUTH_SECRET and BETTER_AUTH_URL are expected from the host environment (or .env file), while DATABASE_URL is hardcoded to the internal Docker network. The user-api is exposed on port 3001 and built from the monorepo root context using the Dockerfile in apps/user-api/.
+
+### `package.json`
+
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root.
 
 ### `packages/auth/src/index.ts`
 

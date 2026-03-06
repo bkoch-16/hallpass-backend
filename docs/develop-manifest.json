@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T18:41:47.629Z",
+  "generatedAt": "2026-03-06T23:23:48.900Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -73,6 +73,14 @@
     ".github/workflows/sync-develop.yml": {
       "blobSha": "b5e8e09d3a2caff5017f99c7d0940e8cfd540665",
       "summary": "GitHub Actions workflow that automatically keeps the `develop` branch in sync with `main` by opening a PR whenever new commits are pushed to `main`. It first checks if `develop` already contains all of `main`'s commits (early exit), then creates or resets a `sync/main-to-develop` branch, attempts a no-fast-forward merge, and opens a PR targeting `develop`. If a merge conflict occurs, it aborts the merge and posts a comment on the originating PR (or commit) alerting maintainers to resolve manually, then exits with failure. The workflow uses `force-with-lease` pushes and avoids duplicate PRs by checking for an existing open sync PR. Requires `contents: write` and `pull-requests: write` permissions and depends on the default `GITHUB_TOKEN`."
+    },
+    "package.json": {
+      "blobSha": "e2b6c40778749a1c5fc6842aeb4ad273299bd743",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root."
+    },
+    ".github/workflows/demo.yml": {
+      "blobSha": "ccb1dfa3481298bb8696ea2012349fc625ab13ee",
+      "summary": "GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages whenever changes to Postman collections or the demo generation script are pushed to `main` or `develop` branches. It uses pnpm (v10.30.1) and Node.js 22 to install dependencies and run `pnpm demo:generate`, then deploys the output from `./apps/demo-ui` to the `gh-pages` branch via the `peaceiris/actions-gh-pages` action. The workflow is path-filtered to only trigger on relevant file changes (`postman/collections/**` and `scripts/generate-demo.ts`). Developers should note the publish directory and branch conventions, and that the workflow relies on `GITHUB_TOKEN` for deployment permissions."
     }
   }
 }
