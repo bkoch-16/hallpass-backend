@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hallpass API Demo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <span class="header-title">Hallpass API Demo</span>
+  <select id="env-select" title="Environment"></select>
+</header>
+
+<div class="user-bar unauthenticated" id="user-bar">
+  <span class="dot grey" id="user-dot"></span>
+  <span id="user-text">Not logged in</span>
+</div>
+
+<main>
+  <div class="card">
+    <div class="controls">
+      <label>Group
+        <select id="group-select"></select>
+      </label>
+      <label>Endpoint
+        <select id="endpoint-select"></select>
+      </label>
+    </div>
+  </div>
+
+  <div class="card" id="meta-card">
+    <div class="method-line">
+      <span class="method-badge" id="method-badge"></span>
+      <span class="url-text" id="url-display"></span>
+    </div>
+    <p class="description" id="description-text"></p>
+  </div>
+
+  <div class="card hidden" id="path-var-card">
+    <div class="section-label">Path Variables</div>
+    <div id="path-var-fields"></div>
+  </div>
+
+  <div class="card hidden" id="query-param-card">
+    <div class="section-label">Query Parameters</div>
+    <div id="query-param-fields"></div>
+  </div>
+
+  <div class="card hidden" id="body-card">
+    <div class="section-label">Body (JSON)</div>
+    <textarea class="body-input" id="body-input" spellcheck="false"></textarea>
+  </div>
+
+  <div class="send-row">
+    <button id="send-btn">Send &#x2192;</button>
+  </div>
+
+  <div class="card hidden" id="response-card">
+    <div class="response-header">
+      <span class="section-label" style="margin-bottom:0">Response</span>
+      <span class="status-badge" id="status-badge"></span>
+    </div>
+    <pre class="response-body" id="response-body"></pre>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
