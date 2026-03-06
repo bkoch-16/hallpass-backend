@@ -9,6 +9,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "turbo test",
+    "test:integration": "turbo test:integration",
     "prepare": "husky"
   },
   "pnpm": {
