@@ -26,7 +26,7 @@ router.get(
   requireRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
   validateQuery(listUsersSchema),
   async (req: Request, res: Response) => {
-    const { role, cursor, ids, limit } = req.query as {
+    const { role, cursor, ids, limit } = req.query as unknown as {
       role?: string;
       cursor?: string;
       ids?: string;
