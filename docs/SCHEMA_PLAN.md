@@ -306,13 +306,18 @@ The `slots:school` and `slots:destination` Redis counters avoid `COUNT(*)` queri
 
 | Method | Route | Auth | Notes |
 |---|---|---|---|
-| GET | `/users/me` | authenticated | Returns own profile. Used by all clients on load. |
-| GET | `/users` | authenticated | Lists users scoped to `req.user.schoolId`. Filterable by `?role=`. Cursor-paginated (`?cursor=<lastId>&limit=50`). Teachers use this to search students when creating a pass on their behalf. SUPER_ADMIN may pass explicit `?schoolId=`. Do not use offset pagination — it degrades at scale. |
-| POST | `/users` | ADMIN+ | Create single user. |
-| POST | `/users/bulk` | ADMIN+ | Bulk create users for school onboarding. Accepts array. Returns `{ created: N, failed: [...] }`. |
-| GET | `/users/:id` | self or TEACHER+ | Fetch single user. |
-| PATCH | `/users/:id` | self or ADMIN+ | Update user. Role changes are restricted to ADMIN+ — a user cannot elevate their own role. `schoolId` changes are restricted to SUPER_ADMIN. |
-| DELETE | `/users/:id` | ADMIN+ | Soft delete. |
+| GET | `/users/me` | authenticated | Returns `req.user` (set by `requireAuth`). Used by all clients on load. |
+| GET | `/users` | TEACHER+ | Cursor-paginated (`?cursor=<lastId>&limit=50`, max 100). Filterable by `?role=`. `?ids=a,b,c` fetches specific users (replaces the former `/users/batch` endpoint, max 100). Scoping to `schoolId` is **not yet implemented** — `schoolId` does not exist in the schema. |
+| POST | `/users` | ADMIN+ | Create single user. Role hierarchy enforced: cannot create a user with a role higher than your own. |
+| POST | `/users/bulk` | ADMIN+ | Bulk create for school onboarding. Accepts array (max 100). Per-user role hierarchy enforced. Returns `{ created: N, failed: [{ index, email, error }] }`. HTTP 200 on partial success, 400 if all fail. |
+| GET | `/users/:id` | self or TEACHER+ | Fetch single user. Returns select fields only (no `deletedAt`, `emailVerified`). |
+| PATCH | `/users/:id` | self or ADMIN+ | Update name, email, or role. Self (non-admin) may only update name — email and role changes require ADMIN+. Role elevation above caller's own rank is blocked (403). `schoolId` change is **not yet implemented** — field does not exist in schema. |
+| DELETE | `/users/:id` | ADMIN+ | Soft delete (sets `deletedAt`). Cannot delete a user of equal or higher rank. Self-delete is blocked. |
+
+**Not yet implemented (pending `schoolId` migration):**
+- `GET /users` scoping to `req.user.schoolId`
+- `SUPER_ADMIN` explicit `?schoolId=` override on list endpoint
+- `PATCH /users/:id` restriction on `schoolId` changes to SUPER_ADMIN only
 
 ### `apps/schools-api`
 
