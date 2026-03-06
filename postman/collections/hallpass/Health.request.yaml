@@ -1,4 +1,5 @@
 $kind: http-request
 url: "{{Base}}/health"
 method: GET
+description: Check service health. Verifies the API is running and can reach the database.
 order: 3000

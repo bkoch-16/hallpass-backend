@@ -1,0 +1,6 @@
+$kind: http-request
+name: Get Me
+url: "{{Base}}/api/users/me"
+method: GET
+description: Returns the currently authenticated user's profile. Requires an active session.
+order: 500

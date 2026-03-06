@@ -1,0 +1,9 @@
+$kind: http-request
+name: Batch Get User
+url: "{{Base}}/api/users?ids=cmmdth7vq0000k50msye6albt,cmmdth8860002k50mq6euj3zh"
+method: GET
+description: Fetch up to 100 users by a comma-separated list of IDs. Requires TEACHER role or higher.
+queryParams:
+  - key: ids
+    value: cmmdth7vq0000k50msye6albt,cmmdth8860002k50mq6euj3zh
+order: 1000

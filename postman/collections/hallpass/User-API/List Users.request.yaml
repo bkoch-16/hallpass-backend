@@ -1,0 +1,13 @@
+$kind: http-request
+name: List Users
+url: "{{Base}}/api/users"
+method: GET
+description: Cursor-paginated list of users. Requires TEACHER role or higher. Optional query params — role (filter by role), cursor (pagination cursor from previous response), limit (default 20, max 100).
+queryParams:
+  - key: role
+    value: STUDENT
+  - key: cursor
+    value: ""
+  - key: limit
+    value: "20"
+order: 750

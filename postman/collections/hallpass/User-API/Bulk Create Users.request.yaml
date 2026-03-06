@@ -1,0 +1,14 @@
+$kind: http-request
+name: Bulk Create Users
+url: "{{Base}}/api/users/bulk"
+method: POST
+description: Create multiple users in one request. Requires ADMIN role or higher. Each user can have an optional role (defaults to STUDENT). Returns a summary of created and failed entries — partial success is possible.
+body:
+  type: json
+  content: |-
+    [
+      { "email": "student1@hallpass.dev", "name": "Student One", "role": "STUDENT" },
+      { "email": "student2@hallpass.dev", "name": "Student Two", "role": "STUDENT" },
+      { "email": "teacher1@hallpass.dev", "name": "Teacher One", "role": "TEACHER" }
+    ]
+order: 6000

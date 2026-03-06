@@ -1,0 +1,14 @@
+$kind: http-request
+name: Create User
+url: "{{Base}}/api/users"
+method: POST
+description: Create a single user. Requires ADMIN role or higher. Cannot assign a role higher than your own. Returns 409 if the email is already in use.
+body:
+  type: json
+  content: |-
+    {
+      "email": "newuser@hallpass.dev",
+      "name": "New User",
+      "role": "STUDENT"
+    }
+order: 5000
