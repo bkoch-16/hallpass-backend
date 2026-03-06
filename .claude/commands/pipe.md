@@ -1,0 +1,1 @@
+Run `.claude/pipe.sh $ARGUMENTS` using the Bash tool and output the result.

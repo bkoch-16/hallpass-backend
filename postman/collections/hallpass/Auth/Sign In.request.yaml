@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{Base}}/api/auth/sign-in/email"
+method: POST
+headers:
+  Origin: "{{Base}}"
+body:
+  type: json
+  content: |-
+    {
+      "email": "test@example.com",
+      "password": "password"
+    }
+order: 2000

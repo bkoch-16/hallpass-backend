@@ -1,0 +1,78 @@
+name: Sync develop with main
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    name: Open sync PR to develop
+    runs-on: ubuntu-latest
+    # Runs on every push to main; skips early if develop already contains all of main's commits
+
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create sync branch and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "develop already contains all commits from main, nothing to sync."
+            exit 0
+          fi
+
+          BRANCH="sync/main-to-develop"
+          if git show-ref --quiet --verify "refs/remotes/origin/$BRANCH"; then
+            git checkout -b "$BRANCH" "origin/$BRANCH"
+            git reset --hard origin/develop
+          else
+            git checkout -b "$BRANCH" origin/develop
+          fi
+          if ! git merge --no-ff origin/main; then
+            echo "::error::Merge conflict detected — manually sync main into develop."
+            git merge --abort
+            MAIN_SHA=$(git rev-parse origin/main)
+            PR_NUMBER=$(gh api repos/${{ github.repository }}/commits/$MAIN_SHA/pulls --jq '[.[] | select(.base.ref == "main")] | .[0].number' 2>/dev/null)
+            if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+              gh pr comment $PR_NUMBER \
+                --body "**Sync conflict**: automatic merge of \`main\` into \`develop\` failed due to conflicts. Please resolve manually."
+            else
+              gh api repos/${{ github.repository }}/commits/$MAIN_SHA/comments \
+                --method POST \
+                --field body="**Sync conflict**: automatic merge of \`main\` into \`develop\` failed due to conflicts. Please resolve manually."
+            fi
+            exit 1
+          fi
+
+          git fetch origin develop
+          if git diff --quiet origin/develop HEAD; then
+            echo "No content differences after merge, nothing to sync."
+            exit 0
+          fi
+
+          git push --force-with-lease origin "$BRANCH"
+
+          EXISTING_PR=$(gh pr list --base develop --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+            echo "Sync PR #$EXISTING_PR already exists, skipping."
+            exit 0
+          fi
+
+          gh pr create \
+            --base develop \
+            --head "$BRANCH" \
+            --title "Sync main into develop" \
+            --body "Changes from \`main\` have been merged into this branch. Review and merge to keep \`develop\` in sync."
