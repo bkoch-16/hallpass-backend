@@ -6,6 +6,7 @@ on:
     paths:
       - 'postman/collections/**'
       - 'scripts/generate-demo.ts'
+      - 'apps/demo-ui/**'
   workflow_dispatch:
 
 jobs:
