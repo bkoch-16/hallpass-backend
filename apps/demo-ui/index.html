@@ -10,7 +10,7 @@
 
 <header>
   <span class="header-title">Hallpass API Demo</span>
-  <select id="env-select" title="Environment"></select>
+  <label class="header-label">Environment <select id="stage-select" title="Stage"></select></label>
 </header>
 
 <div class="info-panel" id="info-panel">
@@ -19,8 +19,8 @@
     <span class="info-toggle-icon" id="info-toggle-icon">&#x25B4;</span>
   </div>
   <div class="info-panel-body" id="info-panel-body">
-    <p>This is a portfolio project demonstrating a backend REST API. There is no full frontend — this tool lets you explore the API endpoints directly, inspect responses, and interact with the data layer.</p>
-    <p><strong>Getting started:</strong> Select an environment, then go to <strong>Auth &gt; Sign In</strong> and use one of the seed accounts below. The session cookie is then used automatically by all protected endpoints.</p>
+    <p>This is a portfolio project demonstrating a backend REST API. There is no full frontend, this tool lets you explore the API endpoints directly, inspect responses, and interact with the data layer.</p>
+    <p><strong>Getting started:</strong> Select a stage (Prod is more stable), then go to <strong>Auth &gt; Sign In</strong> and use one of the seed accounts below. The session cookie is then used automatically by all protected endpoints.</p>
     <p class="info-accounts">Seed accounts (password: <code>password</code>): <code>student@hallpass.dev</code> &nbsp; <code>teacher@hallpass.dev</code> &nbsp; <code>admin@hallpass.dev</code> &nbsp; <code>superadmin@hallpass.dev</code></p>
     <ul class="info-notes">
       <li><strong>Dev environment</strong> is actively used for development and testing and may be less stable than Prod.</li>

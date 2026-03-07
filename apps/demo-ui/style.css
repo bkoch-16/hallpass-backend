@@ -20,6 +20,14 @@ header {
 
 .header-title { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
 
+.header-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #fff;
+}
+
 header select {
   background: #2a2a4a;
   color: #fff;

@@ -5,9 +5,9 @@
 let currentEndpoint = null;
 
 function getBaseUrl() {
-  const sel = document.getElementById('env-select');
-  const idx = parseInt(sel.value, 10);
-  return CONFIG.environments[idx]?.baseUrl ?? '';
+  const stage = document.getElementById('stage-select').value;
+  const group = getSelectedGroup();
+  return group?.baseUrls?.[stage] ?? '';
 }
 
 function getSelectedGroup() {
@@ -209,17 +209,15 @@ async function send() {
 // Populate selectors
 // ---------------------------------------------------------------------------
 
-function populateEnvSelect() {
-  const sel = document.getElementById('env-select');
-  let prodIdx = 0;
-  CONFIG.environments.forEach((env, i) => {
+function populateStageSelect() {
+  const sel = document.getElementById('stage-select');
+  CONFIG.stages.forEach((stage) => {
     const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = env.label;
+    opt.value = stage;
+    opt.textContent = stage;
     sel.appendChild(opt);
-    if (/prod/i.test(env.label)) prodIdx = i;
   });
-  sel.value = String(prodIdx);
+  if (CONFIG.stages.includes('Prod')) sel.value = 'Prod';
 }
 
 function populateGroupSelect() {
@@ -274,14 +272,14 @@ function initInfoPanel() {
 
 function init() {
   initInfoPanel();
-  populateEnvSelect();
+  populateStageSelect();
   const firstGroupIdx = populateGroupSelect();
   populateEndpointSelect(firstGroupIdx);
 
   const ep = getSelectedEndpoint();
   if (ep) renderEndpoint(ep);
 
-  document.getElementById('env-select').addEventListener('change', fetchMe);
+  document.getElementById('stage-select').addEventListener('change', fetchMe);
 
   document.getElementById('group-select').addEventListener('change', (e) => {
     populateEndpointSelect(parseInt(e.target.value, 10));
