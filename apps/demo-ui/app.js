@@ -222,12 +222,16 @@ function populateEnvSelect() {
 function populateGroupSelect() {
   const sel = document.getElementById('group-select');
   sel.innerHTML = '';
-  CONFIG.groups.forEach((g, i) => {
+  const sorted = CONFIG.groups
+    .map((g, i) => ({ g, i }))
+    .sort((a, b) => a.g.name.localeCompare(b.g.name));
+  sorted.forEach(({ g, i }) => {
     const opt = document.createElement('option');
     opt.value = String(i);
     opt.textContent = g.name;
     sel.appendChild(opt);
   });
+  return sorted[0]?.i ?? 0;
 }
 
 function populateEndpointSelect(groupIdx) {
@@ -235,7 +239,10 @@ function populateEndpointSelect(groupIdx) {
   sel.innerHTML = '';
   const group = CONFIG.groups[groupIdx];
   if (!group) return;
-  group.endpoints.forEach((ep, i) => {
+  const sorted = group.endpoints
+    .map((ep, i) => ({ ep, i }))
+    .sort((a, b) => a.ep.name.localeCompare(b.ep.name));
+  sorted.forEach(({ ep, i }) => {
     const opt = document.createElement('option');
     opt.value = String(i);
     opt.textContent = ep.method + '  ' + ep.name;
@@ -249,8 +256,8 @@ function populateEndpointSelect(groupIdx) {
 
 function init() {
   populateEnvSelect();
-  populateGroupSelect();
-  populateEndpointSelect(0);
+  const firstGroupIdx = populateGroupSelect();
+  populateEndpointSelect(firstGroupIdx);
 
   const ep = getSelectedEndpoint();
   if (ep) renderEndpoint(ep);
