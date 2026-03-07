@@ -38,7 +38,8 @@ async function fetchMe() {
       const data = await res.json();
       bar.classList.remove('unauthenticated');
       dot.classList.remove('grey');
-      txt.textContent = [data.name, data.email, data.role].filter(Boolean).join('  \u00b7  ');
+      const stage = document.getElementById('stage-select').value;
+      txt.textContent = [data.name, data.email, data.role, stage].filter(Boolean).join('  \u00b7  ');
     } else {
       bar.classList.add('unauthenticated');
       dot.classList.add('grey');

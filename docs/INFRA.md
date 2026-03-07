@@ -1,9 +1,7 @@
 ## Project Overview
 Hallpass backend — a Node.js monorepo providing API services for a digital hall pass system. Managed with pnpm workspaces and Turborepo.
 
-## Subagents
-
-**Packages:**
+## Packages
 - `apps/user-api` — Main Express 5 REST API
 - `packages/auth` — Authentication layer (better-auth)
 - `packages/db` — Database access (Prisma + PostgreSQL)
