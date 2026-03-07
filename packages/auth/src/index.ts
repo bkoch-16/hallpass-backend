@@ -20,13 +20,6 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
     },
     ...(config.baseURL.startsWith("https://") && {
       advanced: {
-        // better-auth 1.4.7+ has a known bug where trustedOrigins is ignored,
-        // causing all cross-origin requests to be rejected even when the origin
-        // is explicitly listed. Since this API is cross-origin by design (frontend
-        // on a different domain), and the Express CORS middleware already enforces
-        // origin allowlisting via CORS_ORIGIN, disabling better-auth's redundant
-        // origin check is safe. See: github.com/better-auth/better-auth/issues/6798
-        disableCSRFCheck: true,
         defaultCookieAttributes: {
           sameSite: "none",
           secure: true,
