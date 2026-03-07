@@ -261,9 +261,10 @@ function initInfoPanel() {
   const toggle = document.getElementById('info-toggle');
   const body = document.getElementById('info-panel-body');
   const icon = document.getElementById('info-toggle-icon');
+  icon.style.transform = 'rotate(180deg)';
   toggle.addEventListener('click', () => {
     const collapsed = body.classList.toggle('collapsed');
-    icon.style.transform = collapsed ? 'rotate(180deg)' : '';
+    icon.style.transform = collapsed ? '' : 'rotate(180deg)';
   });
 }
 
