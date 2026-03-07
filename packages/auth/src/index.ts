@@ -18,12 +18,14 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
     },
-    advanced: {
-      defaultCookieAttributes: {
-        sameSite: "none",
-        secure: true,
+    ...(config.baseURL.startsWith("https://") && {
+      advanced: {
+        defaultCookieAttributes: {
+          sameSite: "none",
+          secure: true,
+        },
       },
-    },
+    }),
   });
 }
 
