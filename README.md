@@ -16,7 +16,7 @@ Designed as a microservice deployment with separate APIs for Users, Passes, Scho
 
 ## API Demo
 
-**[bkoch-16.github.io/hallpass-backend](https://bkoch-16.github.io/hallpass-backend/)** — browsable API reference, auto-published on every push to `main` or `develop`.
+**[bkoch-16.github.io/hallpass-backend](https://bkoch-16.github.io/hallpass-backend/)** — browsable API reference, auto-published on every push to `main`.
 
 The user dev API is live at [user-api-dev](https://user-api-dev-509242588558.us-west1.run.app) (append `/health` to verify).
 
@@ -58,7 +58,7 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 - `docs/{branch}-manifest.json` — blob SHA manifest for delta tracking (only changed files are re-summarized)
 
 ### API Demo (`demo.yml`)
-Runs on push to `main` or `develop` when `postman/collections/` or `scripts/generate-demo.ts` change. Generates a static API reference site from the Postman collection and publishes it to GitHub Pages (`gh-pages` branch).
+Runs on push to `main` when `postman/collections/` or `scripts/generate-demo.ts` change. Generates a static API reference site from the Postman collection and publishes it to GitHub Pages (`gh-pages` branch).
 
 ## Postman
 
