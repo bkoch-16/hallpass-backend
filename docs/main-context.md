@@ -1,24 +1,28 @@
 # Codebase Context — main
 
-_Generated: 2026-03-06T02:41:45.950Z — 18 files indexed_
+_Generated: 2026-03-07T22:55:29.584Z — 20 files indexed_
 
 ## File Summaries
 
+### `.github/workflows/demo.yml`
+
+GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages. Triggered on pushes to `main` affecting Postman collections, the generation script, or demo-ui files, plus manual dispatch. Uses pnpm and Node 22 to install dependencies, runs `pnpm demo:generate` to produce static HTML, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires write permissions on contents for the GitHub Pages deployment.
+
 ### `.github/workflows/deploy.yml`
 
-CI/CD pipeline for the backend with three jobs: `validate` (lint, build, test on all branches/PRs), `deploy-dev` (pushes to `develop` deploy to Cloud Run dev), and `deploy-prod` (pushes to `main` deploy to Cloud Run prod). The validate job uses dummy environment variables since tests mock the DB. Docker images are built with Buildx, pushed to GCP Artifact Registry with both SHA and `latest` tags, and use GitHub Actions cache for layer reuse. Cloud Run environment variables and secrets are managed directly on the service via GCP Secret Manager rather than being passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
+CI/CD workflow for the backend: runs validation (lint, build, test) on all pushes and PRs, then conditionally deploys to Google Cloud Run. Dev deploys trigger from the `develop` branch or manual dispatch with 'dev' environment; prod deploys trigger from `main`. Uses Docker Buildx with GitHub Actions cache for image builds, pushes to GCP Artifact Registry, and deploys via `google-github-actions/deploy-cloudrun`. Environment secrets (DB URL, auth secrets) are managed in GCP Secret Manager, not passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
 
 ### `.github/workflows/index-codebase.yml`
 
-Automated codebase indexing workflow that runs on pushes to `develop` and `main`, generating context documents for AI-assisted development. It restores a previous manifest from the `docs/index` orphan branch (for incremental indexing), runs `scripts/index-codebase.ts` using the Anthropic API, and pushes generated docs back to the `docs/index` branch. Uses concurrency control (`cancel-in-progress: false`) to prevent parallel runs from conflicting. The branch-slug naming convention allows separate context documents per branch. Requires the `ANTHROPIC_API_KEY` secret.
+GitHub Actions workflow that generates a codebase context/index document on pushes to `develop` or `main` (or via manual dispatch). It checks out the target branch, installs pnpm/Node dependencies, restores a previous manifest from the orphan `docs/index` branch for incremental updates, then runs `scripts/index-codebase.ts` using the Anthropic API. The generated docs are committed and pushed to the `docs/index` branch (not the source branch) with `[skip ci]` to avoid retriggering. Uses `concurrency` with `cancel-in-progress: false` to serialize indexing runs, and requires the `ANTHROPIC_API_KEY` secret.
 
 ### `.github/workflows/review-pr.yml`
 
-AI-powered pull request review workflow using Claude (Anthropic API) that triggers on PR open/sync/reopen against `develop` or `main`. It's restricted to PRs authored by `bkoch-16` (not bot-authored). It generates a diff against the base branch, fetches the codebase context document from the `docs/index` branch, and runs `scripts/review-pr.ts` to produce a review. The review action (approve, request-changes, or comment) is determined by parsing the first line of the AI output. Requires `ANTHROPIC_API_KEY` secret and uses the default `GITHUB_TOKEN` for PR review submission.
+GitHub Actions workflow that performs AI-powered PR reviews using Claude (Anthropic API) on pull requests targeting `develop` or `main`. It is gated to only run for the user `bkoch-16` and generates a diff against the PR base, fetches a pre-built context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review output is submitted via `gh pr review` as an approval, change request, or comment depending on whether the review body starts with 'Ship it' or 'Request changes'. Supports manual dispatch by PR number and disables Husky git hooks via the `HUSKY=0` env var.
 
 ### `.github/workflows/sync-develop.yml`
 
-GitHub Actions workflow that automatically syncs the `develop` branch with `main` after every push to `main`. It creates a `sync/main-to-develop` branch, attempts a no-fast-forward merge of `main` into `develop`, and opens a pull request if there are differences. If the merge encounters conflicts, it aborts, posts a comment on the originating PR or commit notifying of the failure, and exits with an error. The workflow uses force-with-lease pushes to update the sync branch and avoids creating duplicate PRs by checking for existing open sync PRs. Requires `contents: write` and `pull-requests: write` permissions; developers should be aware that merge conflicts require manual resolution and that the sync branch is reset to `origin/develop` on each run if it already exists.
+GitHub Actions workflow that keeps the `develop` branch in sync with `main` after every push to `main` (or via manual dispatch). It checks if `develop` already contains all of `main`'s commits (early exit if so), then creates/updates a `sync/main-to-develop` branch by merging `main` into `develop` with `--no-ff`. If a merge conflict occurs, it aborts and posts a comment on the originating PR or commit notifying about the conflict. If the merge succeeds and produces differences, it opens (or reuses) a PR targeting `develop` for human review, using `--force-with-lease` to update the sync branch.
 
 ### `apps/user-api/Dockerfile`
 
@@ -30,11 +34,11 @@ Main Express application setup for the user-api service, responsible for wiring 
 
 ### `apps/user-api/src/auth.ts`
 
-Creates and exports the Better Auth instance used throughout the user-api service. Delegates to `createAuth` from the `@hallpass/auth` package, configured with `baseURL` and `secret` from validated environment variables. This is the single auth instance imported by both the auth route handler in `app.ts` and the `requireAuth` middleware.
+Bootstraps the BetterAuth instance for the user-api by calling `createAuth` from the shared `@hallpass/auth` package. It configures the auth system using environment variables for base URL, secret, and trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object used across the application for authentication and session management. Any changes to auth configuration (e.g., session duration, cookie settings) should be made in the shared `@hallpass/auth` package.
 
 ### `apps/user-api/src/env.ts`
 
-Environment variable validation module using Zod schema parsing. It requires DATABASE_URL, BETTER_AUTH_URL, and BETTER_AUTH_SECRET to be present, with PORT as optional and CORS_ORIGIN defaulting to "*". The validated `env` object is exported for type-safe access throughout the application. This file will throw at startup if required environment variables are missing, which is intentional for fail-fast behavior.
+Validates and exports typed environment variables using a Zod schema. Required variables are `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN`; `PORT` is optional. The schema is parsed eagerly at import time via `envSchema.parse(process.env)`, so the app will fail fast on startup if any required env var is missing. Developers adding new environment variables must update the schema here.
 
 ### `apps/user-api/src/express.d.ts`
 
@@ -54,23 +58,27 @@ Provides role-based authorization middleware and utilities. Defines a `ROLE_RANK
 
 ### `apps/user-api/src/middleware/validate.ts`
 
-Exports three Express middleware factories—`validateQuery`, `validateBody`, and `validateParams`—that validate the respective request properties against a provided Zod schema. On failure, they return 400 with flattened Zod errors. `validateBody` replaces `req.body` with the parsed (and potentially transformed/stripped) data; `validateParams` similarly replaces `req.params`. These should be placed early in the middleware chain to ensure handlers receive clean, typed data.
+Express middleware factory functions for validating request query parameters, body, and URL params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each returning middleware that responds with 400 and flattened Zod errors on validation failure, or replaces the relevant `req` property with the parsed (and potentially coerced/defaulted) data on success. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it's normally read-only in Express.
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing CRUD endpoints for user management with role-based access control. Exports a Router with GET `/batch` (multi-user lookup, max 100 IDs), GET `/:id`, POST `/`, PATCH `/:id`, and DELETE `/:id` (soft delete via `deletedAt`). All routes require authentication via `requireAuth` middleware, with role guards (`requireRole`, `requireSelfOrRole`) enforcing hierarchical permissions using `roleRank` — users cannot create/assign roles above their own rank, and cannot delete users at or above their rank. Request validation uses Zod schemas through `validateBody`, `validateParams`, and `validateQuery` middleware. The batch route is intentionally placed before `/:id` to avoid route parameter conflicts.
+Comprehensive Express router handling all user CRUD operations: GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (create), POST /bulk (bulk create up to 100), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces role-based access control using `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role rank checks preventing privilege escalation. Uses Prisma for database operations and Zod validation middleware for all inputs. Developers should note the soft-delete pattern and that bulk create uses `Promise.allSettled` for partial-failure tolerance.
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Defines Zod validation schemas for user-related API endpoints. Exports `batchQuerySchema` (for querying multiple users by comma-separated IDs), `userIdSchema` (single user ID param), `updateUserSchema` (partial update requiring at least one field with a `.refine` check), and `createUserSchema` (requires email and name, optional role). All role fields are constrained to the enum `["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]`. Depends on the `zod` library; when modifying, ensure enum values stay in sync with the Prisma/database role definitions.
+Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with coerced numeric limit and defaults), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes.
 
 ### `docker-compose.yml`
 
-Docker Compose configuration for local development defining two services: a PostgreSQL 16 database and the user-api application. PostgreSQL uses a named volume for data persistence and has a health check that user-api depends on before starting. The user-api service is built from the repository root using the user-api Dockerfile, with environment variables for database connection, port, and BetterAuth configuration (secret and URL sourced from `.env` or defaults). Developers should ensure BETTER_AUTH_SECRET is set in their environment or `.env` file.
+Defines local development services: a PostgreSQL 16 (Alpine) database and the `user-api` application container. Postgres is configured with default credentials (postgres/postgres), persists data via a named volume, and includes a health check. The `user-api` service builds from a Dockerfile at `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and injects environment variables including `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CORS_ORIGIN` (with sensible defaults). The API depends on Postgres being healthy before starting.
+
+### `package.json`
+
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, and tsx for script execution. The only production dependency at the root is `@anthropic-ai/sdk`. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use `pnpm` exclusively and run tasks via `turbo` commands; `demo:generate` runs a standalone script for demo UI generation.
 
 ### `packages/auth/src/index.ts`
 
-Configures and exports a shared authentication setup using the `better-auth` library with a Prisma/PostgreSQL adapter from `@hallpass/db`. The `createAuth` factory function accepts a `baseURL` and `secret`, enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` inferred types, plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. This is a shared package consumed by multiple apps; changes to session config or auth settings will affect all downstream services.
+Shared authentication package that wraps BetterAuth with project-specific configuration. The `createAuth` factory configures BetterAuth with a Prisma adapter (PostgreSQL), email/password auth, 7-day sessions with daily refresh, and conditional secure cookie settings for HTTPS deployments. Exports the `createAuth` function, `Auth` and `Session` types (inferred from BetterAuth), and re-exports `toNodeHandler` and `fromNodeHeaders` utilities for Node.js/Express integration. Depends on `@hallpass/db` for the shared Prisma client instance.
 
 ### `packages/db/prisma/schema.prisma`
 

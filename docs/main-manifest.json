@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T02:41:45.950Z",
+  "generatedAt": "2026-03-07T22:55:29.584Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -11,12 +11,12 @@
       "summary": "Main Express application setup for the user-api service, responsible for wiring all middleware and routes. It configures helmet (security headers), CORS (configurable origins via env), pino HTTP logging, JSON body parsing, and two rate limiters (general 100 req/15min, auth 10 req/15min). Routes include BetterAuth handler at `/api/auth/*splat`, user CRUD at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. It includes a 404 catch-all and a global error handler. The `trust proxy` setting is enabled for deployment behind a reverse proxy (Cloud Run)."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "a9baa30042a55df1e1ff61cfff1247777a07e633",
-      "summary": "Creates and exports the Better Auth instance used throughout the user-api service. Delegates to `createAuth` from the `@hallpass/auth` package, configured with `baseURL` and `secret` from validated environment variables. This is the single auth instance imported by both the auth route handler in `app.ts` and the `requireAuth` middleware."
+      "blobSha": "aa8d1ba49d0d3724366df100a1a69a43b264bde9",
+      "summary": "Bootstraps the BetterAuth instance for the user-api by calling `createAuth` from the shared `@hallpass/auth` package. It configures the auth system using environment variables for base URL, secret, and trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object used across the application for authentication and session management. Any changes to auth configuration (e.g., session duration, cookie settings) should be made in the shared `@hallpass/auth` package."
     },
     "apps/user-api/src/env.ts": {
-      "blobSha": "978d4c93c003694c740b7997e0d496bd39bbdea9",
-      "summary": "Environment variable validation module using Zod schema parsing. It requires DATABASE_URL, BETTER_AUTH_URL, and BETTER_AUTH_SECRET to be present, with PORT as optional and CORS_ORIGIN defaulting to \"*\". The validated `env` object is exported for type-safe access throughout the application. This file will throw at startup if required environment variables are missing, which is intentional for fail-fast behavior."
+      "blobSha": "ebe966a2952e73aa014da8b6c62be6b6bac52c31",
+      "summary": "Validates and exports typed environment variables using a Zod schema. Required variables are `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN`; `PORT` is optional. The schema is parsed eagerly at import time via `envSchema.parse(process.env)`, so the app will fail fast on startup if any required env var is missing. Developers adding new environment variables must update the schema here."
     },
     "apps/user-api/src/express.d.ts": {
       "blobSha": "95c5d0097fb1576c5e20750000e93e99a6302181",
@@ -35,44 +35,52 @@
       "summary": "Provides role-based authorization middleware and utilities. Defines a `ROLE_RANK` hierarchy (STUDENT=0 through SERVICE=4) and exports `roleRank()` for numeric comparison. `requireRole(...roles)` restricts access to users with any of the specified roles. `requireSelfOrRole(...roles)` additionally allows access when `req.params.id` matches the authenticated user's ID. All guards depend on `req.user` being set by `requireAuth` and return 401/403 as appropriate."
     },
     "apps/user-api/src/middleware/validate.ts": {
-      "blobSha": "4c57b3f6c35fbb8f815948a1ba600ddf03e58178",
-      "summary": "Exports three Express middleware factories—`validateQuery`, `validateBody`, and `validateParams`—that validate the respective request properties against a provided Zod schema. On failure, they return 400 with flattened Zod errors. `validateBody` replaces `req.body` with the parsed (and potentially transformed/stripped) data; `validateParams` similarly replaces `req.params`. These should be placed early in the middleware chain to ensure handlers receive clean, typed data."
+      "blobSha": "fe303ff6aae657cb70cbe09fb53df207b7bf3df1",
+      "summary": "Express middleware factory functions for validating request query parameters, body, and URL params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each returning middleware that responds with 400 and flattened Zod errors on validation failure, or replaces the relevant `req` property with the parsed (and potentially coerced/defaulted) data on success. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it's normally read-only in Express."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "9eb09399c84af9ada8f9f88dbb286cc115bf6a30",
-      "summary": "Express router implementing CRUD endpoints for user management with role-based access control. Exports a Router with GET `/batch` (multi-user lookup, max 100 IDs), GET `/:id`, POST `/`, PATCH `/:id`, and DELETE `/:id` (soft delete via `deletedAt`). All routes require authentication via `requireAuth` middleware, with role guards (`requireRole`, `requireSelfOrRole`) enforcing hierarchical permissions using `roleRank` — users cannot create/assign roles above their own rank, and cannot delete users at or above their rank. Request validation uses Zod schemas through `validateBody`, `validateParams`, and `validateQuery` middleware. The batch route is intentionally placed before `/:id` to avoid route parameter conflicts."
+      "blobSha": "52a1632d0b2d408ca96d6cc76610be1b0d8170de",
+      "summary": "Comprehensive Express router handling all user CRUD operations: GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (create), POST /bulk (bulk create up to 100), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces role-based access control using `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role rank checks preventing privilege escalation. Uses Prisma for database operations and Zod validation middleware for all inputs. Developers should note the soft-delete pattern and that bulk create uses `Promise.allSettled` for partial-failure tolerance."
     },
     "apps/user-api/src/schemas/user.ts": {
-      "blobSha": "653ab7279f6af79b7949867d6fdc92398111e9e2",
-      "summary": "Defines Zod validation schemas for user-related API endpoints. Exports `batchQuerySchema` (for querying multiple users by comma-separated IDs), `userIdSchema` (single user ID param), `updateUserSchema` (partial update requiring at least one field with a `.refine` check), and `createUserSchema` (requires email and name, optional role). All role fields are constrained to the enum `[\"STUDENT\", \"TEACHER\", \"ADMIN\", \"SUPER_ADMIN\"]`. Depends on the `zod` library; when modifying, ensure enum values stay in sync with the Prisma/database role definitions."
+      "blobSha": "7f00f8e84240018af9fab441b13df9bf967c2b4b",
+      "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with coerced numeric limit and defaults), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "ef9bc9b5ef24d8bf796130193e1ecb484e3e672e",
-      "summary": "Configures and exports a shared authentication setup using the `better-auth` library with a Prisma/PostgreSQL adapter from `@hallpass/db`. The `createAuth` factory function accepts a `baseURL` and `secret`, enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` inferred types, plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. This is a shared package consumed by multiple apps; changes to session config or auth settings will affect all downstream services."
+      "blobSha": "4a69b9f731a8e8c13d52628545786d0fe1a7e460",
+      "summary": "Shared authentication package that wraps BetterAuth with project-specific configuration. The `createAuth` factory configures BetterAuth with a Prisma adapter (PostgreSQL), email/password auth, 7-day sessions with daily refresh, and conditional secure cookie settings for HTTPS deployments. Exports the `createAuth` function, `Auth` and `Session` types (inferred from BetterAuth), and re-exports `toNodeHandler` and `fromNodeHeaders` utilities for Node.js/Express integration. Depends on `@hallpass/db` for the shared Prisma client instance."
     },
     "apps/user-api/Dockerfile": {
       "blobSha": "9851b639b25c247312b073fb5e02ddae5fc35093",
       "summary": "Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm 10. It uses a layer-caching strategy by copying package manifests first, then source code, to avoid busting the dependency install layer on code-only changes. After installing dependencies, it generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect to a DB) and builds internal packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (`docker-entrypoint.sh`), and the service listens on port 3001. Developers modifying this file should ensure any new workspace packages have their package.json copied in the manifest layer and are added to the build chain."
     },
     "docker-compose.yml": {
-      "blobSha": "4eb51d7ddac7a768aec4f808a76118633ccb0431",
-      "summary": "Docker Compose configuration for local development defining two services: a PostgreSQL 16 database and the user-api application. PostgreSQL uses a named volume for data persistence and has a health check that user-api depends on before starting. The user-api service is built from the repository root using the user-api Dockerfile, with environment variables for database connection, port, and BetterAuth configuration (secret and URL sourced from `.env` or defaults). Developers should ensure BETTER_AUTH_SECRET is set in their environment or `.env` file."
+      "blobSha": "1dcfe9c8da884f770eb0ea57c1461d3a6d058b97",
+      "summary": "Defines local development services: a PostgreSQL 16 (Alpine) database and the `user-api` application container. Postgres is configured with default credentials (postgres/postgres), persists data via a named volume, and includes a health check. The `user-api` service builds from a Dockerfile at `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and injects environment variables including `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CORS_ORIGIN` (with sensible defaults). The API depends on Postgres being healthy before starting."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "380f372fd62963d8157b4a0e2d74524e49d7e508",
-      "summary": "CI/CD pipeline for the backend with three jobs: `validate` (lint, build, test on all branches/PRs), `deploy-dev` (pushes to `develop` deploy to Cloud Run dev), and `deploy-prod` (pushes to `main` deploy to Cloud Run prod). The validate job uses dummy environment variables since tests mock the DB. Docker images are built with Buildx, pushed to GCP Artifact Registry with both SHA and `latest` tags, and use GitHub Actions cache for layer reuse. Cloud Run environment variables and secrets are managed directly on the service via GCP Secret Manager rather than being passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets."
+      "blobSha": "7480b7c9bbec461af0867e651b0da505fd6850de",
+      "summary": "CI/CD workflow for the backend: runs validation (lint, build, test) on all pushes and PRs, then conditionally deploys to Google Cloud Run. Dev deploys trigger from the `develop` branch or manual dispatch with 'dev' environment; prod deploys trigger from `main`. Uses Docker Buildx with GitHub Actions cache for image builds, pushes to GCP Artifact Registry, and deploys via `google-github-actions/deploy-cloudrun`. Environment secrets (DB URL, auth secrets) are managed in GCP Secret Manager, not passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets."
     },
     ".github/workflows/index-codebase.yml": {
-      "blobSha": "1a9373bfbfc9e890060fbfb8423e24b47334f479",
-      "summary": "Automated codebase indexing workflow that runs on pushes to `develop` and `main`, generating context documents for AI-assisted development. It restores a previous manifest from the `docs/index` orphan branch (for incremental indexing), runs `scripts/index-codebase.ts` using the Anthropic API, and pushes generated docs back to the `docs/index` branch. Uses concurrency control (`cancel-in-progress: false`) to prevent parallel runs from conflicting. The branch-slug naming convention allows separate context documents per branch. Requires the `ANTHROPIC_API_KEY` secret."
+      "blobSha": "5bf8a1ed09df498e25a7c3eff38ebca99ca58db4",
+      "summary": "GitHub Actions workflow that generates a codebase context/index document on pushes to `develop` or `main` (or via manual dispatch). It checks out the target branch, installs pnpm/Node dependencies, restores a previous manifest from the orphan `docs/index` branch for incremental updates, then runs `scripts/index-codebase.ts` using the Anthropic API. The generated docs are committed and pushed to the `docs/index` branch (not the source branch) with `[skip ci]` to avoid retriggering. Uses `concurrency` with `cancel-in-progress: false` to serialize indexing runs, and requires the `ANTHROPIC_API_KEY` secret."
     },
     ".github/workflows/review-pr.yml": {
-      "blobSha": "09cf7117148922a933aa34f721e96510549ee4fd",
-      "summary": "AI-powered pull request review workflow using Claude (Anthropic API) that triggers on PR open/sync/reopen against `develop` or `main`. It's restricted to PRs authored by `bkoch-16` (not bot-authored). It generates a diff against the base branch, fetches the codebase context document from the `docs/index` branch, and runs `scripts/review-pr.ts` to produce a review. The review action (approve, request-changes, or comment) is determined by parsing the first line of the AI output. Requires `ANTHROPIC_API_KEY` secret and uses the default `GITHUB_TOKEN` for PR review submission."
+      "blobSha": "2d9a16ce829369ce2f74b58729fd3a66e7ad5624",
+      "summary": "GitHub Actions workflow that performs AI-powered PR reviews using Claude (Anthropic API) on pull requests targeting `develop` or `main`. It is gated to only run for the user `bkoch-16` and generates a diff against the PR base, fetches a pre-built context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review output is submitted via `gh pr review` as an approval, change request, or comment depending on whether the review body starts with 'Ship it' or 'Request changes'. Supports manual dispatch by PR number and disables Husky git hooks via the `HUSKY=0` env var."
     },
     ".github/workflows/sync-develop.yml": {
-      "blobSha": "b5e8e09d3a2caff5017f99c7d0940e8cfd540665",
-      "summary": "GitHub Actions workflow that automatically syncs the `develop` branch with `main` after every push to `main`. It creates a `sync/main-to-develop` branch, attempts a no-fast-forward merge of `main` into `develop`, and opens a pull request if there are differences. If the merge encounters conflicts, it aborts, posts a comment on the originating PR or commit notifying of the failure, and exits with an error. The workflow uses force-with-lease pushes to update the sync branch and avoids creating duplicate PRs by checking for existing open sync PRs. Requires `contents: write` and `pull-requests: write` permissions; developers should be aware that merge conflicts require manual resolution and that the sync branch is reset to `origin/develop` on each run if it already exists."
+      "blobSha": "39e6a6880caadf5c1ee14b4c69becfdeeff91bfd",
+      "summary": "GitHub Actions workflow that keeps the `develop` branch in sync with `main` after every push to `main` (or via manual dispatch). It checks if `develop` already contains all of `main`'s commits (early exit if so), then creates/updates a `sync/main-to-develop` branch by merging `main` into `develop` with `--no-ff`. If a merge conflict occurs, it aborts and posts a comment on the originating PR or commit notifying about the conflict. If the merge succeeds and produces differences, it opens (or reuses) a PR targeting `develop` for human review, using `--force-with-lease` to update the sync branch."
+    },
+    "package.json": {
+      "blobSha": "e2b6c40778749a1c5fc6842aeb4ad273299bd743",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, and tsx for script execution. The only production dependency at the root is `@anthropic-ai/sdk`. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use `pnpm` exclusively and run tasks via `turbo` commands; `demo:generate` runs a standalone script for demo UI generation."
+    },
+    ".github/workflows/demo.yml": {
+      "blobSha": "3035c1e3dc15cd80ab33980e9347fa7f9e48f112",
+      "summary": "GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages. Triggered on pushes to `main` affecting Postman collections, the generation script, or demo-ui files, plus manual dispatch. Uses pnpm and Node 22 to install dependencies, runs `pnpm demo:generate` to produce static HTML, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires write permissions on contents for the GitHub Pages deployment."
     }
   }
 }
