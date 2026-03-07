@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-07T00:07:32.043Z",
+  "generatedAt": "2026-03-07T00:27:36.386Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -47,8 +47,8 @@
       "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "3f2f85367638b17e395ab5495dea1841a06de8c5",
-      "summary": "Shared authentication package that wraps `better-auth` with a Prisma/PostgreSQL adapter using the shared `@hallpass/db` Prisma client. Exports a `createAuth` factory function that configures email/password authentication, session expiry (7 days) with daily refresh, trusted origins, and database connectivity. Also exports the `Auth` and `Session` types (inferred from the `betterAuth` return type), plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. Developers should be aware that changes to session configuration, auth plugins, or the database adapter here affect all consuming applications across the monorepo."
+      "blobSha": "4a69b9f731a8e8c13d52628545786d0fe1a7e460",
+      "summary": "This file is the main entry point for the `@hallpass/auth` package, responsible for creating and configuring a `better-auth` authentication instance. It exports `createAuth`, a factory function that accepts `baseURL`, `secret`, and optional `trustedOrigins`, and returns a configured auth instance using a Prisma adapter backed by PostgreSQL (via `@hallpass/db`). Email/password authentication is enabled, sessions are configured with a 7-day expiry and 1-day update age, and HTTPS URLs automatically get `sameSite: 'none'` and `secure: true` cookie attributes. Key type exports include `Auth` (the return type of `createAuth`) and `Session` (inferred session type from better-auth). It also re-exports `toNodeHandler` and `fromNodeHeaders` from `better-auth/node` for use in Node.js server integrations. Developers modifying this file should be aware of the tight coupling to the `@hallpass/db` Prisma client and the `better-auth` library's configuration API."
     },
     "apps/user-api/Dockerfile": {
       "blobSha": "9851b639b25c247312b073fb5e02ddae5fc35093",
@@ -79,8 +79,8 @@
       "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root."
     },
     ".github/workflows/demo.yml": {
-      "blobSha": "a058ca770d91d21dd877f13f24a83d67768e0e82",
-      "summary": "GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages. Triggered by pushes to main/develop that modify Postman collections or the demo generation script, or via manual dispatch. Uses pnpm with Node 22 to run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires `contents: write` permission for pushing to gh-pages."
+      "blobSha": "430e504939d00aec406b63962dc6aa927f64c476",
+      "summary": "This GitHub Actions workflow automates the generation and deployment of a demo UI to GitHub Pages, triggered on pushes to `main` or `develop` branches when specific paths change (Postman collections, the demo generation script, or the demo-ui app), as well as via manual `workflow_dispatch`. It uses pnpm 10.30.1 and Node.js 22, installs dependencies with a frozen lockfile, runs `pnpm demo:generate` to produce static HTML, and deploys the `./apps/demo-ui` directory to the `gh-pages` branch using `peaceiris/actions-gh-pages@v3`. The job requires `contents: write` permission to push to the gh-pages branch. Developers should note that changes to the generation script or Postman collections trigger this pipeline, and the `demo:generate` script must output files into `apps/demo-ui`."
     }
   }
 }

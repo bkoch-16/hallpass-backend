@@ -1,12 +1,12 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-07T00:07:32.043Z — 20 files indexed_
+_Generated: 2026-03-07T00:27:36.386Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages. Triggered by pushes to main/develop that modify Postman collections or the demo generation script, or via manual dispatch. Uses pnpm with Node 22 to run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires `contents: write` permission for pushing to gh-pages.
+This GitHub Actions workflow automates the generation and deployment of a demo UI to GitHub Pages, triggered on pushes to `main` or `develop` branches when specific paths change (Postman collections, the demo generation script, or the demo-ui app), as well as via manual `workflow_dispatch`. It uses pnpm 10.30.1 and Node.js 22, installs dependencies with a frozen lockfile, runs `pnpm demo:generate` to produce static HTML, and deploys the `./apps/demo-ui` directory to the `gh-pages` branch using `peaceiris/actions-gh-pages@v3`. The job requires `contents: write` permission to push to the gh-pages branch. Developers should note that changes to the generation script or Postman collections trigger this pipeline, and the `demo:generate` script must output files into `apps/demo-ui`.
 
 ### `.github/workflows/deploy.yml`
 
@@ -78,7 +78,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package that wraps `better-auth` with a Prisma/PostgreSQL adapter using the shared `@hallpass/db` Prisma client. Exports a `createAuth` factory function that configures email/password authentication, session expiry (7 days) with daily refresh, trusted origins, and database connectivity. Also exports the `Auth` and `Session` types (inferred from the `betterAuth` return type), plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. Developers should be aware that changes to session configuration, auth plugins, or the database adapter here affect all consuming applications across the monorepo.
+This file is the main entry point for the `@hallpass/auth` package, responsible for creating and configuring a `better-auth` authentication instance. It exports `createAuth`, a factory function that accepts `baseURL`, `secret`, and optional `trustedOrigins`, and returns a configured auth instance using a Prisma adapter backed by PostgreSQL (via `@hallpass/db`). Email/password authentication is enabled, sessions are configured with a 7-day expiry and 1-day update age, and HTTPS URLs automatically get `sameSite: 'none'` and `secure: true` cookie attributes. Key type exports include `Auth` (the return type of `createAuth`) and `Session` (inferred session type from better-auth). It also re-exports `toNodeHandler` and `fromNodeHeaders` from `better-auth/node` for use in Node.js server integrations. Developers modifying this file should be aware of the tight coupling to the `@hallpass/db` Prisma client and the `better-auth` library's configuration API.
 
 ### `packages/db/prisma/schema.prisma`
 
