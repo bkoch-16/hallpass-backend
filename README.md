@@ -14,6 +14,12 @@ Designed as a microservice deployment with separate APIs for Users, Passes, Scho
 - **Infrastructure**: Google Cloud Run, GCP Artifact Registry, GCP Secret Manager
 - **CI/CD**: GitHub Actions
 
+## API Demo
+
+**[bkoch-16.github.io/hallpass-backend](https://bkoch-16.github.io/hallpass-backend/)** — browsable API reference, auto-published on every push to `main` or `develop`.
+
+The user dev API is live at [user-api-dev](https://user-api-dev-509242588558.us-west1.run.app) (append `/health` to verify).
+
 ## Architecture & Roadmap
 
 See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API design, and planned services.
@@ -26,7 +32,7 @@ See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API desi
 
 ## CI/CD
 
-Three GitHub Actions workflows run on this repo:
+Four GitHub Actions workflows run on this repo:
 
 ### Deploy (`deploy.yml`)
 Runs on every push and PR.
@@ -51,16 +57,8 @@ Runs on push to `develop` or `main`. Calls Claude to summarize each indexed sour
 - `docs/{branch}-context.md` — human-readable summaries used by the AI reviewer
 - `docs/{branch}-manifest.json` — blob SHA manifest for delta tracking (only changed files are re-summarized)
 
-## Environments
-
-| Environment | Branch | Cloud Run Service | URL |
-|---|---|---|---|
-| Dev | `develop` | `user-api-dev` | [Backend User API](https://user-api-dev-509242588558.us-west1.run.app) |
-| Prod | `main` | `user-api` | — |
-
-- Images are stored in GCP Artifact Registry at `us-west1-docker.pkg.dev/{project}/hallpass/`
-- The cloud database is [Neon](https://neon.tech) (serverless PostgreSQL that scales to zero), matching the Cloud Run deployment model
-- The `DATABASE_URL` is configured as a secret on each Cloud Run service
+### API Demo (`demo.yml`)
+Runs on push to `main` or `develop` when `postman/collections/` or `scripts/generate-demo.ts` change. Generates a static API reference site from the Postman collection and publishes it to GitHub Pages (`gh-pages` branch).
 
 ## Postman
 

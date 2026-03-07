@@ -5,7 +5,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     root: ".",
-    exclude: ["**/node_modules/**", "tests/integration/**"],
+    include: ["tests/integration/**/*.test.ts"],
+    globalSetup: ["./tests/setup/integration-global.ts"],
     env: {
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/hallpass_test",
       BETTER_AUTH_URL: "http://localhost:3001",

@@ -3,10 +3,11 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { prisma } from "@hallpass/db";
 
-export function createAuth(config: { baseURL: string; secret: string }) {
+export function createAuth(config: { baseURL: string; secret: string; trustedOrigins?: string[] }) {
   return betterAuth({
     baseURL: config.baseURL,
     secret: config.secret,
+    trustedOrigins: config.trustedOrigins,
     database: prismaAdapter(prisma, {
       provider: "postgresql",
     }),
@@ -17,6 +18,14 @@ export function createAuth(config: { baseURL: string; secret: string }) {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
     },
+    ...(config.baseURL.startsWith("https://") && {
+      advanced: {
+        defaultCookieAttributes: {
+          sameSite: "none",
+          secure: true,
+        },
+      },
+    }),
   });
 }
 

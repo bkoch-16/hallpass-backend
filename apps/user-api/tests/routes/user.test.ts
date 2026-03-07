@@ -140,52 +140,151 @@ describe("GET /api/users/:id", () => {
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "User not found" });
   });
+
+  it("returns 200 when teacher accesses another user's profile", async () => {
+    const otherUser = { ...fakeUser, id: "other-user", email: "other@test.com", name: "Other User" };
+    authenticateAs(fakeUser); // teacher with id "user-1"
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(fakeUser)   // requireAuth
+      .mockResolvedValueOnce({           // route handler lookup
+        id: otherUser.id,
+        email: otherUser.email,
+        name: otherUser.name,
+        role: otherUser.role,
+        createdAt: otherUser.createdAt,
+      });
+
+    const res = await request(app).get("/api/users/other-user");
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe("other-user");
+  });
 });
 
-describe("GET /api/users/batch", () => {
+describe("GET /api/users/me", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/users/batch?ids=a,b");
+    const res = await request(app).get("/api/users/me");
 
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 when ids query param is missing", async () => {
-    authenticateAs(fakeUser);
-
-    const res = await request(app).get("/api/users/batch");
-
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 403 when student tries batch lookup", async () => {
+  it("returns own profile for student", async () => {
     const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
     authenticateAs(student);
 
-    const res = await request(app).get("/api/users/batch?ids=a,b");
+    const res = await request(app).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe("student-1");
+  });
+
+  it("returns own profile for teacher", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(app).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(fakeUser.id);
+  });
+
+  it("does not expose deletedAt or emailVerified", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(app).get("/api/users/me");
+
+    expect(res.body).not.toHaveProperty("deletedAt");
+    expect(res.body).not.toHaveProperty("emailVerified");
+  });
+});
+
+describe("GET /api/users", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await request(app).get("/api/users");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when student tries to list all users", async () => {
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(student);
+
+    const res = await request(app).get("/api/users");
 
     expect(res.status).toBe(403);
   });
 
-  it("returns 400 when more than 100 IDs are provided", async () => {
+  it("returns paginated list for teacher", async () => {
     authenticateAs(fakeUser);
-    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`).join(",");
+    const users = [
+      { id: "a", email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() },
+      { id: "b", email: "b@test.com", name: "B", role: "STUDENT", createdAt: new Date() },
+    ];
+    mockPrisma.user.findMany.mockResolvedValue(users);
 
-    const res = await request(app).get(`/api/users/batch?ids=${ids}`);
+    const res = await request(app).get("/api/users");
 
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({ message: "Too many IDs (max 100)" });
-    expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.nextCursor).toBeNull();
   });
 
-  it("filters out empty IDs from comma-separated list", async () => {
+  it("filters by role", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await request(app).get("/api/users?role=STUDENT");
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ role: "STUDENT", deletedAt: null }),
+      }),
+    );
+  });
+
+  it("passes cursor and limit to prisma", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await request(app).get("/api/users?cursor=some-id&limit=10");
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 11,
+        cursor: { id: "some-id" },
+        skip: 1,
+      }),
+    );
+  });
+
+  it("returns nextCursor when more results exist", async () => {
+    authenticateAs(fakeUser);
+    const users = Array.from({ length: 51 }, (_, i) => ({
+      id: `user-${i}`,
+      email: `u${i}@test.com`,
+      name: `User ${i}`,
+      role: "STUDENT",
+      createdAt: new Date(),
+    }));
+    mockPrisma.user.findMany.mockResolvedValue(users);
+
+    const res = await request(app).get("/api/users?limit=50");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(50);
+    expect(res.body.nextCursor).toBe("user-49");
+  });
+
+  it("fetches specific users when ?ids= is provided", async () => {
     authenticateAs(fakeUser);
     mockPrisma.user.findMany.mockResolvedValue([
       { id: "a", email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() },
     ]);
 
-    const res = await request(app).get("/api/users/batch?ids=a,,b,");
+    const res = await request(app).get("/api/users?ids=a,b");
 
     expect(res.status).toBe(200);
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
@@ -195,18 +294,41 @@ describe("GET /api/users/batch", () => {
     );
   });
 
-  it("returns users for valid teacher request", async () => {
+  it("trims whitespace around ids", async () => {
     authenticateAs(fakeUser);
-    const users = [
-      { id: "a", email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() },
-      { id: "b", email: "b@test.com", name: "B", role: "STUDENT", createdAt: new Date() },
-    ];
-    mockPrisma.user.findMany.mockResolvedValue(users);
+    mockPrisma.user.findMany.mockResolvedValue([]);
 
-    const res = await request(app).get("/api/users/batch?ids=a,b");
+    await request(app).get("/api/users?ids= a , b ");
 
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["a", "b"] }, deletedAt: null },
+      }),
+    );
+  });
+
+  it("filters out empty IDs from comma-separated list", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await request(app).get("/api/users?ids=a,,b,");
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["a", "b"] }, deletedAt: null },
+      }),
+    );
+  });
+
+  it("returns 400 when more than 100 ids provided", async () => {
+    authenticateAs(fakeUser);
+    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`).join(",");
+
+    const res = await request(app).get(`/api/users?ids=${ids}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Too many IDs (max 100)" });
+    expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -261,6 +383,186 @@ describe("POST /api/users", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("returns 403 when student tries to create a user", async () => {
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(student);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/users/bulk", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }]);
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when teacher tries to bulk create", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }]);
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 for empty array", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app).post("/api/users/bulk").send([]);
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when body contains an invalid user", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "not-an-email", name: "A" }]);
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when trying to create a user with a higher role", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A", role: "SUPER_ADMIN" }]);
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("creates all users and returns created count", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.create
+      .mockResolvedValueOnce({ id: "new-1", email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() })
+      .mockResolvedValueOnce({ id: "new-2", email: "b@test.com", name: "B", role: "STUDENT", createdAt: new Date() });
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }, { email: "b@test.com", name: "B" }]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ created: 2, failed: [] });
+  });
+
+  it("returns partial success when some users fail to create", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.create
+      .mockResolvedValueOnce({ id: "new-1", email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() })
+      .mockRejectedValueOnce(new Error("Unique constraint"));
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }, { email: "dup@test.com", name: "Dup" }]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(1);
+    expect(res.body.failed).toHaveLength(1);
+    expect(res.body.failed[0]).toMatchObject({ index: 1, email: "dup@test.com" });
+  });
+
+  it("returns 400 when all users fail to create", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.create.mockRejectedValue(new Error("DB error"));
+
+    const res = await request(app)
+      .post("/api/users/bulk")
+      .send([
+        { email: "a@test.com", name: "A" },
+        { email: "b@test.com", name: "B" },
+      ]);
+
+    expect(res.status).toBe(400);
+    expect(res.body.created).toBe(0);
+    expect(res.body.failed).toHaveLength(2);
+  });
+
+
+  it("returns 400 when email is missing", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ name: "New User" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when email is invalid format", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "not-an-email", name: "New User" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when name is missing", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "valid@test.com" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when email already exists (unique constraint violation)", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    const error = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    mockPrisma.user.create.mockRejectedValue(error);
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "dup@test.com", name: "Dup User" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Email already in use" });
+  });
+
+  it("returns 500 when prisma.user.create throws an unexpected error", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.create.mockRejectedValue(new Error("unexpected DB error"));
+
+    const res = await request(app)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+  });
 });
 
 describe("PATCH /api/users/:id", () => {
@@ -295,15 +597,17 @@ describe("PATCH /api/users/:id", () => {
     expect(res.body.name).toBe("New Name");
   });
 
-  it("updates email successfully", async () => {
-    authenticateAs(fakeUser);
-    const updated = { ...fakeUser, email: "new@test.com" };
+  it("updates email successfully when caller is admin", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    const target = { ...fakeUser, id: "target-1", role: "STUDENT" };
+    authenticateAs(admin);
+    const updated = { ...target, email: "new@test.com" };
     mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)
-      .mockResolvedValueOnce(fakeUser);
+      .mockResolvedValueOnce(admin)   // requireAuth
+      .mockResolvedValueOnce(target); // route handler existence check
     mockPrisma.user.update.mockResolvedValue(updated);
 
-    const res = await request(app).patch("/api/users/user-1").send({ email: "new@test.com" });
+    const res = await request(app).patch("/api/users/target-1").send({ email: "new@test.com" });
 
     expect(res.status).toBe(200);
     expect(res.body.email).toBe("new@test.com");
@@ -348,6 +652,74 @@ describe("PATCH /api/users/:id", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "User not found" });
+  });
+
+  it("returns 400 when PATCH body has invalid email format", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app).patch("/api/users/student-1").send({ email: "not-an-email" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when PATCH body has empty name", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+
+    const res = await request(app).patch("/api/users/student-1").send({ name: "" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 200 when student updates their own name", async () => {
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(student);
+    const updated = { ...student, name: "Updated Name" };
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(student)  // requireAuth
+      .mockResolvedValueOnce(student); // route handler existence check
+    mockPrisma.user.update.mockResolvedValue(updated);
+
+    const res = await request(app).patch("/api/users/student-1").send({ name: "Updated Name" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("Updated Name");
+  });
+
+  it("returns 403 when student tries to update their own email", async () => {
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(student);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(student)  // requireAuth
+      .mockResolvedValueOnce(student); // route handler existence check
+
+    const res = await request(app).patch("/api/users/student-1").send({ email: "new@student.com" });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 when student tries to change their own role", async () => {
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(student);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(student)  // requireAuth
+      .mockResolvedValueOnce(student); // route handler existence check
+
+    const res = await request(app).patch("/api/users/student-1").send({ role: "TEACHER" });
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when teacher updates another user", async () => {
+    authenticateAs(fakeUser); // teacher with id "user-1"
+
+    const res = await request(app).patch("/api/users/other-user").send({ name: "New Name" });
+
+    expect(res.status).toBe(403);
   });
 });
 
@@ -444,18 +816,97 @@ describe("DELETE /api/users/:id", () => {
       data: { deletedAt: expect.any(Date) },
     });
   });
+
+  it("returns 403 when admin tries to delete themselves", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(admin)  // requireAuth
+      .mockResolvedValueOnce(admin); // route handler: target is themselves
+
+    const res = await request(app).delete("/api/users/admin-1");
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when super_admin tries to delete themselves", async () => {
+    const superAdmin = { ...fakeUser, id: "sa-1", role: "SUPER_ADMIN" };
+    authenticateAs(superAdmin);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(superAdmin)  // requireAuth
+      .mockResolvedValueOnce(superAdmin); // route handler: target is themselves
+
+    const res = await request(app).delete("/api/users/sa-1");
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
 });
 
-describe("Auth middleware — soft-deleted user", () => {
-  it("returns 401 when authenticated user has been soft-deleted", async () => {
-    const deletedUser = { ...fakeUser, id: "deleted-1", deletedAt: new Date() };
-    mockGetSession.mockResolvedValue({ user: deletedUser, session: {} });
-    // findFirst returns null because deletedAt: null filter excludes the user
-    mockPrisma.user.findFirst.mockResolvedValue(null);
+describe("DB error handling", () => {
+  it("GET /api/users/:id returns 500 when prisma throws", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(fakeUser)
+      .mockRejectedValueOnce(new Error("DB error"));
 
-    const res = await request(app).get("/api/users/deleted-1");
+    const res = await request(app).get("/api/users/user-1");
 
-    expect(res.status).toBe(401);
-    expect(res.body).toEqual({ message: "Unauthorized" });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+  });
+
+  it("GET /api/users returns 500 when prisma throws", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockRejectedValue(new Error("DB error"));
+
+    const res = await request(app).get("/api/users");
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+  });
+
+  it("PATCH /api/users/:id returns 500 when prisma.findFirst throws on existence check", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    authenticateAs(admin);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(admin)              // requireAuth
+      .mockRejectedValueOnce(new Error("DB error")); // existence check
+
+    const res = await request(app).patch("/api/users/student-1").send({ name: "X" });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+  });
+
+  it("PATCH /api/users/:id returns 500 when prisma.update throws", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(admin);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(admin)    // requireAuth
+      .mockResolvedValueOnce(student); // existence check
+    mockPrisma.user.update.mockRejectedValue(new Error("DB error"));
+
+    const res = await request(app).patch("/api/users/student-1").send({ name: "X" });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+  });
+
+  it("DELETE /api/users/:id returns 500 when prisma.update throws", async () => {
+    const admin = { ...fakeUser, id: "admin-1", role: "ADMIN" };
+    const student = { ...fakeUser, id: "student-1", role: "STUDENT" };
+    authenticateAs(admin);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(admin)    // requireAuth
+      .mockResolvedValueOnce(student); // existence check
+    mockPrisma.user.update.mockRejectedValue(new Error("DB error"));
+
+    const res = await request(app).delete("/api/users/student-1");
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
   });
 });

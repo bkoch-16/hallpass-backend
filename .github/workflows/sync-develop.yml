@@ -3,6 +3,7 @@ name: Sync develop with main
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   sync:

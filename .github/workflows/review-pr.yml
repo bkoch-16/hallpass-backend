@@ -4,12 +4,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
 
 jobs:
   review:
     name: Review with Claude
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]' && github.event.pull_request.user.login == 'bkoch-16'
+    if: (github.event_name == 'workflow_dispatch' && github.actor == 'bkoch-16') || (github.actor != 'github-actions[bot]' && github.event.pull_request.user.login == 'bkoch-16')
 
     env:
       HUSKY: 0
@@ -21,6 +27,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout PR head (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -36,17 +48,24 @@ jobs:
 
       - name: Get PR diff
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           BASE_REF: ${{ github.base_ref }}
-        run: git diff origin/$BASE_REF...HEAD > pr.diff
+        run: |
+          RESOLVED_BASE=${BASE_REF:-$(gh pr view $PR_NUMBER --json baseRefName --jq '.baseRefName')}
+          git diff origin/$RESOLVED_BASE...HEAD > pr.diff
 
       - name: Fetch context doc
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           BASE_REF: ${{ github.base_ref }}
         run: |
+          RESOLVED_BASE=${BASE_REF:-$(gh pr view $PR_NUMBER --json baseRefName --jq '.baseRefName')}
           git fetch origin docs/index 2>/dev/null || true
-          SLUG=$(echo "$BASE_REF" | tr '/' '-')
+          SLUG=$(echo "$RESOLVED_BASE" | tr '/' '-')
           git show origin/docs/index:"docs/${SLUG}-context.md" > context.md 2>/dev/null || \
-            echo "_Context not yet available (indexing runs on push to ${BASE_REF})._" > context.md
+            echo "_Context not yet available (indexing runs on push to ${RESOLVED_BASE})._" > context.md
 
 
       - name: Run AI review
@@ -59,7 +78,7 @@ jobs:
       - name: Submit PR review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
         run: |
           if grep -qE "^Ship it" review.md; then
             gh pr review $PR_NUMBER --approve --body-file review.md

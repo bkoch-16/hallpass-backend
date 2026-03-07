@@ -3,3 +3,4 @@ node_modules/
 .idea/
 dist/
 .turbo
+apps/demo-ui/config.js

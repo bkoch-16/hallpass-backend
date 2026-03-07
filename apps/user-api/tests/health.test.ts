@@ -21,6 +21,9 @@ vi.mock("@hallpass/db", () => ({
 }));
 
 import app from "../src/app";
+import { prisma } from "@hallpass/db";
+
+const mockPrisma = prisma as unknown as { $queryRaw: ReturnType<typeof vi.fn> };
 
 describe("GET /health", () => {
   it("returns 200 with status ok", async () => {
@@ -28,6 +31,15 @@ describe("GET /health", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok", service: "user-api" });
+  });
+
+  it("returns 503 when DB is unreachable", async () => {
+    mockPrisma.$queryRaw.mockRejectedValueOnce(new Error("connection refused"));
+
+    const res = await request(app).get("/health");
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ status: "error", service: "user-api" });
   });
 });
 

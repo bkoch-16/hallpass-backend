@@ -9,7 +9,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "turbo test",
-    "prepare": "husky"
+    "test:integration": "turbo test:integration",
+    "prepare": "husky",
+    "demo:generate": "tsx scripts/generate-demo.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -30,7 +32,8 @@
     "tsx": "^4.21.0",
     "turbo": "latest",
     "typescript": "latest",
-    "typescript-eslint": "^8.56.1"
+    "typescript-eslint": "^8.56.1",
+    "yaml": "^2.8.2"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0"

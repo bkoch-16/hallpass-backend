@@ -10,6 +10,9 @@
       "cache": false
     },
     "lint": {},
-    "test": {}
+    "test": {},
+    "test:integration": {
+      "cache": false
+    }
   }
 }
