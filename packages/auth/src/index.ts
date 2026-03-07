@@ -20,6 +20,7 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
     },
     ...(config.baseURL.startsWith("https://") && {
       advanced: {
+        disableCSRFCheck: true,
         defaultCookieAttributes: {
           sameSite: "none",
           secure: true,
