@@ -1,3 +1,4 @@
 $kind: collection
+environmentPattern: "User Api"
 variables:
   Base: ""
