@@ -1,14 +1,16 @@
 const CONFIG = {
-  "environments": [
-    {
-      "label": "Hallpass User Api Cloud Dev",
-      "baseUrl": "https://user-api-dev-509242588558.us-west1.run.app"
-    }
+  "stages": [
+    "Prod",
+    "Dev"
   ],
   "groups": [
     {
       "name": "User-API",
       "order": 1000,
+      "baseUrls": {
+        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
+        "Prod": "https://user-api-509242588558.us-west1.run.app"
+      },
       "endpoints": [
         {
           "name": "Get Me",
@@ -136,6 +138,10 @@ const CONFIG = {
     {
       "name": "Auth",
       "order": 2000,
+      "baseUrls": {
+        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
+        "Prod": "https://user-api-509242588558.us-west1.run.app"
+      },
       "endpoints": [
         {
           "name": "Sign Up",
@@ -190,6 +196,10 @@ const CONFIG = {
     {
       "name": "No group",
       "order": 9999,
+      "baseUrls": {
+        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
+        "Prod": "https://user-api-509242588558.us-west1.run.app"
+      },
       "endpoints": [
         {
           "name": "Health",
