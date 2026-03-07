@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T23:53:32.825Z",
+  "generatedAt": "2026-03-07T00:07:32.043Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -11,8 +11,8 @@
       "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters—a general 100 req/15min limit and a stricter 10 req/15min limit for auth routes. Routes include Better Auth integration at `/api/auth/*splat`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth`, `env`, and `userRouter` modules. Includes a 404 catch-all and a global error handler that logs errors and returns 500. The `trust proxy` setting is enabled for running behind a reverse proxy (important for rate limiting accuracy)."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "a9baa30042a55df1e1ff61cfff1247777a07e633",
-      "summary": "Creates and exports the Better Auth instance using the @hallpass/auth package's createAuth factory. Configures auth with baseURL and secret from validated environment variables. This single auth instance is shared by the auth route handler in app.ts and the session validation in the requireAuth middleware."
+      "blobSha": "aa8d1ba49d0d3724366df100a1a69a43b264bde9",
+      "summary": "Initializes and exports the authentication instance for the user-api application by calling `createAuth` from the shared `@hallpass/auth` package. Configures auth using environment variables for the base URL, secret, and CORS trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object consumed by other parts of the user-api. Developers modifying this file should ensure the `env` module provides the required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` variables."
     },
     "apps/user-api/src/env.ts": {
       "blobSha": "978d4c93c003694c740b7997e0d496bd39bbdea9",
@@ -47,8 +47,8 @@
       "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "ef9bc9b5ef24d8bf796130193e1ecb484e3e672e",
-      "summary": "Provides a shared authentication configuration factory using the `better-auth` library for the @hallpass monorepo. The `createAuth` function accepts a `baseURL` and `secret`, configures a Prisma adapter with PostgreSQL (via `@hallpass/db`), enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` types inferred from the auth instance, as well as `toNodeHandler` and `fromNodeHeaders` utilities for integrating with Node.js HTTP servers. Consumers instantiate auth by calling `createAuth` with environment-specific config; modifying session strategy or auth plugins should be done here as this is the centralized auth setup."
+      "blobSha": "3f2f85367638b17e395ab5495dea1841a06de8c5",
+      "summary": "Shared authentication package that wraps `better-auth` with a Prisma/PostgreSQL adapter using the shared `@hallpass/db` Prisma client. Exports a `createAuth` factory function that configures email/password authentication, session expiry (7 days) with daily refresh, trusted origins, and database connectivity. Also exports the `Auth` and `Session` types (inferred from the `betterAuth` return type), plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. Developers should be aware that changes to session configuration, auth plugins, or the database adapter here affect all consuming applications across the monorepo."
     },
     "apps/user-api/Dockerfile": {
       "blobSha": "9851b639b25c247312b073fb5e02ddae5fc35093",

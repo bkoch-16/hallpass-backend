@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-06T23:53:32.825Z — 20 files indexed_
+_Generated: 2026-03-07T00:07:32.043Z — 20 files indexed_
 
 ## File Summaries
 
@@ -34,7 +34,7 @@ Main Express application setup for the user-api service. Configures middleware i
 
 ### `apps/user-api/src/auth.ts`
 
-Creates and exports the Better Auth instance using the @hallpass/auth package's createAuth factory. Configures auth with baseURL and secret from validated environment variables. This single auth instance is shared by the auth route handler in app.ts and the session validation in the requireAuth middleware.
+Initializes and exports the authentication instance for the user-api application by calling `createAuth` from the shared `@hallpass/auth` package. Configures auth using environment variables for the base URL, secret, and CORS trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object consumed by other parts of the user-api. Developers modifying this file should ensure the `env` module provides the required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` variables.
 
 ### `apps/user-api/src/env.ts`
 
@@ -78,7 +78,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Provides a shared authentication configuration factory using the `better-auth` library for the @hallpass monorepo. The `createAuth` function accepts a `baseURL` and `secret`, configures a Prisma adapter with PostgreSQL (via `@hallpass/db`), enables email/password authentication, and sets session expiry to 7 days with a 1-day update age. Exports the `Auth` and `Session` types inferred from the auth instance, as well as `toNodeHandler` and `fromNodeHeaders` utilities for integrating with Node.js HTTP servers. Consumers instantiate auth by calling `createAuth` with environment-specific config; modifying session strategy or auth plugins should be done here as this is the centralized auth setup.
+Shared authentication package that wraps `better-auth` with a Prisma/PostgreSQL adapter using the shared `@hallpass/db` Prisma client. Exports a `createAuth` factory function that configures email/password authentication, session expiry (7 days) with daily refresh, trusted origins, and database connectivity. Also exports the `Auth` and `Session` types (inferred from the `betterAuth` return type), plus `toNodeHandler` and `fromNodeHeaders` utilities for Node.js HTTP integration. Developers should be aware that changes to session configuration, auth plugins, or the database adapter here affect all consuming applications across the monorepo.
 
 ### `packages/db/prisma/schema.prisma`
 
