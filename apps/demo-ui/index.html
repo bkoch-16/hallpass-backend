@@ -13,6 +13,23 @@
   <select id="env-select" title="Environment"></select>
 </header>
 
+<div class="info-panel" id="info-panel">
+  <div class="info-panel-header" id="info-toggle">
+    <span class="info-panel-title">About this demo</span>
+    <span class="info-toggle-icon" id="info-toggle-icon">&#x25B4;</span>
+  </div>
+  <div class="info-panel-body" id="info-panel-body">
+    <p>This is a portfolio project demonstrating a backend REST API. There is no full frontend — this tool lets you explore the API endpoints directly, inspect responses, and interact with the data layer.</p>
+    <p><strong>Getting started:</strong> Select an environment, then go to <strong>Auth &gt; Sign In</strong> and use one of the seed accounts below. The session cookie is then used automatically by all protected endpoints.</p>
+    <p class="info-accounts">Seed accounts (password: <code>password</code>): <code>student@hallpass.dev</code> &nbsp; <code>teacher@hallpass.dev</code> &nbsp; <code>admin@hallpass.dev</code> &nbsp; <code>superadmin@hallpass.dev</code></p>
+    <ul class="info-notes">
+      <li><strong>Dev environment</strong> is actively used for development and testing and may be less stable than Prod.</li>
+      <li><strong>Prod credentials</strong> are not normally shared publicly, but are provided here to offer a more stable demo environment.</li>
+      <li><strong>Cold starts</strong> may cause the first request to take a few seconds. In a real production setting I would set minimum instances to 1 or more to prevent this startup time, but I keep them at 0 in a portfolio to keep infrastructure costs minimal.</li>
+    </ul>
+  </div>
+</div>
+
 <div class="user-bar unauthenticated" id="user-bar">
   <span class="dot grey" id="user-dot"></span>
   <span id="user-text">Not logged in</span>

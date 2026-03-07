@@ -102,7 +102,7 @@ function parseEnvironments(): Environment[] {
       const baseEntry = env.values.find((v) => v.key === "Base");
       return { label: env.name, baseUrl: baseEntry?.value ?? "" };
     })
-    .filter((env) => !/prod/i.test(env.label));
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // ---------------------------------------------------------------------------

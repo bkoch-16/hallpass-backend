@@ -211,12 +211,15 @@ async function send() {
 
 function populateEnvSelect() {
   const sel = document.getElementById('env-select');
+  let prodIdx = 0;
   CONFIG.environments.forEach((env, i) => {
     const opt = document.createElement('option');
     opt.value = String(i);
     opt.textContent = env.label;
     sel.appendChild(opt);
+    if (/prod/i.test(env.label)) prodIdx = i;
   });
+  sel.value = String(prodIdx);
 }
 
 function populateGroupSelect() {
@@ -251,10 +254,25 @@ function populateEndpointSelect(groupIdx) {
 }
 
 // ---------------------------------------------------------------------------
+// Info panel toggle
+// ---------------------------------------------------------------------------
+
+function initInfoPanel() {
+  const toggle = document.getElementById('info-toggle');
+  const body = document.getElementById('info-panel-body');
+  const icon = document.getElementById('info-toggle-icon');
+  toggle.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('collapsed');
+    icon.style.transform = collapsed ? 'rotate(180deg)' : '';
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
 function init() {
+  initInfoPanel();
   populateEnvSelect();
   const firstGroupIdx = populateGroupSelect();
   populateEndpointSelect(firstGroupIdx);
