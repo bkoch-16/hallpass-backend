@@ -46,10 +46,16 @@ describe("Helmet security headers", () => {
 });
 
 describe("CORS headers", () => {
-  it("returns Access-Control-Allow-Origin: * when CORS_ORIGIN is *", async () => {
+  it("returns Access-Control-Allow-Origin for allowed origin", async () => {
+    const res = await request(app).get("/health").set("Origin", "http://localhost:3000");
+
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+  });
+
+  it("does not return Access-Control-Allow-Origin for disallowed origin", async () => {
     const res = await request(app).get("/health").set("Origin", "http://example.com");
 
-    expect(res.headers["access-control-allow-origin"]).toBe("*");
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 });
 
