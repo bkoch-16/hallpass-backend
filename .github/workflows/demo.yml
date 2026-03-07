@@ -2,7 +2,7 @@ name: Deploy Demo UI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'postman/collections/**'
       - 'scripts/generate-demo.ts'
