@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@hallpass/db": "workspace:*",
-    "better-auth": "<1.4.7"
+    "better-auth": "latest"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
