@@ -68,7 +68,7 @@ pnpm --filter @hallpass/user-api lint
 | `DATABASE_URL` | — | Yes |
 | `BETTER_AUTH_SECRET` | — | Yes |
 | `BETTER_AUTH_URL` | `http://localhost:3001` | No |
-| `CORS_ORIGIN` | `*` | No |
+| `CORS_ORIGIN` | — | Yes |
 | `PORT` | `3001` | No |
 
 ## Architecture

@@ -1,16 +1,16 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-07T00:27:36.386Z — 20 files indexed_
+_Generated: 2026-03-07T22:51:30.640Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-This GitHub Actions workflow automates the generation and deployment of a demo UI to GitHub Pages, triggered on pushes to `main` or `develop` branches when specific paths change (Postman collections, the demo generation script, or the demo-ui app), as well as via manual `workflow_dispatch`. It uses pnpm 10.30.1 and Node.js 22, installs dependencies with a frozen lockfile, runs `pnpm demo:generate` to produce static HTML, and deploys the `./apps/demo-ui` directory to the `gh-pages` branch using `peaceiris/actions-gh-pages@v3`. The job requires `contents: write` permission to push to the gh-pages branch. Developers should note that changes to the generation script or Postman collections trigger this pipeline, and the `demo:generate` script must output files into `apps/demo-ui`.
+GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages on pushes to `main` (filtered to specific paths) or manual dispatch. It installs dependencies with pnpm, runs a `pnpm demo:generate` script to produce static HTML from Postman collections, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission for pushing to the gh-pages branch. Developers modifying Postman collections or the demo generation script should be aware this auto-deploys.
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD workflow for the backend user-api service, handling validation (lint, build, test) and deployment to Google Cloud Run. The `validate` job runs on all pushes and PRs, using dummy environment variables for DATABASE_URL, BETTER_AUTH_SECRET, and BETTER_AUTH_URL since tests mock the DB layer. Separate `deploy-dev` and `deploy-prod` jobs deploy Docker images to GCP Artifact Registry and Cloud Run, gated by branch (develop→dev, main→prod) or manual workflow_dispatch with environment selection. Environment variables and secrets on Cloud Run are managed via GCP Secret Manager, not passed in the workflow. Depends on GCP secrets (`GCP_PROJECT_ID`, `GCP_SA_KEY`) and uses Docker Buildx with GitHub Actions cache for efficient builds.
+CI/CD pipeline that validates (lint, build, test) on all pushes and PRs, then conditionally deploys the user-api to Google Cloud Run. The `validate` job uses dummy environment variables since tests mock the DB layer but env.ts validation still runs. Deployment follows a branch-based strategy: `develop` branch deploys to `user-api-dev` and `main` deploys to production `user-api`, both in `us-west1`. Docker images are built with Buildx, pushed to GCP Artifact Registry with SHA and `latest` tags, and use GitHub Actions cache. Secrets (GCP_PROJECT_ID, GCP_SA_KEY) must be configured in GitHub, while runtime env vars and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow.
 
 ### `.github/workflows/index-codebase.yml`
 
@@ -38,7 +38,7 @@ Initializes and exports the authentication instance for the user-api application
 
 ### `apps/user-api/src/env.ts`
 
-Environment variable validation and export using Zod schemas. Defines required variables `DATABASE_URL`, `BETTER_AUTH_URL`, and `BETTER_AUTH_SECRET`, an optional `PORT`, and `CORS_ORIGIN` defaulting to `"*"`. Parses `process.env` at module load time, so the app will fail fast on startup if required variables are missing. The exported `env` object is the single typed source of truth for configuration used throughout the user-api service.
+Validates and exports required environment variables at application startup using Zod schema parsing. Requires `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` as mandatory strings, with `PORT` being optional. The module eagerly parses `process.env` on import, meaning the application will crash immediately if any required variable is missing. This is imported across the app for type-safe env access. CI pipelines must provide dummy values for these variables even when the database isn't used, as noted in the deploy workflow.
 
 ### `apps/user-api/src/express.d.ts`
 
@@ -70,7 +70,7 @@ Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (r
 
 ### `docker-compose.yml`
 
-Local development Docker Compose configuration defining two services: a PostgreSQL 16 database and the user-api application. Postgres uses a named volume for data persistence and includes a health check; the user-api service depends on Postgres being healthy before starting. Environment variables BETTER_AUTH_SECRET and BETTER_AUTH_URL are expected from the host environment (or .env file), while DATABASE_URL is hardcoded to the internal Docker network. The user-api is exposed on port 3001 and built from the monorepo root context using the Dockerfile in apps/user-api/.
+Defines the local development environment with two services: a PostgreSQL 16 database and the user-api application. PostgreSQL is configured with default credentials (postgres/postgres), a `hallpass` database, persistent volume storage, and a health check. The user-api service is built from `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and depends on a healthy Postgres instance. Environment variables like `BETTER_AUTH_SECRET` are expected from the host environment or `.env` file, while others have sensible defaults. Developers should ensure the `.env` file provides `BETTER_AUTH_SECRET` before running `docker compose up`.
 
 ### `package.json`
 
