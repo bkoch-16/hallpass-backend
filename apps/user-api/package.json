@@ -14,6 +14,7 @@
     "@hallpass/auth": "workspace:*",
     "@hallpass/db": "workspace:*",
     "@hallpass/logger": "workspace:*",
+    "@hallpass/types": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "latest",
     "express": "^5.2.1",

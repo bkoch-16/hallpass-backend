@@ -1,19 +1,19 @@
 import { Request, Response, NextFunction } from "express";
-import { Role } from "@hallpass/db";
+import type { UserRole } from "@hallpass/types";
 
-const ROLE_RANK: Record<Role, number> = {
-  [Role.STUDENT]: 0,
-  [Role.TEACHER]: 1,
-  [Role.ADMIN]: 2,
-  [Role.SUPER_ADMIN]: 3,
-  [Role.SERVICE]: 4,
+const ROLE_RANK: Record<UserRole, number> = {
+  STUDENT: 0,
+  TEACHER: 1,
+  ADMIN: 2,
+  SUPER_ADMIN: 3,
+  SERVICE: 4,
 };
 
-export function roleRank(role: Role): number {
+export function roleRank(role: UserRole): number {
   return ROLE_RANK[role];
 }
 
-export function requireRole(...roles: Role[]) {
+export function requireRole(...roles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       res.status(401).json({ message: "Unauthorized" });
@@ -31,7 +31,7 @@ export function requireRole(...roles: Role[]) {
   };
 }
 
-export function requireSelfOrRole(...roles: Role[]) {
+export function requireSelfOrRole(...roles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       res.status(401).json({ message: "Unauthorized" });

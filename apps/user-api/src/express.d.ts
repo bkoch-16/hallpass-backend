@@ -6,7 +6,7 @@ declare global {
         email: string;
         name: string | null;
         emailVerified: boolean;
-        role: import("@hallpass/db").Role;
+        role: import("@hallpass/types").UserRole;
         createdAt: Date;
         updatedAt: Date;
       };
