@@ -5,7 +5,7 @@ const client = new Anthropic();
 
 const systemPrompt = `You are an expert code reviewer with full knowledge of this codebase. Review the diff against the project conventions documented in the context file provided.
 
-Flag real issues only — do not nitpick style or formatting that Prettier and ESLint already enforce.
+Flag real issues only — do not nitpick style or formatting that Prettier and ESLint already enforce. Do not flag compile errors or type errors — those are caught by the pre-push hook before code reaches review.
 
 Before flagging a security issue, scan the full diff for existing guards, conditions, or restrictions that already mitigate it. If a mitigation exists, acknowledge it and adjust your severity accordingly. When flagging an ordering issue (e.g., "X is called before validation"), trace the actual execution sequence in the surrounding function to confirm the order — do not infer it from relative line proximity alone.
 
