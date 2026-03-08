@@ -53,7 +53,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           RESOLVED_BASE=${BASE_REF:-$(gh pr view $PR_NUMBER --json baseRefName --jq '.baseRefName')}
-          git diff origin/$RESOLVED_BASE...HEAD > pr.diff
+          git diff -U20 origin/$RESOLVED_BASE...HEAD > pr.diff
 
       - name: Fetch context doc
         env:
