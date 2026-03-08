@@ -6,6 +6,7 @@ Hallpass backend — a Node.js monorepo providing API services for a digital hal
 - `packages/auth` — Authentication layer (better-auth)
 - `packages/db` — Database access (Prisma + PostgreSQL)
 - `packages/logger` — Shared structured logging (Pino)
+- `packages/types` — Shared TypeScript types (enums, response shapes, request bodies)
 
 
 ## Tech Stack
@@ -88,6 +89,18 @@ apps/user-api/src/
 2. Middleware (`middleware/`) — auth, logging, rate limiting
 3. Validation (`schemas/`) — Zod schemas
 4. Data (`@hallpass/db`) — Prisma ORM singleton
+
+## Types Package
+
+`@hallpass/types` is a zero-dependency package that exports shared TypeScript contracts consumed by `apps/user-api` (and future apis):
+
+- **Enums**: `UserRole`, `PassStatus`, `PolicyInterval`, `ASSIGNABLE_ROLES`
+- **Pagination**: `CursorPage<T>`
+- **Response shapes**: `UserResponse`, `PassResponse`, `SchoolResponse`, `DistrictResponse`, `DestinationResponse`, `PassPolicyResponse`, `ScheduleTypeResponse`, `PeriodResponse`, `SchoolCalendarResponse`
+- **Request bodies**: `Create*Body` / `Update*Body` interfaces for all resources, `UpsertPassPolicyBody`, `CalendarEntryBody`
+- **Bulk operation results**: `BulkUpsertResult`, `BulkUserResult`, `BulkUserFailure`
+
+Built with `tsc` (no runtime dependencies). Import from `@hallpass/types`.
 
 ## Database
 
