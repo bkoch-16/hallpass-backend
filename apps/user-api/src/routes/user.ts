@@ -15,10 +15,17 @@ import {
 
 const router = Router();
 
+const USER_SELECT = { id: true, email: true, name: true, role: true, createdAt: true } as const;
+
+type UserRow = { id: string; email: string; name: string | null; role: UserRole; createdAt: Date };
+
+function toUserResponse(u: UserRow): UserResponse {
+  return { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, schoolId: null, districtId: null };
+}
+
 // GET /me — must come before /:id
 router.get("/me", requireAuth, (req: Request, res: Response) => {
-  const { id, email, name, role, createdAt } = req.user!;
-  res.json({ id, email, name, role, schoolId: null, districtId: null, createdAt } satisfies UserResponse);
+  res.json(toUserResponse(req.user!));
 });
 
 // GET / — cursor-paginated list; ?ids= replaces the former /batch endpoint
@@ -44,9 +51,9 @@ router.get(
       }
       const users = await prisma.user.findMany({
         where: { id: { in: idList }, deletedAt: null },
-        select: { id: true, email: true, name: true, role: true, createdAt: true },
+        select: USER_SELECT,
       });
-      res.json({ data: users as UserResponse[], nextCursor: null } satisfies CursorPage<UserResponse>);
+      res.json({ data: users.map(toUserResponse), nextCursor: null } satisfies CursorPage<UserResponse>);
       return;
     }
 
@@ -58,14 +65,14 @@ router.get(
       take: take + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { id: "asc" },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: USER_SELECT,
     });
 
     const hasMore = users.length > take;
     const data = hasMore ? users.slice(0, take) : users;
     const nextCursor = hasMore ? data[data.length - 1].id : null;
 
-    res.json({ data: data as UserResponse[], nextCursor } satisfies CursorPage<UserResponse>);
+    res.json({ data: data.map(toUserResponse), nextCursor } satisfies CursorPage<UserResponse>);
   },
 );
 
@@ -77,7 +84,7 @@ router.get(
   async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({
       where: { id: req.params.id as string, deletedAt: null },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: USER_SELECT,
     });
 
     if (!user) {
@@ -85,7 +92,7 @@ router.get(
       return;
     }
 
-    res.json(user as UserResponse);
+    res.json(toUserResponse(user));
   },
 );
 
@@ -104,9 +111,9 @@ router.post(
     try {
       const user = await prisma.user.create({
         data: { email: req.body.email, name: req.body.name, role: targetRole },
-        select: { id: true, email: true, name: true, role: true, createdAt: true },
+        select: USER_SELECT,
       });
-      res.status(201).json(user as UserResponse);
+      res.status(201).json(toUserResponse(user));
     } catch (err: unknown) {
       if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
         res.status(409).json({ message: "Email already in use" });
@@ -137,7 +144,7 @@ router.post(
       users.map((u) =>
         prisma.user.create({
           data: { email: u.email, name: u.name, role: u.role ?? UserRole.STUDENT },
-          select: { id: true, email: true, name: true, role: true, createdAt: true },
+          select: USER_SELECT,
         }),
       ),
     );
@@ -181,10 +188,10 @@ router.patch(
     const updated = await prisma.user.update({
       where: { id: req.params.id as string },
       data: req.body,
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: USER_SELECT,
     });
 
-    res.json(updated as UserResponse);
+    res.json(toUserResponse(updated));
   },
 );
 
