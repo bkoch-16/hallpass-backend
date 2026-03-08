@@ -20,7 +20,8 @@ const USER_SELECT = { id: true, email: true, name: true, role: true, createdAt: 
 type UserRow = { id: string; email: string; name: string | null; role: UserRole; createdAt: Date };
 
 function toUserResponse(u: UserRow): UserResponse {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, schoolId: null, districtId: null };
+    // Hardcode schoolId and districtId as null until their schema are added
+    return { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, schoolId: null, districtId: null };
 }
 
 // GET /me — must come before /:id
