@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-07T22:51:30.640Z",
+  "generatedAt": "2026-03-08T02:12:18.300Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "d8cf1ec24c1652153aab4ef90749e385fd88513f",
@@ -19,8 +19,8 @@
       "summary": "Validates and exports required environment variables at application startup using Zod schema parsing. Requires `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` as mandatory strings, with `PORT` being optional. The module eagerly parses `process.env` on import, meaning the application will crash immediately if any required variable is missing. This is imported across the app for type-safe env access. CI pipelines must provide dummy values for these variables even when the database isn't used, as noted in the deploy workflow."
     },
     "apps/user-api/src/express.d.ts": {
-      "blobSha": "95c5d0097fb1576c5e20750000e93e99a6302181",
-      "summary": "TypeScript declaration file that augments the Express Request interface to include an optional user property. The user shape mirrors the Prisma User model (id, email, name, emailVerified, role, createdAt, updatedAt) with the Role type imported from @hallpass/db. This enables type-safe access to req.user throughout route handlers and middleware after authentication."
+      "blobSha": "31fea08a2b9e399a7975b5973c19a4d856a11716",
+      "summary": "Augments the global Express `Request` interface to include an optional `user` property with typed user fields (id, email, name, emailVerified, role, createdAt, updatedAt). The `role` field imports `UserRole` from `@hallpass/types`, creating a cross-package type dependency. The `export {}` at the bottom ensures the file is treated as a module so the global augmentation works correctly. Developers adding new user properties to the auth middleware should update this type definition to keep it in sync."
     },
     "apps/user-api/src/index.ts": {
       "blobSha": "dfae02b9016fcce80d96d22d1c0802178fd96f43",
@@ -31,20 +31,20 @@
       "summary": "Express middleware that validates the current session using Better Auth's getSession API by converting Node request headers via fromNodeHeaders. After session validation, it fetches the full user record from Prisma (excluding soft-deleted users) and attaches it to req.user. Returns 401 for missing/invalid sessions or deleted users. Must be applied before any route that needs req.user."
     },
     "apps/user-api/src/middleware/roleGuard.ts": {
-      "blobSha": "9532f29e0344a3ff292feb2a17206e57b3faeb7f",
-      "summary": "Provides role-based authorization middleware and utilities. Defines a ROLE_RANK hierarchy (STUDENT=0 through SERVICE=4) with a roleRank() helper for comparing privilege levels. Exports requireRole() which checks if req.user.role is in the allowed set, and requireSelfOrRole() which additionally permits access if the route param :id matches the authenticated user's ID. Both return 401 if no user is present and 403 if authorization fails. Must be used after requireAuth middleware."
+      "blobSha": "30864212171ec9fed4d2ac0e4abec17ea4a76836",
+      "summary": "Provides Express middleware factories for role-based access control: `requireRole` checks if the authenticated user has one of the specified roles, and `requireSelfOrRole` additionally allows access if the user's ID matches `req.params.id`. Exports a `roleRank` utility function that maps `UserRole` values to numeric ranks (STUDENT=0 through SERVICE=4), used elsewhere for hierarchical role comparisons. Depends on the `req.user` object being populated by a prior auth middleware. Returns 401 for unauthenticated requests and 403 for insufficient permissions."
     },
     "apps/user-api/src/middleware/validate.ts": {
       "blobSha": "fe303ff6aae657cb70cbe09fb53df207b7bf3df1",
       "summary": "Express middleware factory functions for validating request query parameters, body, and route params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each accepting a `ZodSchema` and returning middleware that returns a 400 response with flattened Zod errors on validation failure. On success, the parsed (and potentially transformed/defaulted) data replaces the original `req.query`, `req.body`, or `req.params`. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it is normally read-only, while body and params are assigned directly."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "52a1632d0b2d408ca96d6cc76610be1b0d8170de",
-      "summary": "Defines the Express router for all user CRUD endpoints including GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (single create), POST /bulk (bulk create), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Uses middleware chains of `requireAuth`, role-based guards (`requireRole`, `requireSelfOrRole`), and Zod validation (`validateBody`, `validateParams`, `validateQuery`) from sibling middleware/schema modules. Role hierarchy is enforced via `roleRank` to prevent privilege escalation on create, update, and delete operations. Depends on `@hallpass/db` for Prisma client and Role enum; all queries filter on `deletedAt: null` and select a consistent subset of user fields. Handles Prisma unique constraint errors (P2002) for email conflicts."
+      "blobSha": "da2482a7a3d43092cfe805a7e3ed6483358c920d",
+      "summary": "Defines the full CRUD REST router for user management with endpoints: GET /me, GET / (cursor-paginated list with optional `ids` filter), GET /:id, POST / (create), POST /bulk (batch create), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces role-based authorization using `requireRole` and `requireSelfOrRole`, with hierarchical checks via `roleRank` to prevent privilege escalation (e.g., users cannot create/delete users of equal or higher rank). Uses Prisma for database access with a consistent `USER_SELECT` projection and `toUserResponse` mapper that hardcodes `schoolId`/`districtId` as null. Depends on validation middleware with Zod schemas, `@hallpass/db` for Prisma, and `@hallpass/types` for shared types including `CursorPage` and `BulkUserResult`."
     },
     "apps/user-api/src/schemas/user.ts": {
-      "blobSha": "7f00f8e84240018af9fab441b13df9bf967c2b4b",
-      "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes."
+      "blobSha": "e59783f258e00a794c9fba0810545fd201b829a6",
+      "summary": "Defines Zod validation schemas for user-related API endpoints: `userIdSchema` for path params, `listUsersSchema` for query params (with coerced numeric limit and defaults), `createUserSchema` and `bulkCreateSchema` for creation, and `updateUserSchema` for partial updates. Uses `ASSIGNABLE_ROLES` from `@hallpass/types` to constrain valid role values via `z.enum`. The `updateUserSchema` includes a `.refine` check requiring at least one field to be present. The `listUsersSchema` uses `z.coerce.number()` to handle query string parsing with a default limit of 50."
     },
     "packages/auth/src/index.ts": {
       "blobSha": "4a69b9f731a8e8c13d52628545786d0fe1a7e460",
@@ -67,8 +67,8 @@
       "summary": "Workflow that generates an AI-friendly codebase context document by running `scripts/index-codebase.ts` with an Anthropic API key. Triggered on pushes to develop/main or manually with a branch selector. It restores a previous manifest from the `docs/index` orphan branch for incremental indexing, runs the indexer, then commits updated docs back to `docs/index`. Uses concurrency group `docs-index` with `cancel-in-progress: false` to prevent parallel runs, and commits are tagged `[skip ci]` to avoid recursive triggers."
     },
     ".github/workflows/review-pr.yml": {
-      "blobSha": "2d9a16ce829369ce2f74b58729fd3a66e7ad5624",
-      "summary": "AI-powered PR review workflow using Claude (Anthropic API) that runs on PR events or manual dispatch. Restricted to PRs authored by `bkoch-16` and ignores bot-triggered events. It generates a diff against the PR's base branch, fetches a codebase context document from `docs/index`, and runs `scripts/review-pr.ts` to produce a review. The review output is parsed for \"Ship it\" (approve), \"Request changes\", or default (comment) actions via `gh pr review`. Requires `pull-requests: write` permission and the `ANTHROPIC_API_KEY` secret. Sets `HUSKY: 0` to skip git hooks during CI."
+      "blobSha": "0994a308b7819f1212ae69cf89364f9b6335c10c",
+      "summary": "GitHub Actions workflow that performs automated AI-powered PR reviews using Claude (Anthropic API). Triggers on PR open/sync/reopen against `develop` or `main` branches, or via manual `workflow_dispatch` with a PR number input, but only runs for the user `bkoch-16`. It checks out the code, generates a unified diff (with 20 lines of context) against the base branch, fetches an optional context doc from a `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review is submitted as an approval, change request, or comment based on whether the output starts with 'Ship it' or 'Request changes'. Sets `HUSKY=0` to skip git hooks during CI and requires `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` secrets."
     },
     ".github/workflows/sync-develop.yml": {
       "blobSha": "39e6a6880caadf5c1ee14b4c69becfdeeff91bfd",

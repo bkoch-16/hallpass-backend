@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-07T22:51:30.640Z — 20 files indexed_
+_Generated: 2026-03-08T02:12:18.300Z — 20 files indexed_
 
 ## File Summaries
 
@@ -18,7 +18,7 @@ Workflow that generates an AI-friendly codebase context document by running `scr
 
 ### `.github/workflows/review-pr.yml`
 
-AI-powered PR review workflow using Claude (Anthropic API) that runs on PR events or manual dispatch. Restricted to PRs authored by `bkoch-16` and ignores bot-triggered events. It generates a diff against the PR's base branch, fetches a codebase context document from `docs/index`, and runs `scripts/review-pr.ts` to produce a review. The review output is parsed for "Ship it" (approve), "Request changes", or default (comment) actions via `gh pr review`. Requires `pull-requests: write` permission and the `ANTHROPIC_API_KEY` secret. Sets `HUSKY: 0` to skip git hooks during CI.
+GitHub Actions workflow that performs automated AI-powered PR reviews using Claude (Anthropic API). Triggers on PR open/sync/reopen against `develop` or `main` branches, or via manual `workflow_dispatch` with a PR number input, but only runs for the user `bkoch-16`. It checks out the code, generates a unified diff (with 20 lines of context) against the base branch, fetches an optional context doc from a `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review is submitted as an approval, change request, or comment based on whether the output starts with 'Ship it' or 'Request changes'. Sets `HUSKY=0` to skip git hooks during CI and requires `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` secrets.
 
 ### `.github/workflows/sync-develop.yml`
 
@@ -42,7 +42,7 @@ Validates and exports required environment variables at application startup usin
 
 ### `apps/user-api/src/express.d.ts`
 
-TypeScript declaration file that augments the Express Request interface to include an optional user property. The user shape mirrors the Prisma User model (id, email, name, emailVerified, role, createdAt, updatedAt) with the Role type imported from @hallpass/db. This enables type-safe access to req.user throughout route handlers and middleware after authentication.
+Augments the global Express `Request` interface to include an optional `user` property with typed user fields (id, email, name, emailVerified, role, createdAt, updatedAt). The `role` field imports `UserRole` from `@hallpass/types`, creating a cross-package type dependency. The `export {}` at the bottom ensures the file is treated as a module so the global augmentation works correctly. Developers adding new user properties to the auth middleware should update this type definition to keep it in sync.
 
 ### `apps/user-api/src/index.ts`
 
@@ -54,7 +54,7 @@ Express middleware that validates the current session using Better Auth's getSes
 
 ### `apps/user-api/src/middleware/roleGuard.ts`
 
-Provides role-based authorization middleware and utilities. Defines a ROLE_RANK hierarchy (STUDENT=0 through SERVICE=4) with a roleRank() helper for comparing privilege levels. Exports requireRole() which checks if req.user.role is in the allowed set, and requireSelfOrRole() which additionally permits access if the route param :id matches the authenticated user's ID. Both return 401 if no user is present and 403 if authorization fails. Must be used after requireAuth middleware.
+Provides Express middleware factories for role-based access control: `requireRole` checks if the authenticated user has one of the specified roles, and `requireSelfOrRole` additionally allows access if the user's ID matches `req.params.id`. Exports a `roleRank` utility function that maps `UserRole` values to numeric ranks (STUDENT=0 through SERVICE=4), used elsewhere for hierarchical role comparisons. Depends on the `req.user` object being populated by a prior auth middleware. Returns 401 for unauthenticated requests and 403 for insufficient permissions.
 
 ### `apps/user-api/src/middleware/validate.ts`
 
@@ -62,11 +62,11 @@ Express middleware factory functions for validating request query parameters, bo
 
 ### `apps/user-api/src/routes/user.ts`
 
-Defines the Express router for all user CRUD endpoints including GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (single create), POST /bulk (bulk create), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Uses middleware chains of `requireAuth`, role-based guards (`requireRole`, `requireSelfOrRole`), and Zod validation (`validateBody`, `validateParams`, `validateQuery`) from sibling middleware/schema modules. Role hierarchy is enforced via `roleRank` to prevent privilege escalation on create, update, and delete operations. Depends on `@hallpass/db` for Prisma client and Role enum; all queries filter on `deletedAt: null` and select a consistent subset of user fields. Handles Prisma unique constraint errors (P2002) for email conflicts.
+Defines the full CRUD REST router for user management with endpoints: GET /me, GET / (cursor-paginated list with optional `ids` filter), GET /:id, POST / (create), POST /bulk (batch create), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces role-based authorization using `requireRole` and `requireSelfOrRole`, with hierarchical checks via `roleRank` to prevent privilege escalation (e.g., users cannot create/delete users of equal or higher rank). Uses Prisma for database access with a consistent `USER_SELECT` projection and `toUserResponse` mapper that hardcodes `schoolId`/`districtId` as null. Depends on validation middleware with Zod schemas, `@hallpass/db` for Prisma, and `@hallpass/types` for shared types including `CursorPage` and `BulkUserResult`.
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (route params), `listUsersSchema` (query params with coerced numeric limit defaulting to 50), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create entries), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes.
+Defines Zod validation schemas for user-related API endpoints: `userIdSchema` for path params, `listUsersSchema` for query params (with coerced numeric limit and defaults), `createUserSchema` and `bulkCreateSchema` for creation, and `updateUserSchema` for partial updates. Uses `ASSIGNABLE_ROLES` from `@hallpass/types` to constrain valid role values via `z.enum`. The `updateUserSchema` includes a `.refine` check requiring at least one field to be present. The `listUsersSchema` uses `z.coerce.number()` to handle query string parsing with a default limit of 50.
 
 ### `docker-compose.yml`
 

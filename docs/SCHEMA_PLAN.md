@@ -6,22 +6,41 @@ Source of truth before building `schools-api`, `passes-api`, and shared packages
 
 ## Prisma Schema Changes
 
-### `User` — add `schoolId`
+### `User` — add `schoolId` and `districtId`
 
-Every user belongs to exactly one school. Nullable to allow SUPER_ADMIN users who span no specific school.
+Every user belongs to exactly one school. Nullable to allow SUPER_ADMIN users who span no specific school. SUPER_ADMINs may also be scoped to a district — if `districtId` is set they can only manage schools within that district; if null they are platform-wide with no restriction.
 
 ```prisma
 model User {
   // ...existing fields...
-  schoolId  String?
-  deletedAt DateTime? // soft delete — deleted users cannot authenticate; set by DELETE /users/:id
+  schoolId   String?
+  districtId String?   // SUPER_ADMIN only — scopes to a district; null = platform-wide
+  deletedAt  DateTime? // soft delete — deleted users cannot authenticate; set by DELETE /users/:id
 
-  school          School?  @relation(fields: [schoolId], references: [id])
-  passes          Pass[]   @relation("StudentPasses")
-  requestedPasses Pass[]   @relation("RequestedPasses")
-  approvedPasses  Pass[]   @relation("ApprovedPasses")
-  deniedPasses    Pass[]   @relation("DeniedPasses")
-  cancelledPasses Pass[]   @relation("CancelledPasses")
+  school          School?   @relation(fields: [schoolId], references: [id])
+  district        District? @relation(fields: [districtId], references: [id])
+  passes          Pass[]    @relation("StudentPasses")
+  requestedPasses Pass[]    @relation("RequestedPasses")
+  approvedPasses  Pass[]    @relation("ApprovedPasses")
+  deniedPasses    Pass[]    @relation("DeniedPasses")
+  cancelledPasses Pass[]    @relation("CancelledPasses")
+}
+```
+
+### `District`
+
+A named group of schools. Used to scope SUPER_ADMIN access — a SUPER_ADMIN with a `districtId` can only manage schools belonging to that district.
+
+```prisma
+model District {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  schools School[]
+  users   User[]
 }
 ```
 
@@ -29,13 +48,15 @@ model User {
 
 ```prisma
 model School {
-  id        String    @id @default(cuid())
-  name      String
-  timezone  String    @default("America/Los_Angeles")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id         String    @id @default(cuid())
+  name       String
+  timezone   String    @default("America/Los_Angeles")
+  districtId String?   // optional — schools may belong to a district
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
+  district      District?
   users         User[]
   scheduleTypes ScheduleType[]
   calendar      SchoolCalendar[]
@@ -314,12 +335,21 @@ The `slots:school` and `slots:destination` Redis counters avoid `COUNT(*)` queri
 | PATCH | `/users/:id` | self or ADMIN+ | Update name, email, or role. Self (non-admin) may only update name — email and role changes require ADMIN+. Role elevation above caller's own rank is blocked (403). `schoolId` change is **not yet implemented** — field does not exist in schema. |
 | DELETE | `/users/:id` | ADMIN+ | Soft delete (sets `deletedAt`). Cannot delete a user of equal or higher rank. Self-delete is blocked. |
 
-**Not yet implemented (pending `schoolId` migration):**
+**Not yet implemented (pending `schoolId`/`districtId` migration):**
 - `GET /users` scoping to `req.user.schoolId`
-- `SUPER_ADMIN` explicit `?schoolId=` override on list endpoint
+- `SUPER_ADMIN` explicit `?schoolId=` override on list endpoint (district-scoped SUPER_ADMINs further restricted to schools in their district)
 - `PATCH /users/:id` restriction on `schoolId` changes to SUPER_ADMIN only
+- `PATCH /users/:id` restriction on `districtId` changes to platform-wide SUPER_ADMIN only
 
-### `apps/schools-api`
+### `apps/schools-api` — District routes
+
+| Method | Route | Auth | Notes |
+|---|---|---|---|
+| GET | `/districts` | SUPER_ADMIN | List all districts. District-scoped SUPER_ADMINs see only their own district. |
+| POST | `/districts` | SUPER_ADMIN (platform-wide only) | Create a district. |
+| GET/PATCH/DELETE | `/districts/:id` | SUPER_ADMIN | District-scoped SUPER_ADMINs may only access their own district. |
+
+### `apps/schools-api` — School routes
 
 Covers schools, schedule types, periods, calendar, and destinations.
 
@@ -482,7 +512,12 @@ For each completed pass: update DB to `COMPLETED`, set `returnedAt`, emit `pass:
 
 All users — STUDENT, TEACHER, ADMIN — are strictly scoped to their own school. Every query across every API is automatically filtered to `req.user.schoolId`. Passing a different `schoolId` in params, query, or body is ignored; the value from the authenticated user is always used.
 
-SUPER_ADMINs are the only role exempt from this — they may pass `schoolId` explicitly to act across schools.
+SUPER_ADMINs are the only role exempt from school scoping. Their access is determined by `districtId`:
+
+- **`districtId = null` (platform-wide):** No restriction — can act on any school. May pass `schoolId` explicitly on any endpoint.
+- **`districtId` set (district-scoped):** Restricted to schools where `school.districtId = user.districtId`. Any explicit `schoolId` that does not belong to their district is rejected with 403.
+
+Auth middleware applies this check automatically for all SUPER_ADMIN requests after confirming the role.
 
 ---
 
