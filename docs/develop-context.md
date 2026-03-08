@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-08T02:12:18.300Z — 20 files indexed_
+_Generated: 2026-03-08T03:53:28.159Z — 20 files indexed_
 
 ## File Summaries
 
@@ -26,7 +26,7 @@ Automation workflow that keeps the `develop` branch in sync with `main` after ea
 
 ### `apps/user-api/Dockerfile`
 
-Multi-stage Docker build for the user-api service in a pnpm monorepo. It copies package manifests first to optimize layer caching, then installs dependencies, copies source code, generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect), and builds packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (docker-entrypoint.sh) that likely handles runtime setup such as database migrations. When modifying, be aware that build order matters due to inter-package dependencies, and any new workspace package consumed by user-api needs its package.json copied in the manifest stage.
+Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with pnpm 10 in a monorepo context. It employs a layer-caching strategy by copying package manifests first, running `pnpm install --frozen-lockfile`, and then copying source code. After installation, it generates the Prisma client (using a dummy `DATABASE_URL` since generation doesn't require a live database) and builds internal packages (`db`, `auth`, `logger`, `types`) in dependency order before building `user-api` itself. The container exposes port 3001 and uses a custom `docker-entrypoint.sh` script as its entrypoint. Developers modifying this file should ensure any new workspace dependencies are added to the manifest-copy stage and the build order, and should be aware that changes to the entrypoint script require it to be kept in sync at `apps/user-api/docker-entrypoint.sh`.
 
 ### `apps/user-api/src/app.ts`
 
