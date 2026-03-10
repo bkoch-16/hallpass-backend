@@ -203,9 +203,14 @@ describe("bulkCreateSchema", () => {
 });
 
 describe("userIdSchema", () => {
-  it("accepts valid id", () => {
-    const r = userIdSchema.safeParse({ id: "user-123" });
+  it("accepts valid numeric id", () => {
+    const r = userIdSchema.safeParse({ id: "123" });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects non-numeric id", () => {
+    const r = userIdSchema.safeParse({ id: "user-123" });
+    expect(r.success).toBe(false);
   });
 
   it("rejects empty id", () => {
