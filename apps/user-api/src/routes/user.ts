@@ -202,6 +202,11 @@ router.patch(
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const isSelf = userId === req.user!.id;
 
+    if (!isSuperAdmin && !isSelf && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
     if ("schoolId" in req.body && !isSuperAdmin) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -227,13 +232,20 @@ router.patch(
       return;
     }
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: req.body,
-      select: USER_SELECT,
-    });
-
-    res.json(toUserResponse(updated));
+    try {
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: req.body,
+        select: USER_SELECT,
+      });
+      res.json(toUserResponse(updated));
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+        res.status(400).json({ message: "Invalid schoolId" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -245,6 +257,12 @@ router.delete(
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
     const findWhere: Record<string, unknown> = { id: userId, deletedAt: null };
     if (!isSuperAdmin) findWhere.schoolId = req.user!.schoolId;
     const user = await prisma.user.findFirst({
