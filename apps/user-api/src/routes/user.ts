@@ -90,8 +90,13 @@ router.get(
   requireSelfOrRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const user = isNaN(userId) ? null : await prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
+      where: {
+        id: userId,
+        deletedAt: null,
+        ...(!isSuperAdmin && { schoolId: req.user!.schoolId }),
+      },
       select: USER_SELECT,
     });
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ASSIGNABLE_ROLES } from "@hallpass/types";
 
 export const userIdSchema = z.object({
-  id: z.string().min(1, "id is required"),
+  id: z.string().regex(/^\d+$/, "id must be a positive integer"),
 });
 
 export const listUsersSchema = z.object({
