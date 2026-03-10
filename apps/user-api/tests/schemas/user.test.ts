@@ -158,9 +158,14 @@ describe("listUsersSchema", () => {
     expect(r.data?.limit).toBe(50);
   });
 
-  it("accepts cursor and ids as strings", () => {
-    const r = listUsersSchema.safeParse({ cursor: "some-id", ids: "a,b,c" });
+  it("accepts numeric cursor and ids as strings", () => {
+    const r = listUsersSchema.safeParse({ cursor: "42", ids: "1,2,3" });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects non-numeric cursor", () => {
+    const r = listUsersSchema.safeParse({ cursor: "some-id" });
+    expect(r.success).toBe(false);
   });
 });
 
