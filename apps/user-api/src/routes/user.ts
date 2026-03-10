@@ -51,7 +51,11 @@ router.get(
         res.status(400).json({ message: "Too many IDs (max 100)" });
         return;
       }
-      const idList = rawIds.map(Number).filter((n) => !isNaN(n));
+      const idList = rawIds.map(Number);
+      if (idList.some(isNaN)) {
+        res.status(400).json({ message: "Invalid ID format" });
+        return;
+      }
       const where: Record<string, unknown> = { id: { in: idList }, deletedAt: null };
       if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
       const users = await prisma.user.findMany({ where, select: USER_SELECT });
@@ -85,8 +89,9 @@ router.get(
   validateParams(userIdSchema),
   requireSelfOrRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findFirst({
-      where: { id: Number(req.params.id), deletedAt: null },
+    const userId = Number(req.params.id);
+    const user = isNaN(userId) ? null : await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
       select: USER_SELECT,
     });
 
@@ -210,8 +215,9 @@ router.delete(
   validateParams(userIdSchema),
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findFirst({
-      where: { id: Number(req.params.id), deletedAt: null },
+    const userId = Number(req.params.id);
+    const user = isNaN(userId) ? null : await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
     });
 
     if (!user) {
@@ -225,7 +231,7 @@ router.delete(
     }
 
     await prisma.user.update({
-      where: { id: Number(req.params.id) },
+      where: { id: userId },
       data: { deletedAt: new Date() },
     });
 
