@@ -419,6 +419,33 @@ describe("POST /api/users", () => {
     expect(res.body.email).toBe("new@test.com");
   });
 
+  it("scopes created user to admin's schoolId", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
+    authenticateAs(admin);
+    const created = { id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: 1, createdAt: new Date() };
+    mockPrisma.user.create.mockResolvedValue(created);
+
+    await request(app).post("/api/users").send({ email: "new@test.com", name: "New User" });
+
+    expect(mockPrisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ schoolId: 1 }),
+      }),
+    );
+  });
+
+  it("does not force schoolId when super_admin creates a user", async () => {
+    const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN", schoolId: null };
+    authenticateAs(superAdmin);
+    const created = { id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: null, createdAt: new Date() };
+    mockPrisma.user.create.mockResolvedValue(created);
+
+    await request(app).post("/api/users").send({ email: "new@test.com", name: "New User" });
+
+    const callArg = mockPrisma.user.create.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(callArg.data).not.toHaveProperty("schoolId");
+  });
+
   it("allows super_admin to create a super_admin", async () => {
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
     authenticateAs(superAdmin);
@@ -523,6 +550,23 @@ describe("POST /api/users/bulk", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ created: 2, failed: [] });
+  });
+
+  it("scopes bulk created users to admin's schoolId", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
+    authenticateAs(admin);
+    mockPrisma.user.create
+      .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", schoolId: 1, createdAt: new Date() })
+      .mockResolvedValueOnce({ id: 11, email: "b@test.com", name: "B", role: "STUDENT", schoolId: 1, createdAt: new Date() });
+
+    await request(app)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }, { email: "b@test.com", name: "B" }]);
+
+    for (const call of mockPrisma.user.create.mock.calls) {
+      const arg = call[0] as { data: Record<string, unknown> };
+      expect(arg.data).toMatchObject({ schoolId: 1 });
+    }
   });
 
   it("returns partial success when some users fail to create", async () => {

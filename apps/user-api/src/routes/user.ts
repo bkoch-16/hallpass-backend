@@ -123,6 +123,7 @@ router.post(
   validateBody(createUserSchema),
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const targetRole: UserRole = req.body.role ?? UserRole.STUDENT;
     if (roleRank(targetRole) > roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
@@ -131,7 +132,12 @@ router.post(
 
     try {
       const user = await prisma.user.create({
-        data: { email: req.body.email, name: req.body.name, role: targetRole },
+        data: {
+          email: req.body.email,
+          name: req.body.name,
+          role: targetRole,
+          ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+        },
         select: USER_SELECT,
       });
       res.status(201).json(toUserResponse(user));
@@ -164,7 +170,12 @@ router.post(
     const results = await Promise.allSettled(
       users.map((u) =>
         prisma.user.create({
-          data: { email: u.email, name: u.name, role: u.role ?? UserRole.STUDENT },
+          data: {
+            email: u.email,
+            name: u.name,
+            role: u.role ?? UserRole.STUDENT,
+            ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
+          },
           select: USER_SELECT,
         }),
       ),

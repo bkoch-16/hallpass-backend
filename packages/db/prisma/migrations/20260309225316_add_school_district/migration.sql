@@ -23,7 +23,6 @@ ADD COLUMN     "userId" INTEGER NOT NULL;
 
 -- AlterTable
 ALTER TABLE "User" DROP CONSTRAINT "User_pkey",
-ADD COLUMN     "districtId" INTEGER,
 ADD COLUMN     "schoolId" INTEGER,
 DROP COLUMN "id",
 ADD COLUMN     "id" SERIAL NOT NULL,
@@ -58,9 +57,6 @@ ALTER TABLE "School" ADD CONSTRAINT "School_districtId_fkey" FOREIGN KEY ("distr
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_districtId_fkey" FOREIGN KEY ("districtId") REFERENCES "District"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
