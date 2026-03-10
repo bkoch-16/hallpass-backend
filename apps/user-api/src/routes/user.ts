@@ -233,8 +233,11 @@ router.delete(
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const findWhere: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin) findWhere.schoolId = req.user!.schoolId;
     const user = await prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
+      where: findWhere,
     });
 
     if (!user) {

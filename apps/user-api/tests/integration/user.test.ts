@@ -190,6 +190,16 @@ describe("GET /api/users (integration)", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 when ?cursor=0", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?cursor=0");
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("POST /api/users (integration)", () => {
@@ -425,8 +435,9 @@ describe("POST /api/users/bulk (integration)", () => {
 
 describe("DELETE /api/users/:id (integration)", () => {
   it("soft-deletes the user (sets deletedAt in DB)", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app).delete(`/api/users/${student.id}`);
@@ -438,13 +449,43 @@ describe("DELETE /api/users/:id (integration)", () => {
   });
 
   it("soft-deleted user cannot be found via GET", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     await request(app).delete(`/api/users/${student.id}`);
     const res = await request(app).get(`/api/users/${student.id}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it("ADMIN cannot delete a user in a different school", async () => {
+    const schoolA = await seedSchool();
+    const schoolB = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: schoolA.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: schoolB.id });
+    authenticateAs(admin);
+
+    const res = await request(app).delete(`/api/users/${student.id}`);
+
+    expect(res.status).toBe(404);
+
+    const inDb = await prisma.user.findUnique({ where: { id: student.id } });
+    expect(inDb?.deletedAt).toBeNull();
+  });
+
+  it("SUPER_ADMIN can delete a user in any school", async () => {
+    const school = await seedSchool();
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    authenticateAs(superAdmin);
+
+    const res = await request(app).delete(`/api/users/${student.id}`);
+
+    expect(res.status).toBe(204);
+
+    const inDb = await prisma.user.findUnique({ where: { id: student.id } });
+    expect(inDb?.deletedAt).not.toBeNull();
   });
 });

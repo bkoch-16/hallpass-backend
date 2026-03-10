@@ -7,7 +7,7 @@ export const userIdSchema = z.object({
 
 export const listUsersSchema = z.object({
   role: z.enum(ASSIGNABLE_ROLES).optional(),
-  cursor: z.string().regex(/^\d+$/, "cursor must be a positive integer").optional(),
+  cursor: z.string().regex(/^[1-9]\d*$/, "cursor must be a positive integer").optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   ids: z.string().optional(),
 });
