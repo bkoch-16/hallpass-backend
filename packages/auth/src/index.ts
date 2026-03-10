@@ -15,7 +15,9 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
       enabled: true,
     },
     advanced: {
-      generateId: false,
+      database: {
+        generateId: "serial",
+      },
       ...(config.baseURL.startsWith("https://") && {
         defaultCookieAttributes: {
           sameSite: "none",
