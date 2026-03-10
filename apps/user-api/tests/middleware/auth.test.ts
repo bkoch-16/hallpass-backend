@@ -59,7 +59,7 @@ beforeEach(() => {
 
 describe("requireAuth", () => {
   it("sets req.user and calls next() for a valid session", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: 1 }, session: {} });
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
     const req = { headers: {} } as Request;
     const res = mockRes();
@@ -73,7 +73,7 @@ describe("requireAuth", () => {
   });
 
   it("queries DB with deletedAt: null to exclude soft-deleted users", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: 1 }, session: {} });
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
     const req = { headers: {} } as Request;
 
@@ -111,7 +111,7 @@ describe("requireAuth", () => {
   });
 
   it("returns 401 when user is not found in DB (soft-deleted)", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: 999 }, session: {} });
+    mockGetSession.mockResolvedValue({ user: { id: "999" }, session: {} });
     mockPrisma.user.findFirst.mockResolvedValue(null);
     const req = { headers: {} } as Request;
     const res = mockRes();
@@ -125,7 +125,7 @@ describe("requireAuth", () => {
   });
 
   it("propagates DB errors when findFirst throws (Express catches and sends 500)", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: 1 }, session: {} });
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockRejectedValue(new Error("DB connection lost"));
     const req = { headers: {} } as Request;
     const res = mockRes();
