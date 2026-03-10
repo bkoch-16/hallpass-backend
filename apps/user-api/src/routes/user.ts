@@ -45,6 +45,11 @@ router.get(
 
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
 
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     if (ids) {
       const rawIds = ids.split(",").map((id) => id.trim()).filter(Boolean);
       if (rawIds.length > 100) {
@@ -91,14 +96,17 @@ router.get(
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
-    const user = isNaN(userId) ? null : await prisma.user.findFirst({
-      where: {
-        id: userId,
-        deletedAt: null,
-        ...(!isSuperAdmin && { schoolId: req.user!.schoolId }),
-      },
-      select: USER_SELECT,
-    });
+    const isSelf = userId === req.user!.id;
+
+    if (!isSuperAdmin && !isSelf && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const where: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin && !isSelf) where.schoolId = req.user!.schoolId;
+
+    const user = await prisma.user.findFirst({ where, select: USER_SELECT });
 
     if (!user) {
       res.status(404).json({ message: "User not found" });
@@ -180,7 +188,7 @@ router.patch(
   requireSelfOrRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
-    const user = isNaN(userId) ? null : await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
     });
 
@@ -221,7 +229,7 @@ router.delete(
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
-    const user = isNaN(userId) ? null : await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
     });
 

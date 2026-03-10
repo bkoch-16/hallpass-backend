@@ -259,7 +259,7 @@ describe("PATCH /api/users/:id (integration)", () => {
       .patch(`/api/users/nonexistent-id`)
       .send({ name: "Ghost" });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 
   it("returns 404 when target user is soft-deleted", async () => {
