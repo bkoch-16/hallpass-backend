@@ -14,6 +14,9 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
     emailAndPassword: {
       enabled: true,
     },
+    advanced: {
+      generateId: false,
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,

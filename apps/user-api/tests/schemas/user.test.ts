@@ -97,6 +97,27 @@ describe("updateUserSchema", () => {
     const r = updateUserSchema.safeParse({ role: "GOD" });
     expect(r.success).toBe(false);
   });
+
+  it("accepts schoolId as a valid positive integer", () => {
+    const r = updateUserSchema.safeParse({ schoolId: 1 });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts schoolId as null", () => {
+    const r = updateUserSchema.safeParse({ schoolId: null });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects schoolId with invalid format (non-integer string)", () => {
+    const r = updateUserSchema.safeParse({ schoolId: "school-1" });
+    expect(r.success).toBe(false);
+  });
+
+  it("schoolId alone satisfies the at-least-one-field requirement", () => {
+    const r = updateUserSchema.safeParse({ schoolId: 1 });
+    expect(r.success).toBe(true);
+  });
+
 });
 
 describe("listUsersSchema", () => {

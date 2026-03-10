@@ -24,7 +24,7 @@ export async function requireAuth(
   }
 
   const user = await prisma.user.findFirst({
-    where: { id: session.user.id, deletedAt: null },
+    where: { id: Number(session.user.id), deletedAt: null },
   });
 
   if (!user) {

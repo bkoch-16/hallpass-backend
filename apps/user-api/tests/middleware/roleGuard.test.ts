@@ -82,8 +82,8 @@ describe("requireSelfOrRole", () => {
 
   it("calls next() when user is accessing their own resource", () => {
     const req = {
-      user: { id: "user-1", role: "STUDENT" },
-      params: { id: "user-1" },
+      user: { id: 1, role: "STUDENT" },
+      params: { id: "1" },
     } as unknown as Request;
     requireSelfOrRole(Role.ADMIN)(req, res, next);
     expect(next).toHaveBeenCalledOnce();
@@ -92,8 +92,8 @@ describe("requireSelfOrRole", () => {
 
   it("calls next() when user has the required role (accessing different resource)", () => {
     const req = {
-      user: { id: "admin-1", role: "ADMIN" },
-      params: { id: "user-2" },
+      user: { id: 3, role: "ADMIN" },
+      params: { id: "2" },
     } as unknown as Request;
     requireSelfOrRole(Role.ADMIN)(req, res, next);
     expect(next).toHaveBeenCalledOnce();
@@ -101,8 +101,8 @@ describe("requireSelfOrRole", () => {
 
   it("returns 403 when user is neither self nor has required role", () => {
     const req = {
-      user: { id: "teacher-1", role: "TEACHER" },
-      params: { id: "user-2" },
+      user: { id: 1, role: "TEACHER" },
+      params: { id: "2" },
     } as unknown as Request;
     requireSelfOrRole(Role.ADMIN)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(403);

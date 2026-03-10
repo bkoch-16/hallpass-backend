@@ -25,6 +25,7 @@ export const updateUserSchema = z
     name: z.string().min(1).optional(),
     email: z.string().email("Invalid email").optional(),
     role: z.enum(ASSIGNABLE_ROLES).optional(),
+    schoolId: z.number().int().positive().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field is required",

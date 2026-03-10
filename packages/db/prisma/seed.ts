@@ -25,16 +25,28 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 const seedUsers = [
-  { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const },
-  { email: "teacher@hallpass.dev", name: "Sample Teacher", role: "TEACHER" as const },
-  { email: "admin@hallpass.dev", name: "Sample Admin", role: "ADMIN" as const },
-  { email: "superadmin@hallpass.dev", name: "Sample Super Admin", role: "SUPER_ADMIN" as const },
+  { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const, assignSchool: true },
+  { email: "teacher@hallpass.dev", name: "Sample Teacher", role: "TEACHER" as const, assignSchool: true },
+  { email: "admin@hallpass.dev", name: "Sample Admin", role: "ADMIN" as const, assignSchool: true },
+  { email: "superadmin@hallpass.dev", name: "Sample Super Admin", role: "SUPER_ADMIN" as const, assignSchool: false },
 ];
 
 const DEFAULT_PASSWORD = "password";
 
 async function main() {
   const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
+
+  let district = await prisma.district.findFirst({ where: { name: "Demo District" } });
+  if (!district) {
+    district = await prisma.district.create({ data: { name: "Demo District" } });
+  }
+  console.log(`Seeded district: ${district.name}`);
+
+  let school = await prisma.school.findFirst({ where: { name: "Demo High School" } });
+  if (!school) {
+    school = await prisma.school.create({ data: { name: "Demo High School", districtId: district.id } });
+  }
+  console.log(`Seeded school: ${school.name}`);
 
   for (const userData of seedUsers) {
     const user = await prisma.$transaction(async (tx) => {
@@ -46,6 +58,7 @@ async function main() {
           name: userData.name,
           role: userData.role,
           emailVerified: true,
+          schoolId: userData.assignSchool ? school.id : null,
         },
       });
 

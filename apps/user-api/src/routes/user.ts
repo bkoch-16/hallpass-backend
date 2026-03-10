@@ -15,13 +15,12 @@ import {
 
 const router = Router();
 
-const USER_SELECT = { id: true, email: true, name: true, role: true, createdAt: true } as const;
+const USER_SELECT = { id: true, email: true, name: true, role: true, schoolId: true, createdAt: true } as const;
 
-type UserRow = { id: string; email: string; name: string | null; role: UserRole; createdAt: Date };
+type UserRow = { id: number; email: string; name: string | null; role: UserRole; schoolId: number | null; createdAt: Date };
 
 function toUserResponse(u: UserRow): UserResponse {
-    // Hardcode schoolId and districtId as null until their schema are added
-    return { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, schoolId: null, districtId: null };
+  return { id: u.id, email: u.email, name: u.name, role: u.role, schoolId: u.schoolId, createdAt: u.createdAt };
 }
 
 // GET /me — must come before /:id
@@ -44,34 +43,37 @@ router.get(
     };
     const take = limit;
 
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
     if (ids) {
-      const idList = ids.split(",").map((id) => id.trim()).filter(Boolean);
-      if (idList.length > 100) {
+      const rawIds = ids.split(",").map((id) => id.trim()).filter(Boolean);
+      if (rawIds.length > 100) {
         res.status(400).json({ message: "Too many IDs (max 100)" });
         return;
       }
-      const users = await prisma.user.findMany({
-        where: { id: { in: idList }, deletedAt: null },
-        select: USER_SELECT,
-      });
+      const idList = rawIds.map(Number).filter((n) => !isNaN(n));
+      const where: Record<string, unknown> = { id: { in: idList }, deletedAt: null };
+      if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
+      const users = await prisma.user.findMany({ where, select: USER_SELECT });
       res.json({ data: users.map(toUserResponse), nextCursor: null } satisfies CursorPage<UserResponse>);
       return;
     }
 
     const where: Record<string, unknown> = { deletedAt: null };
+    if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
     if (role) where.role = role;
 
     const users = await prisma.user.findMany({
       where,
       take: take + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
       orderBy: { id: "asc" },
       select: USER_SELECT,
     });
 
     const hasMore = users.length > take;
     const data = hasMore ? users.slice(0, take) : users;
-    const nextCursor = hasMore ? data[data.length - 1].id : null;
+    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
 
     res.json({ data: data.map(toUserResponse), nextCursor } satisfies CursorPage<UserResponse>);
   },
@@ -84,7 +86,7 @@ router.get(
   requireSelfOrRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
+      where: { id: Number(req.params.id), deletedAt: null },
       select: USER_SELECT,
     });
 
@@ -167,8 +169,9 @@ router.patch(
   validateBody(updateUserSchema),
   requireSelfOrRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
+    const userId = Number(req.params.id);
+    const user = isNaN(userId) ? null : await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
     });
 
     if (!user) {
@@ -186,8 +189,13 @@ router.patch(
       return;
     }
 
+    if ("schoolId" in req.body && req.user!.role !== UserRole.SUPER_ADMIN) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     const updated = await prisma.user.update({
-      where: { id: req.params.id as string },
+      where: { id: userId },
       data: req.body,
       select: USER_SELECT,
     });
@@ -203,7 +211,7 @@ router.delete(
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
+      where: { id: Number(req.params.id), deletedAt: null },
     });
 
     if (!user) {
@@ -217,7 +225,7 @@ router.delete(
     }
 
     await prisma.user.update({
-      where: { id: req.params.id as string },
+      where: { id: Number(req.params.id) },
       data: { deletedAt: new Date() },
     });
 
