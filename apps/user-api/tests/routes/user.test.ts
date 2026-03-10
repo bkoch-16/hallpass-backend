@@ -783,9 +783,6 @@ describe("PATCH /api/users/:id", () => {
 
   it("returns 403 when TEACHER tries to change schoolId", async () => {
     authenticateAs(fakeUser); // teacher with id 1
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)  // requireAuth
-      .mockResolvedValueOnce(fakeUser); // existence check
 
     const res = await request(app).patch("/api/users/1").send({ schoolId: 2 });
 
@@ -795,15 +792,25 @@ describe("PATCH /api/users/:id", () => {
 
   it("returns 403 when ADMIN tries to change schoolId", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
-    const target = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(target);
 
     const res = await request(app).patch("/api/users/2").send({ schoolId: 2 });
 
     expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when ADMIN tries to update a user from a different school", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
+    authenticateAs(admin);
+    // findFirst returns null because schoolId scoping excludes the cross-school user
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(admin)  // requireAuth
+      .mockResolvedValueOnce(null);  // route handler: scoped findFirst finds nothing
+
+    const res = await request(app).patch("/api/users/99").send({ name: "Hijack" });
+
+    expect(res.status).toBe(404);
     expect(mockPrisma.user.update).not.toHaveBeenCalled();
   });
 

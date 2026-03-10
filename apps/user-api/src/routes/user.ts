@@ -188,9 +188,18 @@ router.patch(
   requireSelfOrRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
     const userId = Number(req.params.id);
-    const user = await prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
-    });
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const isSelf = userId === req.user!.id;
+
+    if ("schoolId" in req.body && !isSuperAdmin) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const findWhere: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin && !isSelf) findWhere.schoolId = req.user!.schoolId;
+
+    const user = await prisma.user.findFirst({ where: findWhere });
 
     if (!user) {
       res.status(404).json({ message: "User not found" });
@@ -203,11 +212,6 @@ router.patch(
     }
 
     if (req.body.role && roleRank(req.body.role) > roleRank(req.user!.role)) {
-      res.status(403).json({ message: "Forbidden" });
-      return;
-    }
-
-    if ("schoolId" in req.body && req.user!.role !== UserRole.SUPER_ADMIN) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
