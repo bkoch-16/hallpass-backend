@@ -39,7 +39,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-function authenticateAs(user: { id: string; role: string }) {
+function authenticateAs(user: { id: number; role: string }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
@@ -168,6 +168,27 @@ describe("GET /api/users (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].id).toBe(a.id);
+  });
+
+  it("returns 400 when ?ids= contains id=0", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?ids=0");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid ID format" });
+  });
+
+  it("returns 400 when ?cursor= is non-numeric", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?cursor=abc");
+
+    expect(res.status).toBe(400);
   });
 });
 

@@ -57,7 +57,7 @@ router.get(
         return;
       }
       const idList = rawIds.map(Number);
-      if (idList.some(isNaN)) {
+      if (idList.some((id) => !Number.isInteger(id) || id <= 0)) {
         res.status(400).json({ message: "Invalid ID format" });
         return;
       }
