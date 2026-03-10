@@ -30,10 +30,12 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // Sessions and accounts are cascade-deleted with users.
   await prisma.user.deleteMany();
+  await prisma.school.deleteMany();
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany();
+  await prisma.school.deleteMany();
   await prisma.$disconnect();
 });
 
@@ -41,10 +43,15 @@ function authenticateAs(user: { id: string; role: string }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+async function seedSchool() {
+  return prisma.school.create({ data: { name: "Test School" } });
+}
+
 async function seedUser(overrides: Partial<{
   email: string;
   name: string;
   role: "STUDENT" | "TEACHER" | "ADMIN" | "SUPER_ADMIN";
+  schoolId: number;
   deletedAt: Date | null;
 }> = {}) {
   return prisma.user.create({
@@ -52,6 +59,7 @@ async function seedUser(overrides: Partial<{
       email: overrides.email ?? `user-${crypto.randomUUID()}@test.com`,
       name: overrides.name ?? "Test User",
       role: overrides.role ?? "STUDENT",
+      schoolId: overrides.schoolId ?? null,
       deletedAt: overrides.deletedAt ?? null,
     },
   });
@@ -94,8 +102,9 @@ describe("GET /api/users/me (integration)", () => {
 
 describe("GET /api/users/:id (integration)", () => {
   it("returns only the expected select fields (no deletedAt)", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users/${student.id}`);
@@ -107,8 +116,9 @@ describe("GET /api/users/:id (integration)", () => {
   });
 
   it("returns 404 for a soft-deleted target user", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const deleted = await seedUser({ deletedAt: new Date() });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const deleted = await seedUser({ deletedAt: new Date(), schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users/${deleted.id}`);
@@ -119,9 +129,10 @@ describe("GET /api/users/:id (integration)", () => {
 
 describe("GET /api/users (integration)", () => {
   it("returns only active users (excludes soft-deleted)", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT", deletedAt: new Date() });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, deletedAt: new Date() });
     authenticateAs(teacher);
 
     const res = await request(app).get("/api/users");
@@ -132,9 +143,10 @@ describe("GET /api/users (integration)", () => {
   });
 
   it("filters by ?role=", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get("/api/users?role=STUDENT");
@@ -145,9 +157,10 @@ describe("GET /api/users (integration)", () => {
   });
 
   it("returns specific users when ?ids= provided", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const a = await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT" }); // not requested
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const a = await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id }); // not requested
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users?ids=${a.id}`);
