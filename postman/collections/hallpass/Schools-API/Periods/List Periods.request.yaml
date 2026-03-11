@@ -1,11 +1,10 @@
 $kind: http-request
-name: List Periods
 url: "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods"
 method: GET
 description: List all periods for a schedule type. Requires school membership.
 pathVariables:
   - key: schoolId
-    value: 1
+    value: "1"
   - key: scheduleTypeId
     value: ""
 order: 1000

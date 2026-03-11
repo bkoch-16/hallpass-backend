@@ -1,11 +1,10 @@
 $kind: http-request
-name: Create Period
 url: "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods"
 method: POST
 description: Create a period within a schedule type. Requires ADMIN or SUPER_ADMIN role.
 pathVariables:
   - key: schoolId
-    value: 1
+    value: "1"
   - key: scheduleTypeId
     value: ""
 body:

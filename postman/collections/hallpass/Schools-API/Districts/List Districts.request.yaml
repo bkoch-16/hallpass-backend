@@ -1,5 +1,4 @@
 $kind: http-request
-name: List Districts
 url: "{{Base}}/api/districts"
 method: GET
 description: Cursor-paginated list of all districts. Requires SUPER_ADMIN role.

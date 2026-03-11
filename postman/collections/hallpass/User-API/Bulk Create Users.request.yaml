@@ -1,5 +1,4 @@
 $kind: http-request
-name: Bulk Create Users
 url: "{{Base}}/api/users/bulk"
 method: POST
 description: Create multiple users in one request. Requires ADMIN role or higher. Each user can have an optional role (defaults to STUDENT). Returns a summary of created and failed entries — partial success is possible.

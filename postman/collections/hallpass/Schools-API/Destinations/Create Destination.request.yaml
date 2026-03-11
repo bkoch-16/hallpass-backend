@@ -1,11 +1,10 @@
 $kind: http-request
-name: Create Destination
 url: "{{Base}}/api/schools/:schoolId/destinations"
 method: POST
 description: Create a destination for a school. Requires ADMIN or SUPER_ADMIN role.
 pathVariables:
   - key: schoolId
-    value: 1
+    value: "1"
 body:
   type: json
   content: |-
