@@ -52,8 +52,8 @@ jobs:
       - name: Test
         run: pnpm test
 
-  deploy-dev:
-    name: Deploy to Cloud Run (dev)
+  deploy-user-api-dev:
+    name: Deploy user-api to Cloud Run (dev)
     runs-on: ubuntu-latest
     needs: validate
     if: (github.ref == 'refs/heads/develop' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev')
@@ -89,7 +89,7 @@ jobs:
           cache-from: type=gha,scope=user-api
           cache-to: type=gha,mode=max,scope=user-api
 
-      - name: Deploy to Cloud Run
+      - name: Deploy user-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE }}
@@ -135,7 +135,7 @@ jobs:
           cache-from: type=gha,scope=schools-api
           cache-to: type=gha,mode=max,scope=schools-api
 
-      - name: Deploy to Cloud Run
+      - name: Deploy schools-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE }}
@@ -144,7 +144,7 @@ jobs:
           # Env vars and secrets are managed directly on the Cloud Run service
           # via GCP Secret Manager — no env_vars passed here
 
-  deploy-prod:
+  deploy-user-api-prod:
     name: Deploy user-api to Cloud Run (prod)
     runs-on: ubuntu-latest
     needs: validate
@@ -181,7 +181,7 @@ jobs:
           cache-from: type=gha,scope=user-api
           cache-to: type=gha,mode=max,scope=user-api
 
-      - name: Deploy to Cloud Run
+      - name: Deploy user-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE }}
@@ -227,7 +227,7 @@ jobs:
           cache-from: type=gha,scope=schools-api
           cache-to: type=gha,mode=max,scope=schools-api
 
-      - name: Deploy to Cloud Run
+      - name: Deploy schools-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE }}
