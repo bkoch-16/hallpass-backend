@@ -4,3 +4,9 @@ node_modules/
 dist/
 .turbo
 apps/demo-ui/config.js
+
+# Babysitter
+.a5c/logs/
+.a5c/runs/
+**/.a5c/
+!/.a5c/

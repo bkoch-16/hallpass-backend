@@ -17,3 +17,21 @@ Prefer parallel focused agents over sequential broad ones.
 
 ## Reference
 Project docs are in /docs. Read relevant docs before starting any task.
+
+## Babysitter
+
+This project uses [babysitter](https://github.com/a5c-ai/babysitter) for orchestrated multi-step workflows.
+
+**Invoke babysitter for:**
+- Feature development with TDD: `/babysitter:call implement <feature> using TDD`
+- Schema/API changes: `/babysitter:call add <endpoint> to <service>`
+- PR reviews: `/babysitter:call review the current PR`
+- Bug investigation: `/babysitter:call investigate and fix <issue>`
+
+**Key constraints:**
+- Babysitter may commit locally but must NOT push or open PRs without explicit user approval
+- No CI/CD integration — do not trigger GitHub Actions workflows autonomously
+- Always run `pnpm --filter @hallpass/db exec prisma migrate deploy` after schema changes
+- Use `pnpm --filter <app>` to scope commands to a single service
+
+**Project profile:** `.a5c/project-profile.json`
