@@ -1,28 +1,28 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T00:15:35.933Z — 20 files indexed_
+_Generated: 2026-03-11T02:11:00.663Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages on pushes to `main` (filtered to specific paths) or manual dispatch. It installs dependencies with pnpm, runs a `pnpm demo:generate` script to produce static HTML from Postman collections, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission for pushing to the gh-pages branch. Developers modifying Postman collections or the demo generation script should be aware this auto-deploys.
+GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to `main` that change Postman collections, the demo generation script, or demo-ui app files, plus manual dispatch. Uses pnpm with Node 22 to install dependencies and run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission and sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var.
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD pipeline that validates (lint, build, test) on all pushes and PRs, then conditionally deploys the user-api to Google Cloud Run. The `validate` job uses dummy environment variables since tests mock the DB layer but env.ts validation still runs. Deployment follows a branch-based strategy: `develop` branch deploys to `user-api-dev` and `main` deploys to production `user-api`, both in `us-west1`. Docker images are built with Buildx, pushed to GCP Artifact Registry with SHA and `latest` tags, and use GitHub Actions cache. Secrets (GCP_PROJECT_ID, GCP_SA_KEY) must be configured in GitHub, while runtime env vars and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow.
+Primary CI/CD workflow for the backend, handling validation (lint, build, test) and deployment to Google Cloud Run for dev and prod environments. Triggers on pushes to `main`/`develop`, PRs, and manual dispatch with environment selection. The `validate` job uses dummy env vars (since tests mock `@hallpass/db`) and runs Prisma client generation before lint/build/test. Deployment jobs build Docker images from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and `latest` tags using GHA build cache, and deploy to Cloud Run. Dev deploys from `develop` branch, prod from `main`; env vars and secrets are managed on Cloud Run via GCP Secret Manager rather than in the workflow.
 
 ### `.github/workflows/index-codebase.yml`
 
-Workflow that generates an AI-friendly codebase context document by running `scripts/index-codebase.ts` with an Anthropic API key. Triggered on pushes to develop/main or manually with a branch selector. It restores a previous manifest from the `docs/index` orphan branch for incremental indexing, runs the indexer, then commits updated docs back to `docs/index`. Uses concurrency group `docs-index` with `cancel-in-progress: false` to prevent parallel runs, and commits are tagged `[skip ci]` to avoid recursive triggers.
+Workflow that generates an AI-powered codebase context/index document using the Anthropic API. Triggers on pushes to `develop`/`main` or manual dispatch with branch selection, and stores results on an orphan `docs/index` branch. Implements incremental indexing by restoring a previous manifest JSON before running the indexer script (`scripts/index-codebase.ts`). Uses serialized concurrency (`docs-index` group, no cancellation) and a 15-minute timeout. Developers modifying this should note the branch-slug naming convention for manifests and that the `ANTHROPIC_API_KEY` secret is required.
 
 ### `.github/workflows/review-pr.yml`
 
-GitHub Actions workflow that performs automated AI-powered PR reviews using Claude (Anthropic API). Triggers on PR open/sync/reopen against `develop` or `main` branches, or via manual `workflow_dispatch` with a PR number input, but only runs for the user `bkoch-16`. It checks out the code, generates a unified diff (with 20 lines of context) against the base branch, fetches an optional context doc from a `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review is submitted as an approval, change request, or comment based on whether the output starts with 'Ship it' or 'Request changes'. Sets `HUSKY=0` to skip git hooks during CI and requires `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` secrets.
+AI-powered PR review workflow using Claude (Anthropic API) that runs on PR events targeting `develop`/`main` or via manual dispatch with a PR number. Restricted to PRs authored by `bkoch-16` and excludes bot-triggered events. Generates a unified diff with 20 lines of context, fetches a codebase context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review action (approve, request-changes, or comment) is determined by parsing the first line of the generated `review.md`. Requires `ANTHROPIC_API_KEY` secret and `pull-requests: write` permission; sets `HUSKY=0` to skip git hooks.
 
 ### `.github/workflows/sync-develop.yml`
 
-Automation workflow that keeps the `develop` branch in sync with `main` after each push to main. It checks if develop already contains main's commits (exits early if so), then attempts a `--no-ff` merge of main into a `sync/main-to-develop` branch. On merge conflicts, it aborts and posts a conflict notification comment on the originating PR or commit. If the merge succeeds with actual differences, it force-pushes the sync branch and creates a PR targeting develop (or skips if one already exists). Requires `contents: write` and `pull-requests: write` permissions.
+Automation workflow that keeps the `develop` branch in sync with `main` by creating a merge PR after each push to `main`. First checks if `develop` already contains all `main` commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a no-ff merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires both `contents: write` and `pull-requests: write` permissions.
 
 ### `apps/user-api/Dockerfile`
 

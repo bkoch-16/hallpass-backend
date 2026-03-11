@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-11T00:15:35.933Z",
+  "generatedAt": "2026-03-11T02:11:00.663Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "9bcd429e4e1592200bc7afe110fa01207baca105",
@@ -59,28 +59,28 @@
       "summary": "Defines the local development environment with two services: a PostgreSQL 16 database and the user-api application. PostgreSQL is configured with default credentials (postgres/postgres), a `hallpass` database, persistent volume storage, and a health check. The user-api service is built from `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and depends on a healthy Postgres instance. Environment variables like `BETTER_AUTH_SECRET` are expected from the host environment or `.env` file, while others have sensible defaults. Developers should ensure the `.env` file provides `BETTER_AUTH_SECRET` before running `docker compose up`."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "7480b7c9bbec461af0867e651b0da505fd6850de",
-      "summary": "CI/CD pipeline that validates (lint, build, test) on all pushes and PRs, then conditionally deploys the user-api to Google Cloud Run. The `validate` job uses dummy environment variables since tests mock the DB layer but env.ts validation still runs. Deployment follows a branch-based strategy: `develop` branch deploys to `user-api-dev` and `main` deploys to production `user-api`, both in `us-west1`. Docker images are built with Buildx, pushed to GCP Artifact Registry with SHA and `latest` tags, and use GitHub Actions cache. Secrets (GCP_PROJECT_ID, GCP_SA_KEY) must be configured in GitHub, while runtime env vars and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow."
+      "blobSha": "044addebec88acdbf9626b351cd0bd018c499379",
+      "summary": "Primary CI/CD workflow for the backend, handling validation (lint, build, test) and deployment to Google Cloud Run for dev and prod environments. Triggers on pushes to `main`/`develop`, PRs, and manual dispatch with environment selection. The `validate` job uses dummy env vars (since tests mock `@hallpass/db`) and runs Prisma client generation before lint/build/test. Deployment jobs build Docker images from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and `latest` tags using GHA build cache, and deploy to Cloud Run. Dev deploys from `develop` branch, prod from `main`; env vars and secrets are managed on Cloud Run via GCP Secret Manager rather than in the workflow."
     },
     ".github/workflows/index-codebase.yml": {
-      "blobSha": "5bf8a1ed09df498e25a7c3eff38ebca99ca58db4",
-      "summary": "Workflow that generates an AI-friendly codebase context document by running `scripts/index-codebase.ts` with an Anthropic API key. Triggered on pushes to develop/main or manually with a branch selector. It restores a previous manifest from the `docs/index` orphan branch for incremental indexing, runs the indexer, then commits updated docs back to `docs/index`. Uses concurrency group `docs-index` with `cancel-in-progress: false` to prevent parallel runs, and commits are tagged `[skip ci]` to avoid recursive triggers."
+      "blobSha": "821b594ddd6a7fe908bbeb77e608826f11bae017",
+      "summary": "Workflow that generates an AI-powered codebase context/index document using the Anthropic API. Triggers on pushes to `develop`/`main` or manual dispatch with branch selection, and stores results on an orphan `docs/index` branch. Implements incremental indexing by restoring a previous manifest JSON before running the indexer script (`scripts/index-codebase.ts`). Uses serialized concurrency (`docs-index` group, no cancellation) and a 15-minute timeout. Developers modifying this should note the branch-slug naming convention for manifests and that the `ANTHROPIC_API_KEY` secret is required."
     },
     ".github/workflows/review-pr.yml": {
-      "blobSha": "0994a308b7819f1212ae69cf89364f9b6335c10c",
-      "summary": "GitHub Actions workflow that performs automated AI-powered PR reviews using Claude (Anthropic API). Triggers on PR open/sync/reopen against `develop` or `main` branches, or via manual `workflow_dispatch` with a PR number input, but only runs for the user `bkoch-16`. It checks out the code, generates a unified diff (with 20 lines of context) against the base branch, fetches an optional context doc from a `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review is submitted as an approval, change request, or comment based on whether the output starts with 'Ship it' or 'Request changes'. Sets `HUSKY=0` to skip git hooks during CI and requires `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` secrets."
+      "blobSha": "6a17efbdb85cb7d526f271983e70c26bd6a81e08",
+      "summary": "AI-powered PR review workflow using Claude (Anthropic API) that runs on PR events targeting `develop`/`main` or via manual dispatch with a PR number. Restricted to PRs authored by `bkoch-16` and excludes bot-triggered events. Generates a unified diff with 20 lines of context, fetches a codebase context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review action (approve, request-changes, or comment) is determined by parsing the first line of the generated `review.md`. Requires `ANTHROPIC_API_KEY` secret and `pull-requests: write` permission; sets `HUSKY=0` to skip git hooks."
     },
     ".github/workflows/sync-develop.yml": {
-      "blobSha": "39e6a6880caadf5c1ee14b4c69becfdeeff91bfd",
-      "summary": "Automation workflow that keeps the `develop` branch in sync with `main` after each push to main. It checks if develop already contains main's commits (exits early if so), then attempts a `--no-ff` merge of main into a `sync/main-to-develop` branch. On merge conflicts, it aborts and posts a conflict notification comment on the originating PR or commit. If the merge succeeds with actual differences, it force-pushes the sync branch and creates a PR targeting develop (or skips if one already exists). Requires `contents: write` and `pull-requests: write` permissions."
+      "blobSha": "e4fda5aa22c3fb943d091ee5e9e6bbf0776a8cb4",
+      "summary": "Automation workflow that keeps the `develop` branch in sync with `main` by creating a merge PR after each push to `main`. First checks if `develop` already contains all `main` commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a no-ff merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires both `contents: write` and `pull-requests: write` permissions."
     },
     "package.json": {
       "blobSha": "e2b6c40778749a1c5fc6842aeb4ad273299bd743",
       "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root."
     },
     ".github/workflows/demo.yml": {
-      "blobSha": "3035c1e3dc15cd80ab33980e9347fa7f9e48f112",
-      "summary": "GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages on pushes to `main` (filtered to specific paths) or manual dispatch. It installs dependencies with pnpm, runs a `pnpm demo:generate` script to produce static HTML from Postman collections, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission for pushing to the gh-pages branch. Developers modifying Postman collections or the demo generation script should be aware this auto-deploys."
+      "blobSha": "1994f5faab5fc0e7023e3f0bb8bbd446962395a3",
+      "summary": "GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to `main` that change Postman collections, the demo generation script, or demo-ui app files, plus manual dispatch. Uses pnpm with Node 22 to install dependencies and run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission and sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var."
     }
   }
 }
