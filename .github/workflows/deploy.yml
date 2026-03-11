@@ -86,8 +86,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=user-api
+          cache-to: type=gha,mode=max,scope=user-api
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
@@ -132,8 +132,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=schools-api
+          cache-to: type=gha,mode=max,scope=schools-api
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
@@ -178,8 +178,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=user-api
+          cache-to: type=gha,mode=max,scope=user-api
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
@@ -224,8 +224,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=schools-api
+          cache-to: type=gha,mode=max,scope=schools-api
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
