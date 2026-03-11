@@ -322,7 +322,7 @@ Indexes are defined inline above on each model. Summary of rationale:
 - `Destination(schoolId)` — list destinations for school
 - `ScheduleType(schoolId)` — list schedule types for school
 
-The `slots:school` and `slots:destination` Redis counters serve as a fast-path pessimistic guard — they are checked first and avoid a `COUNT(*)` query in the common case. When a counter reads `0`, the API falls back to a single indexed `COUNT(*)` query before rejecting; if the DB shows capacity is available, the stale counter is immediately corrected and the request proceeds (see **Self-Healing** under the Redis section). The `maxPerInterval` limit is intentionally kept as a direct DB `COUNT(*)` — pass requests are infrequent enough that an indexed query is acceptable and avoids stale-counter risk. The indexes above back both the cold-start counter initialization queries and the `maxPerInterval` interval count query.
+The `slots:school` and `slots:destination` Redis counters serve as a fast-path pessimistic guard — they are checked first and avoid a `COUNT(*)` query in the common case. Counters are initialized lazily by passes-api on first use (see **Counter initialization** under the Redis section). When a counter reads `0`, the API falls back to a single indexed `COUNT(*)` query before rejecting; if the DB shows capacity is available, the stale counter is immediately corrected and the request proceeds (see **Self-Healing** under the Redis section). The `maxPerInterval` limit is intentionally kept as a direct DB `COUNT(*)` — pass requests are infrequent enough that an indexed query is acceptable and avoids stale-counter risk. The indexes above back both the lazy-init counter initialization queries and the `maxPerInterval` interval count query.
 
 ---
 
@@ -388,10 +388,10 @@ Covers schools, schedule types, periods, calendar, and destinations.
 | PATCH/DELETE | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id` | ADMIN+ | If `startTime` or `endTime` changes, the BullMQ expiry job for that period was scheduled against the old time. The corrected job is upserted at the next Cloud Scheduler run (up to 12 hours away) — reschedule at time of change to get around this.                                                                                                                                                                                       |
 | GET/POST | `/schools/:schoolId/calendar` | GET: authenticated; POST: ADMIN+ | POST accepts a single `CalendarEntry` or an array for bulk import. Upserts on `(schoolId, date)` — idempotent. Returns `{ created: N, updated: N }`. A full academic year is ~180 entries; bulk is required for school setup.                                                                                                                                                                                                               |
 | PATCH/DELETE | `/schools/:schoolId/calendar/:id` | ADMIN+ |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | On POST, if `maxOccupancy` is set, immediately initialize `slots:destination:{destinationId}` to `maxOccupancy` — do not wait for cold start. Without this, the cap is silently bypassed until the next service restart.                                                                                                                                                                                                                    |
-| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | If `maxOccupancy` changes, delete and re-initialize `slots:destination:{destinationId}` using the same distributed lock pattern as cold start. If `maxOccupancy` is removed (set to null), delete the key entirely. On soft DELETE, immediately expire all WAITING passes for that destination — they will never be promoted since approvals to a deleted destination are blocked, and waiting for period-end expiry leaves students stuck. |
-| GET | `/schools/:schoolId/policy` | authenticated | Returns the school's PassPolicy, or 404 if none set                                                                                                                                                                                                                                                                                                                                                                                         |
-| PUT | `/schools/:schoolId/policy` | ADMIN+ | Create or replace policy (upsert on `schoolId`). On first creation or update of `maxActivePasses`, immediately initialize `slots:school:{schoolId}` — do not wait for cold start. On subsequent update, delete and re-initialize using the distributed lock pattern. If `maxActivePasses` is removed, delete the key entirely.                                                                                                              |
+| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | |
+| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | On soft DELETE, immediately expire all WAITING passes for that destination — they will never be promoted since approvals to a deleted destination are blocked, and waiting for period-end expiry leaves students stuck. |
+| GET | `/schools/:schoolId/policy` | authenticated | Returns the school's PassPolicy, or 404 if none set |
+| PUT | `/schools/:schoolId/policy` | ADMIN+ | Create or replace policy (upsert on `schoolId`). |
 
 ### `apps/passes-api`
 
@@ -429,7 +429,31 @@ Serverless Redis — matches the Cloud Run + Neon zero-scale model.
 - Counters are **pessimistic**: a value of `0` means "assume full — verify before rejecting" (see Self-Healing below)
 - `slots:school` only tracked if `PassPolicy.maxActivePasses` is set; `slots:destination` only tracked if `Destination.maxOccupancy` is set
 
-**Policy changes require counter re-sync.** If `PassPolicy.maxActivePasses` is updated mid-day, the `slots:school:{schoolId}` counter is stale. The `PUT /schools/:schoolId/policy` endpoint must delete and re-initialize `slots:school:{schoolId}` using the same distributed lock pattern as cold start. Failure to do this leaves WAITING passes stranded until next cold start. If `maxActivePasses` is removed (set to null), delete `slots:school:{schoolId}` entirely — the school no longer has a cap and the key must not linger with a stale value.
+**Counter initialization — lazy / on-demand (passes-api only):**
+
+Slot counters are **not** pre-initialized by `schools-api`. `passes-api` initializes them lazily on first use. A missing key does **not** mean unlimited — before treating a missing counter as "no cap", passes-api checks the DB:
+
+```ts
+// Before claiming a school slot:
+const schoolKey = `slots:school:${schoolId}`;
+const schoolVal = await redis.get(schoolKey);
+if (schoolVal === null) {
+  const policy = await prisma.passPolicy.findUnique({ where: { schoolId } });
+  if (policy?.maxActivePasses != null) {
+    const active = await prisma.pass.count({ where: { schoolId, status: 'ACTIVE' } });
+    const available = policy.maxActivePasses - active;
+    await redis.set(schoolKey, available);
+    // proceed with slot check using `available`
+  }
+  // else: no policy / no cap → unlimited, proceed
+}
+
+// Same pattern for slots:destination:{destinationId}
+```
+
+This preserves the cap guarantee with at most one extra DB lookup + `SET` per cold-start or first-use after a cap is configured.
+
+**Policy/occupancy changes and stale counters:** When `maxActivePasses` or `maxOccupancy` changes mid-day, the existing counter becomes stale. The lazy-init path will not fix this until the key expires or is deleted. The Janitor (see below) re-computes all counters nightly and corrects drift. For immediate mid-day corrections, passes-api's self-healing reconciliation (see Self-Healing below) detects a `0` counter that doesn't match DB and overwrites it inline.
 
 **Cold-start counter initialization (distributed lock):**
 
