@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-11T02:11:00.663Z",
+  "generatedAt": "2026-03-11T02:21:27.288Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "9bcd429e4e1592200bc7afe110fa01207baca105",
@@ -59,8 +59,8 @@
       "summary": "Defines the local development environment with two services: a PostgreSQL 16 database and the user-api application. PostgreSQL is configured with default credentials (postgres/postgres), a `hallpass` database, persistent volume storage, and a health check. The user-api service is built from `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and depends on a healthy Postgres instance. Environment variables like `BETTER_AUTH_SECRET` are expected from the host environment or `.env` file, while others have sensible defaults. Developers should ensure the `.env` file provides `BETTER_AUTH_SECRET` before running `docker compose up`."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "044addebec88acdbf9626b351cd0bd018c499379",
-      "summary": "Primary CI/CD workflow for the backend, handling validation (lint, build, test) and deployment to Google Cloud Run for dev and prod environments. Triggers on pushes to `main`/`develop`, PRs, and manual dispatch with environment selection. The `validate` job uses dummy env vars (since tests mock `@hallpass/db`) and runs Prisma client generation before lint/build/test. Deployment jobs build Docker images from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and `latest` tags using GHA build cache, and deploy to Cloud Run. Dev deploys from `develop` branch, prod from `main`; env vars and secrets are managed on Cloud Run via GCP Secret Manager rather than in the workflow."
+      "blobSha": "2d53aece5fc1924a58c43dad6e44819a32999e62",
+      "summary": "GitHub Actions workflow for backend CI/CD that validates (lint, build, test) and deploys the `user-api` to Google Cloud Run. Triggers on pushes to main/develop, pull requests, and manual dispatch with environment selection (dev/prod). The `validate` job uses dummy environment variables to satisfy env.ts validation, generates the Prisma client, then runs lint, build, and test. `deploy-dev` targets the `develop` branch (or manual dev dispatch) deploying to `user-api-dev`, while `deploy-prod` targets `main` deploying to `user-api`. Both deploy jobs build a Docker image from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and latest tags using GHA cache, and deploy to Cloud Run in `us-west1`. Environment variables and secrets are managed on the Cloud Run service via GCP Secret Manager, not in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets."
     },
     ".github/workflows/index-codebase.yml": {
       "blobSha": "821b594ddd6a7fe908bbeb77e608826f11bae017",
@@ -79,8 +79,8 @@
       "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root."
     },
     ".github/workflows/demo.yml": {
-      "blobSha": "1994f5faab5fc0e7023e3f0bb8bbd446962395a3",
-      "summary": "GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to `main` that change Postman collections, the demo generation script, or demo-ui app files, plus manual dispatch. Uses pnpm with Node 22 to install dependencies and run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission and sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var."
+      "blobSha": "c3533ff9d09af77146465207164d6f776a50cda8",
+      "summary": "GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to main when Postman collections, the demo generation script, or demo-ui app files change, plus manual dispatch. Uses pnpm with Node 22, runs `pnpm demo:generate` to build static HTML, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires `contents: write` permission for pushing to gh-pages. Developers modifying this should note the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var and that the generation script path (`scripts/generate-demo.ts`) and publish directory must stay in sync."
     }
   }
 }

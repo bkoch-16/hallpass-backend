@@ -1,16 +1,16 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T02:11:00.663Z — 20 files indexed_
+_Generated: 2026-03-11T02:21:27.288Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to `main` that change Postman collections, the demo generation script, or demo-ui app files, plus manual dispatch. Uses pnpm with Node 22 to install dependencies and run `pnpm demo:generate`, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the `peaceiris/actions-gh-pages` action. Requires `contents: write` permission and sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var.
+GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to main when Postman collections, the demo generation script, or demo-ui app files change, plus manual dispatch. Uses pnpm with Node 22, runs `pnpm demo:generate` to build static HTML, then deploys the `./apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires `contents: write` permission for pushing to gh-pages. Developers modifying this should note the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var and that the generation script path (`scripts/generate-demo.ts`) and publish directory must stay in sync.
 
 ### `.github/workflows/deploy.yml`
 
-Primary CI/CD workflow for the backend, handling validation (lint, build, test) and deployment to Google Cloud Run for dev and prod environments. Triggers on pushes to `main`/`develop`, PRs, and manual dispatch with environment selection. The `validate` job uses dummy env vars (since tests mock `@hallpass/db`) and runs Prisma client generation before lint/build/test. Deployment jobs build Docker images from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and `latest` tags using GHA build cache, and deploy to Cloud Run. Dev deploys from `develop` branch, prod from `main`; env vars and secrets are managed on Cloud Run via GCP Secret Manager rather than in the workflow.
+GitHub Actions workflow for backend CI/CD that validates (lint, build, test) and deploys the `user-api` to Google Cloud Run. Triggers on pushes to main/develop, pull requests, and manual dispatch with environment selection (dev/prod). The `validate` job uses dummy environment variables to satisfy env.ts validation, generates the Prisma client, then runs lint, build, and test. `deploy-dev` targets the `develop` branch (or manual dev dispatch) deploying to `user-api-dev`, while `deploy-prod` targets `main` deploying to `user-api`. Both deploy jobs build a Docker image from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and latest tags using GHA cache, and deploy to Cloud Run in `us-west1`. Environment variables and secrets are managed on the Cloud Run service via GCP Secret Manager, not in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
 
 ### `.github/workflows/index-codebase.yml`
 
