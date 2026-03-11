@@ -1,0 +1,118 @@
+{
+  "cicdIntegration": false,
+  "createdAt": "2026-03-11T18:13:30Z",
+  "description": "Multi-service Node.js/TypeScript backend monorepo for the Hallpass application. Manages school/district data, user authentication, and API services.",
+  "goals": [
+    {
+      "category": "development",
+      "description": "Feature development with TDD methodology",
+      "id": "goal-features-0",
+      "priority": "high",
+      "status": "active"
+    },
+    {
+      "category": "development",
+      "description": "Schema/API work — Prisma schema changes and REST endpoint development",
+      "id": "goal-schema-1",
+      "priority": "high",
+      "status": "active"
+    },
+    {
+      "category": "quality",
+      "description": "Automated PR reviews for code quality",
+      "id": "goal-reviews-2",
+      "priority": "medium",
+      "status": "active"
+    }
+  ],
+  "installedPlugins": [
+    "@a5c-ai/babysitter"
+  ],
+  "name": "hallpass-backend",
+  "painPoints": [
+    "Schema migrations sometimes require cleanup passes before merging",
+    "Auth/guard logic requires multiple fix iterations"
+  ],
+  "permissions": {
+    "cicdTrigger": false,
+    "gitCommits": true,
+    "gitPush": false,
+    "openPullRequests": false
+  },
+  "preferences": {
+    "autonomyLevel": "semi-autonomous",
+    "breakpointTolerance": "moderate",
+    "methodology": "tdd",
+    "verbosity": "normal"
+  },
+  "projectType": "monorepo",
+  "recommendedProcesses": [
+    "methodologies/tdd",
+    "specializations/backend-development",
+    "cradle/bugfix"
+  ],
+  "repository": {
+    "defaultBranch": "develop",
+    "mainBranch": "main",
+    "platform": "github",
+    "type": "git"
+  },
+  "stack": {
+    "buildSystem": "Turborepo",
+    "cicd": "GitHub Actions",
+    "containerization": "Docker Compose",
+    "database": "PostgreSQL",
+    "language": "TypeScript",
+    "orm": "Prisma",
+    "packageManager": "pnpm",
+    "runtime": "Node.js"
+  },
+  "structure": {
+    "apps": [
+      "schools-api",
+      "user-api",
+      "auth",
+      "demo-ui"
+    ],
+    "packages": [
+      "db",
+      "logger",
+      "types"
+    ]
+  },
+  "team": [
+    {
+      "name": "bkoch-16",
+      "role": "sole-developer",
+      "username": "bkoch-16"
+    }
+  ],
+  "updatedAt": "2026-03-11T18:13:30Z",
+  "version": 1,
+  "workflow": {
+    "branchStrategy": "feature-branches",
+    "codeReview": "prs-required",
+    "commitStyle": "imperative-short-descriptive",
+    "releaseCadence": "manual"
+  },
+  "projectName": "hallpass-backend",
+  "techStack": {
+    "buildSystem": "Turborepo",
+    "cicd": "GitHub Actions",
+    "containerization": "Docker Compose",
+    "database": "PostgreSQL",
+    "language": "TypeScript",
+    "orm": "Prisma",
+    "packageManager": "pnpm",
+    "runtime": "Node.js"
+  },
+  "architecture": {
+    "pattern": "monorepo-multi-service"
+  },
+  "testCommands": {
+    "unit": "pnpm turbo test",
+    "integration": "pnpm turbo test:integration  # requires Docker running",
+    "singleApp": "pnpm --filter <app> test",
+    "notes": "Integration tests require docker-compose to be running (docker-compose up -d)"
+  }
+}
