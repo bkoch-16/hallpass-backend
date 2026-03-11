@@ -1,0 +1,11 @@
+$kind: http-request
+name: Delete Destination
+url: "{{Base}}/api/schools/:schoolId/destinations/:id"
+method: DELETE
+description: Soft-delete a destination. Requires ADMIN or SUPER_ADMIN role. Returns 204 on success.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: id
+    value: ""
+order: 4000

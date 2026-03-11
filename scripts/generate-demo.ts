@@ -67,10 +67,17 @@ interface Endpoint {
   body: string | null;
 }
 
+interface Subgroup {
+  name: string;
+  order: number;
+  endpoints: Endpoint[];
+}
+
 interface Group {
   name: string;
   order: number;
   baseUrls: Record<string, string>;
+  subgroups: Subgroup[] | null;
   endpoints: Endpoint[];
 }
 
@@ -99,6 +106,15 @@ function stemName(filePath: string): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function readOrder(dir: string): number {
+  const defPath = path.join(dir, ".resources", "definition.yaml");
+  if (fs.existsSync(defPath)) {
+    const def = readYaml<GroupDefinitionYaml>(defPath);
+    return def.order ?? 9999;
+  }
+  return 9999;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,37 +186,42 @@ function parseGroupsForCollection(
     path.join(collectionDir, "**/*.request.yaml")
   );
   const groupMap = new Map<string, Group>();
+  // subgroupMap: groupName -> subgroupName -> Subgroup
+  const subgroupMap = new Map<string, Map<string, Subgroup>>();
 
   for (const filePath of requestFiles) {
     const rel = path.relative(collectionDir, filePath);
     const parts = rel.split(path.sep);
 
+    // Determine group and optional subgroup from path depth
     let groupName: string;
     let groupDir: string | null;
+    let subgroupName: string | null = null;
+    let subgroupDir: string | null = null;
+
     if (parts.length === 1) {
       groupName = "No group";
       groupDir = null;
-    } else {
+    } else if (parts.length === 2) {
       groupName = parts[0];
       groupDir = path.join(collectionDir, parts[0]);
-    }
-
-    let groupOrder = 9999;
-    if (groupDir) {
-      const defPath = path.join(groupDir, ".resources", "definition.yaml");
-      if (fs.existsSync(defPath)) {
-        const def = readYaml<GroupDefinitionYaml>(defPath);
-        groupOrder = def.order ?? 9999;
-      }
+    } else {
+      // 3+ levels: treat first as group, second as subgroup
+      groupName = parts[0];
+      groupDir = path.join(collectionDir, parts[0]);
+      subgroupName = parts[1];
+      subgroupDir = path.join(collectionDir, parts[0], parts[1]);
     }
 
     if (!groupMap.has(groupName)) {
       groupMap.set(groupName, {
         name: groupName,
-        order: groupOrder,
+        order: groupDir ? readOrder(groupDir) : 9999,
         baseUrls: getBaseUrls(environmentPattern, envs),
+        subgroups: null,
         endpoints: [],
       });
+      subgroupMap.set(groupName, new Map());
     }
 
     const req = readYaml<RequestYaml>(filePath);
@@ -216,7 +237,35 @@ function parseGroupsForCollection(
       body: req.body?.content ?? null,
     };
 
-    groupMap.get(groupName)!.endpoints.push(endpoint);
+    const group = groupMap.get(groupName)!;
+    const sgMap = subgroupMap.get(groupName)!;
+
+    if (subgroupName) {
+      if (!sgMap.has(subgroupName)) {
+        sgMap.set(subgroupName, {
+          name: subgroupName,
+          order: subgroupDir ? readOrder(subgroupDir) : 9999,
+          endpoints: [],
+        });
+      }
+      sgMap.get(subgroupName)!.endpoints.push(endpoint);
+      // Mark group as having subgroups
+      if (group.subgroups === null) group.subgroups = [];
+    } else {
+      group.endpoints.push(endpoint);
+    }
+  }
+
+  // Attach and sort subgroups
+  for (const [groupName, sgMap] of subgroupMap.entries()) {
+    if (sgMap.size === 0) continue;
+    const group = groupMap.get(groupName)!;
+    group.subgroups = [...sgMap.values()].sort(
+      (a, b) => a.order - b.order || a.name.localeCompare(b.name)
+    );
+    for (const sg of group.subgroups) {
+      sg.endpoints.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+    }
   }
 
   for (const group of groupMap.values()) {
@@ -255,7 +304,12 @@ function main() {
     "utf8"
   );
 
-  const totalEndpoints = groups.reduce((n, g) => n + g.endpoints.length, 0);
+  const totalEndpoints = groups.reduce((n, g) => {
+    if (g.subgroups) {
+      return n + g.subgroups.reduce((m, sg) => m + sg.endpoints.length, 0);
+    }
+    return n + g.endpoints.length;
+  }, 0);
   console.log(
     `Generated apps/demo-ui/config.js — ${groups.length} groups, ${totalEndpoints} endpoints, ${stages.length} stages`
   );

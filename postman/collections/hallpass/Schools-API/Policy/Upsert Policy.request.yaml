@@ -1,0 +1,17 @@
+$kind: http-request
+name: Upsert Policy
+url: "{{Base}}/api/schools/:schoolId/policy"
+method: PUT
+description: Create or replace the pass policy for a school. All fields are optional — omitting them clears the policy. interval and maxPerInterval must both be set or both omitted. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+body:
+  type: json
+  content: |-
+    {
+      "maxActivePasses": 3,
+      "interval": "DAY",
+      "maxPerInterval": 5
+    }
+order: 2000

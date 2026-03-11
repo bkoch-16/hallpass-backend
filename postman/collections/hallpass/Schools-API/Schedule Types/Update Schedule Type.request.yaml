@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Schedule Type
+url: "{{Base}}/api/schools/:schoolId/schedule-types/:id"
+method: PATCH
+description: Update a schedule type's name or buffers. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: id
+    value: ""
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated Schedule Name"
+    }
+order: 3000

@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Calendar Entry
+url: "{{Base}}/api/schools/:schoolId/calendar/:id"
+method: PATCH
+description: Update a calendar entry's schedule type or note. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: id
+    value: ""
+body:
+  type: json
+  content: |-
+    {
+      "note": "Updated note"
+    }
+order: 3000

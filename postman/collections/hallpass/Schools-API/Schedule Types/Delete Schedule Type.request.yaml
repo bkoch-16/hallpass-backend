@@ -1,0 +1,11 @@
+$kind: http-request
+name: Delete Schedule Type
+url: "{{Base}}/api/schools/:schoolId/schedule-types/:id"
+method: DELETE
+description: Soft-delete a schedule type. Fails with 409 if calendar entries reference it. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: id
+    value: ""
+order: 4000

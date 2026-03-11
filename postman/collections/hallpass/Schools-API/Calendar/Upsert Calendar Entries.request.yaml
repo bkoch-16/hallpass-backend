@@ -1,0 +1,16 @@
+$kind: http-request
+name: Upsert Calendar Entries
+url: "{{Base}}/api/schools/:schoolId/calendar"
+method: POST
+description: Bulk upsert calendar entries by date. Accepts a single entry or array. Returns counts of created and updated entries. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+body:
+  type: json
+  content: |-
+    [
+      { "date": "2026-03-11", "scheduleTypeId": null, "note": null },
+      { "date": "2026-03-12", "scheduleTypeId": null, "note": "Late Start" }
+    ]
+order: 2000

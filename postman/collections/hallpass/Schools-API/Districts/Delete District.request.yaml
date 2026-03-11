@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete District
+url: "{{Base}}/api/districts/:id"
+method: DELETE
+description: Soft-delete a district. Requires SUPER_ADMIN role. Returns 204 on success.
+pathVariables:
+  - key: id
+    value: 1
+order: 5000
