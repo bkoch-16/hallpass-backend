@@ -1,5 +1,4 @@
 $kind: http-request
-name: Create District
 url: "{{Base}}/api/districts"
 method: POST
 description: Create a new district. Requires SUPER_ADMIN role.

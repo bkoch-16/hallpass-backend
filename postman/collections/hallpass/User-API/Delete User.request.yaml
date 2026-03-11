@@ -1,9 +1,8 @@
 $kind: http-request
-name: Delete User
 url: "{{Base}}/api/users/:id"
 method: DELETE
 description: Soft-delete a user. Requires ADMIN role or higher. Cannot delete a user with an equal or higher role than your own. Returns 204 on success.
 pathVariables:
   - key: id
-    value: 1
+    value: "1"
 order: 4000

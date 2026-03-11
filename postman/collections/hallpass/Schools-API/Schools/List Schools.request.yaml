@@ -1,5 +1,4 @@
 $kind: http-request
-name: List Schools
 url: "{{Base}}/api/schools"
 method: GET
 description: Cursor-paginated list of all schools. Requires SUPER_ADMIN role.

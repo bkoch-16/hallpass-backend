@@ -1,5 +1,4 @@
 $kind: http-request
-name: Create School
 url: "{{Base}}/api/schools"
 method: POST
 description: Create a new school. Requires SUPER_ADMIN role.
