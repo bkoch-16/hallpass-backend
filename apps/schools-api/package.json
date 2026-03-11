@@ -1,0 +1,35 @@
+{
+  "name": "@hallpass/schools-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@hallpass/auth": "workspace:*",
+    "@hallpass/db": "workspace:*",
+    "@hallpass/logger": "workspace:*",
+    "@hallpass/types": "workspace:*",
+"cors": "^2.8.6",
+    "dotenv": "latest",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "^4.0.18"
+  }
+}

@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create Schedule Type
+url: "{{Base}}/api/schools/:schoolId/schedule-types"
+method: POST
+description: Create a schedule type for a school. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+body:
+  type: json
+  content: |-
+    {
+      "name": "Standard Day",
+      "startBuffer": 15,
+      "endBuffer": 15
+    }
+order: 2000

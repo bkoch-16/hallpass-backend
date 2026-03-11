@@ -1,0 +1,14 @@
+$kind: http-request
+name: List Schedule Types
+url: "{{Base}}/api/schools/:schoolId/schedule-types"
+method: GET
+description: List all schedule types for a school. Requires school membership.
+pathVariables:
+  - key: schoolId
+    value: 1
+queryParams:
+  - key: cursor
+    value: ""
+  - key: limit
+    value: "50"
+order: 1000

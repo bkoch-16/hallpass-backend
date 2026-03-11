@@ -15,11 +15,20 @@ function getSelectedGroup() {
   return CONFIG.groups[parseInt(sel.value, 10)] ?? null;
 }
 
+function getSelectedSubgroup() {
+  const group = getSelectedGroup();
+  if (!group?.subgroups) return null;
+  const sel = document.getElementById('subgroup-select');
+  return group.subgroups[parseInt(sel.value, 10)] ?? null;
+}
+
 function getSelectedEndpoint() {
   const sel = document.getElementById('endpoint-select');
+  const subgroup = getSelectedSubgroup();
   const group = getSelectedGroup();
-  if (!group) return null;
-  return group.endpoints[parseInt(sel.value, 10)] ?? null;
+  const endpoints = subgroup ? subgroup.endpoints : group?.endpoints;
+  if (!endpoints) return null;
+  return endpoints[parseInt(sel.value, 10)] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,12 +245,30 @@ function populateGroupSelect() {
   return sorted[0]?.i ?? 0;
 }
 
-function populateEndpointSelect(groupIdx) {
+function populateSubgroupSelect(group) {
+  const label = document.getElementById('subgroup-label');
+  const sel = document.getElementById('subgroup-select');
+  sel.innerHTML = '';
+
+  if (!group?.subgroups?.length) {
+    label.classList.add('hidden');
+    return;
+  }
+
+  group.subgroups.forEach((sg, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = sg.name;
+    sel.appendChild(opt);
+  });
+  label.classList.remove('hidden');
+}
+
+function populateEndpointSelect(endpoints) {
   const sel = document.getElementById('endpoint-select');
   sel.innerHTML = '';
-  const group = CONFIG.groups[groupIdx];
-  if (!group) return;
-  const sorted = group.endpoints
+  if (!endpoints) return;
+  const sorted = endpoints
     .map((ep, i) => ({ ep, i }))
     .sort((a, b) => a.ep.name.localeCompare(b.ep.name));
   sorted.forEach(({ ep, i }) => {
@@ -250,6 +277,16 @@ function populateEndpointSelect(groupIdx) {
     opt.textContent = ep.method + '  ' + ep.name;
     sel.appendChild(opt);
   });
+}
+
+function getActiveEndpoints() {
+  const group = getSelectedGroup();
+  if (!group) return [];
+  if (group.subgroups?.length) {
+    const subgroup = getSelectedSubgroup();
+    return subgroup?.endpoints ?? group.subgroups[0]?.endpoints ?? [];
+  }
+  return group.endpoints;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +312,9 @@ function init() {
   initInfoPanel();
   populateStageSelect();
   const firstGroupIdx = populateGroupSelect();
-  populateEndpointSelect(firstGroupIdx);
+  const firstGroup = CONFIG.groups[firstGroupIdx];
+  populateSubgroupSelect(firstGroup);
+  populateEndpointSelect(getActiveEndpoints());
 
   const ep = getSelectedEndpoint();
   if (ep) renderEndpoint(ep);
@@ -283,7 +322,15 @@ function init() {
   document.getElementById('stage-select').addEventListener('change', fetchMe);
 
   document.getElementById('group-select').addEventListener('change', (e) => {
-    populateEndpointSelect(parseInt(e.target.value, 10));
+    const group = CONFIG.groups[parseInt(e.target.value, 10)];
+    populateSubgroupSelect(group);
+    populateEndpointSelect(getActiveEndpoints());
+    const ep = getSelectedEndpoint();
+    if (ep) renderEndpoint(ep);
+  });
+
+  document.getElementById('subgroup-select').addEventListener('change', () => {
+    populateEndpointSelect(getActiveEndpoints());
     const ep = getSelectedEndpoint();
     if (ep) renderEndpoint(ep);
   });

@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Policy
+url: "{{Base}}/api/schools/:schoolId/policy"
+method: GET
+description: Get the pass policy for a school. Returns 404 if no policy has been set. Requires school membership.
+pathVariables:
+  - key: schoolId
+    value: 1
+order: 1000

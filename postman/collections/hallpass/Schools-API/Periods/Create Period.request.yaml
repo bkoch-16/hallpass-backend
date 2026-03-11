@@ -1,0 +1,20 @@
+$kind: http-request
+name: Create Period
+url: "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods"
+method: POST
+description: Create a period within a schedule type. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: scheduleTypeId
+    value: ""
+body:
+  type: json
+  content: |-
+    {
+      "name": "Period 1",
+      "startTime": "08:00",
+      "endTime": "08:50",
+      "order": 0
+    }
+order: 2000

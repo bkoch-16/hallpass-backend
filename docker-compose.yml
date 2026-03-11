@@ -33,5 +33,22 @@ services:
       postgres:
         condition: service_healthy
 
+  schools-api:
+    build:
+      context: .
+      dockerfile: apps/schools-api/Dockerfile
+    container_name: hallpass-schools-api
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hallpass
+      PORT: "3002"
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3002}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:

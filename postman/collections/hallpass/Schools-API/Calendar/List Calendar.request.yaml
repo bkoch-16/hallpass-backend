@@ -1,0 +1,14 @@
+$kind: http-request
+name: List Calendar
+url: "{{Base}}/api/schools/:schoolId/calendar"
+method: GET
+description: List calendar entries for a school, optionally filtered by date range. Requires school membership.
+pathVariables:
+  - key: schoolId
+    value: 1
+queryParams:
+  - key: from
+    value: ""
+  - key: to
+    value: ""
+order: 1000

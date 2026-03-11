@@ -1,0 +1,16 @@
+$kind: http-request
+name: Create Destination
+url: "{{Base}}/api/schools/:schoolId/destinations"
+method: POST
+description: Create a destination for a school. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+body:
+  type: json
+  content: |-
+    {
+      "name": "Library",
+      "maxOccupancy": 20
+    }
+order: 2000

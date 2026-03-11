@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Destination
+url: "{{Base}}/api/schools/:schoolId/destinations/:id"
+method: PATCH
+description: Update a destination's name or max occupancy. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: 1
+  - key: id
+    value: ""
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated Destination"
+    }
+order: 3000

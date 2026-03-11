@@ -1,0 +1,15 @@
+$kind: http-request
+name: Update District
+url: "{{Base}}/api/districts/:id"
+method: PATCH
+description: Update a district's name. Requires SUPER_ADMIN role.
+pathVariables:
+  - key: id
+    value: 1
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated District Name"
+    }
+order: 4000
