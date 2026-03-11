@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-11T02:21:27.288Z",
+  "generatedAt": "2026-03-11T20:45:20.284Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "9bcd429e4e1592200bc7afe110fa01207baca105",
-      "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Contains models for a school district hierarchy (District → School → User) along with auth-related models (Session, Account). Users have a Role enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and soft-delete support via nullable `deletedAt` fields on District, School, and User. Sessions and Accounts cascade-delete when their parent User is removed. IDs use autoincrement integers for domain models and CUIDs for auth models (Session, Account)."
+      "blobSha": "56bd13ebb356011da7d912273564eb41eebacbdd",
+      "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Core models include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication (compatible with better-auth). School-related models include ScheduleType, Period (with time slots and ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (per-school limits on active passes and interval-based quotas). Soft deletes are supported via optional `deletedAt` fields on most entities. Key relationships: District→Schools→Users, School→ScheduleTypes→Periods, School→PassPolicy (1:1). Developers modifying this file must run `prisma migrate` to update the database and `prisma generate` to regenerate the client."
     },
     "apps/user-api/src/app.ts": {
       "blobSha": "47d7bd37349c0a440bbff0d12325b216597917b5",
@@ -55,8 +55,8 @@
       "summary": "Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with pnpm 10 in a monorepo context. It employs a layer-caching strategy by copying package manifests first, running `pnpm install --frozen-lockfile`, and then copying source code. After installation, it generates the Prisma client (using a dummy `DATABASE_URL` since generation doesn't require a live database) and builds internal packages (`db`, `auth`, `logger`, `types`) in dependency order before building `user-api` itself. The container exposes port 3001 and uses a custom `docker-entrypoint.sh` script as its entrypoint. Developers modifying this file should ensure any new workspace dependencies are added to the manifest-copy stage and the build order, and should be aware that changes to the entrypoint script require it to be kept in sync at `apps/user-api/docker-entrypoint.sh`."
     },
     "docker-compose.yml": {
-      "blobSha": "1dcfe9c8da884f770eb0ea57c1461d3a6d058b97",
-      "summary": "Defines the local development environment with two services: a PostgreSQL 16 database and the user-api application. PostgreSQL is configured with default credentials (postgres/postgres), a `hallpass` database, persistent volume storage, and a health check. The user-api service is built from `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and depends on a healthy Postgres instance. Environment variables like `BETTER_AUTH_SECRET` are expected from the host environment or `.env` file, while others have sensible defaults. Developers should ensure the `.env` file provides `BETTER_AUTH_SECRET` before running `docker compose up`."
+      "blobSha": "326ff59e3c518f2931aabaff881659ae0ed02fb6",
+      "summary": "Docker Compose configuration defining three services for local development: a PostgreSQL 16 (Alpine) database, and two API microservices (user-api on port 3001, schools-api on port 3002). Both APIs depend on Postgres with a health check ensuring the database is ready before they start. Environment variables include DATABASE_URL (pointing to the containerized Postgres), BETTER_AUTH_SECRET/URL for authentication, and CORS_ORIGIN for frontend access. Each API service builds from its own Dockerfile in the apps/ directory using the repo root as build context. A named volume `postgres_data` persists database data across container restarts. Developers need to set BETTER_AUTH_SECRET (and optionally BETTER_AUTH_URL/CORS_ORIGIN) via environment or .env file."
     },
     ".github/workflows/deploy.yml": {
       "blobSha": "2d53aece5fc1924a58c43dad6e44819a32999e62",
@@ -75,8 +75,8 @@
       "summary": "Automation workflow that keeps the `develop` branch in sync with `main` by creating a merge PR after each push to `main`. First checks if `develop` already contains all `main` commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a no-ff merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires both `contents: write` and `pull-requests: write` permissions."
     },
     "package.json": {
-      "blobSha": "e2b6c40778749a1c5fc6842aeb4ad273299bd743",
-      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root."
+      "blobSha": "59806c0b5fed61f97ec9b7a10750031df6d395d3",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating builds, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` and `demo:serve` for a demo UI, and `prepare` for Husky git hooks. Dev dependencies include ESLint, Prettier, TypeScript, tsx (for running TS scripts), and yaml/micromatch/fast-glob likely used in code generation or scripting. The only production dependency is `@anthropic-ai/sdk`, suggesting AI/LLM integration. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use pnpm and Turbo commands from the root; direct npm/yarn usage is not supported."
     },
     ".github/workflows/demo.yml": {
       "blobSha": "c3533ff9d09af77146465207164d6f776a50cda8",

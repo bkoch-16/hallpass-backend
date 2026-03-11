@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T02:21:27.288Z — 20 files indexed_
+_Generated: 2026-03-11T20:45:20.284Z — 20 files indexed_
 
 ## File Summaries
 
@@ -70,11 +70,11 @@ Defines Zod validation schemas for user-related API endpoints. Exports `userIdSc
 
 ### `docker-compose.yml`
 
-Defines the local development environment with two services: a PostgreSQL 16 database and the user-api application. PostgreSQL is configured with default credentials (postgres/postgres), a `hallpass` database, persistent volume storage, and a health check. The user-api service is built from `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and depends on a healthy Postgres instance. Environment variables like `BETTER_AUTH_SECRET` are expected from the host environment or `.env` file, while others have sensible defaults. Developers should ensure the `.env` file provides `BETTER_AUTH_SECRET` before running `docker compose up`.
+Docker Compose configuration defining three services for local development: a PostgreSQL 16 (Alpine) database, and two API microservices (user-api on port 3001, schools-api on port 3002). Both APIs depend on Postgres with a health check ensuring the database is ready before they start. Environment variables include DATABASE_URL (pointing to the containerized Postgres), BETTER_AUTH_SECRET/URL for authentication, and CORS_ORIGIN for frontend access. Each API service builds from its own Dockerfile in the apps/ directory using the repo root as build context. A named volume `postgres_data` persists database data across container restarts. Developers need to set BETTER_AUTH_SECRET (and optionally BETTER_AUTH_URL/CORS_ORIGIN) via environment or .env file.
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (runs a TypeScript script via tsx) and `prepare` (sets up Husky git hooks). Dev dependencies center around ESLint, Prettier, TypeScript, and Turborepo, with `@anthropic-ai/sdk` as the sole production dependency. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma. Developers modifying this file should be aware of the Turborepo pipeline configuration (separate `turbo.json`) and that this is a private, non-publishable workspace root.
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating builds, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` and `demo:serve` for a demo UI, and `prepare` for Husky git hooks. Dev dependencies include ESLint, Prettier, TypeScript, tsx (for running TS scripts), and yaml/micromatch/fast-glob likely used in code generation or scripting. The only production dependency is `@anthropic-ai/sdk`, suggesting AI/LLM integration. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use pnpm and Turbo commands from the root; direct npm/yarn usage is not supported.
 
 ### `packages/auth/src/index.ts`
 
@@ -82,4 +82,4 @@ Factory module that creates and configures a `better-auth` authentication instan
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Contains models for a school district hierarchy (District → School → User) along with auth-related models (Session, Account). Users have a Role enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and soft-delete support via nullable `deletedAt` fields on District, School, and User. Sessions and Accounts cascade-delete when their parent User is removed. IDs use autoincrement integers for domain models and CUIDs for auth models (Session, Account).
+Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Core models include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication (compatible with better-auth). School-related models include ScheduleType, Period (with time slots and ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (per-school limits on active passes and interval-based quotas). Soft deletes are supported via optional `deletedAt` fields on most entities. Key relationships: District→Schools→Users, School→ScheduleTypes→Periods, School→PassPolicy (1:1). Developers modifying this file must run `prisma migrate` to update the database and `prisma generate` to regenerate the client.
