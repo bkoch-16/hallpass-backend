@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T20:45:20.284Z — 20 files indexed_
+_Generated: 2026-03-11T21:47:07.909Z — 20 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-GitHub Actions workflow for backend CI/CD that validates (lint, build, test) and deploys the `user-api` to Google Cloud Run. Triggers on pushes to main/develop, pull requests, and manual dispatch with environment selection (dev/prod). The `validate` job uses dummy environment variables to satisfy env.ts validation, generates the Prisma client, then runs lint, build, and test. `deploy-dev` targets the `develop` branch (or manual dev dispatch) deploying to `user-api-dev`, while `deploy-prod` targets `main` deploying to `user-api`. Both deploy jobs build a Docker image from `apps/user-api/Dockerfile`, push to GCP Artifact Registry with SHA and latest tags using GHA cache, and deploy to Cloud Run in `us-west1`. Environment variables and secrets are managed on the Cloud Run service via GCP Secret Manager, not in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
+CI/CD pipeline for the Hallpass monorepo that validates (lint, build, test) on all pushes/PRs, then deploys two services (user-api and schools-api) to Google Cloud Run for dev and prod environments. The `validate` job uses pnpm with Node 22, generates a Prisma client, and runs checks with dummy environment variables since tests mock the DB layer. Deployment is branch-driven: `develop` triggers dev deploys, `main` triggers prod deploys, with manual `workflow_dispatch` override support via an environment input. Docker images are built using Buildx with GitHub Actions cache (`type=gha`), pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. Key secrets required are `GCP_PROJECT_ID` and `GCP_SA_KEY` for GCP authentication.
 
 ### `.github/workflows/index-codebase.yml`
 
