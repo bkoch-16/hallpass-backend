@@ -38,7 +38,7 @@ export function requireSelfOrRole(...roles: UserRole[]) {
       return;
     }
 
-    const isSelf = req.params.id === req.user.id;
+    const isSelf = Number(req.params.id) === req.user.id;
     const hasRole = roles.includes(req.user.role);
 
     if (!isSelf && !hasRole) {

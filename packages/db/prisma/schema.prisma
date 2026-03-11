@@ -14,23 +14,48 @@ enum Role {
   SERVICE
 }
 
-model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  name      String?
-  emailVerified Boolean   @default(false)
-  role      Role      @default(STUDENT)
+model District {
+  id        Int       @id @default(autoincrement())
+  name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  schools   School[]
+}
+
+model School {
+  id         Int       @id @default(autoincrement())
+  name       String
+  timezone   String    @default("America/Los_Angeles")
+  districtId Int?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  district   District? @relation(fields: [districtId], references: [id])
+  users      User[]
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String?
+  emailVerified Boolean   @default(false)
+  role          Role      @default(STUDENT)
+  schoolId      Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  school    School?   @relation(fields: [schoolId], references: [id])
   sessions  Session[]
   accounts  Account[]
 }
 
 model Session {
   id        String   @id @default(cuid())
-  userId    String
+  userId    Int
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -43,7 +68,7 @@ model Session {
 
 model Account {
   id            String    @id @default(cuid())
-  userId        String
+  userId        Int
   accountId     String
   providerId    String
   accessToken   String?

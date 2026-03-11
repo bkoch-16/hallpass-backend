@@ -44,34 +44,33 @@ export interface CursorPage<T> {
 // ─── Response shapes ─────────────────────────────────────────────────────────
 
 export interface DistrictResponse {
-  id: string;
+  id: number;
   name: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface UserResponse {
-  id: string;
+  id: number;
   name: string | null;
   email: string;
   role: UserRole;
-  schoolId: string | null;
-  districtId: string | null;
+  schoolId: number | null;
   createdAt: Date;
 }
 
 export interface SchoolResponse {
-  id: string;
+  id: number;
   name: string;
   timezone: string;
-  districtId: string | null;
+  districtId: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface PassPolicyResponse {
   id: string;
-  schoolId: string;
+  schoolId: number;
   maxActivePasses: number | null;
   interval: PolicyInterval | null;
   maxPerInterval: number | null;
@@ -79,7 +78,7 @@ export interface PassPolicyResponse {
 
 export interface ScheduleTypeResponse {
   id: string;
-  schoolId: string;
+  schoolId: number;
   name: string;
   startBuffer: number;
   endBuffer: number;
@@ -96,7 +95,7 @@ export interface PeriodResponse {
 
 export interface SchoolCalendarResponse {
   id: string;
-  schoolId: string;
+  schoolId: number;
   date: Date;
   scheduleTypeId: string | null;
   note: string | null;
@@ -104,14 +103,14 @@ export interface SchoolCalendarResponse {
 
 export interface DestinationResponse {
   id: string;
-  schoolId: string;
+  schoolId: number;
   name: string;
   maxOccupancy: number | null;
 }
 
 export interface PassResponse {
   id: string;
-  schoolId: string;
+  schoolId: number;
   studentId: string;
   destinationId: string;
   periodId: string;
@@ -142,13 +141,13 @@ export interface UpdateDistrictBody {
 export interface CreateSchoolBody {
   name: string;
   timezone?: string;
-  districtId?: string;
+  districtId?: number;
 }
 
 export interface UpdateSchoolBody {
   name?: string;
   timezone?: string;
-  districtId?: string;
+  districtId?: number;
 }
 
 export interface CreateScheduleTypeBody {

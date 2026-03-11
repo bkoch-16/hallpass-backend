@@ -30,21 +30,28 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // Sessions and accounts are cascade-deleted with users.
   await prisma.user.deleteMany();
+  await prisma.school.deleteMany();
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany();
+  await prisma.school.deleteMany();
   await prisma.$disconnect();
 });
 
-function authenticateAs(user: { id: string; role: string }) {
+function authenticateAs(user: { id: number; role: string }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
+}
+
+async function seedSchool() {
+  return prisma.school.create({ data: { name: "Test School" } });
 }
 
 async function seedUser(overrides: Partial<{
   email: string;
   name: string;
   role: "STUDENT" | "TEACHER" | "ADMIN" | "SUPER_ADMIN";
+  schoolId: number;
   deletedAt: Date | null;
 }> = {}) {
   return prisma.user.create({
@@ -52,6 +59,7 @@ async function seedUser(overrides: Partial<{
       email: overrides.email ?? `user-${crypto.randomUUID()}@test.com`,
       name: overrides.name ?? "Test User",
       role: overrides.role ?? "STUDENT",
+      schoolId: overrides.schoolId ?? null,
       deletedAt: overrides.deletedAt ?? null,
     },
   });
@@ -94,8 +102,9 @@ describe("GET /api/users/me (integration)", () => {
 
 describe("GET /api/users/:id (integration)", () => {
   it("returns only the expected select fields (no deletedAt)", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users/${student.id}`);
@@ -107,8 +116,9 @@ describe("GET /api/users/:id (integration)", () => {
   });
 
   it("returns 404 for a soft-deleted target user", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const deleted = await seedUser({ deletedAt: new Date() });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const deleted = await seedUser({ deletedAt: new Date(), schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users/${deleted.id}`);
@@ -119,9 +129,10 @@ describe("GET /api/users/:id (integration)", () => {
 
 describe("GET /api/users (integration)", () => {
   it("returns only active users (excludes soft-deleted)", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT", deletedAt: new Date() });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, deletedAt: new Date() });
     authenticateAs(teacher);
 
     const res = await request(app).get("/api/users");
@@ -132,9 +143,10 @@ describe("GET /api/users (integration)", () => {
   });
 
   it("filters by ?role=", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
     const res = await request(app).get("/api/users?role=STUDENT");
@@ -145,9 +157,10 @@ describe("GET /api/users (integration)", () => {
   });
 
   it("returns specific users when ?ids= provided", async () => {
-    const teacher = await seedUser({ role: "TEACHER" });
-    const a = await seedUser({ role: "STUDENT" });
-    await seedUser({ role: "STUDENT" }); // not requested
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const a = await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id }); // not requested
     authenticateAs(teacher);
 
     const res = await request(app).get(`/api/users?ids=${a.id}`);
@@ -155,6 +168,37 @@ describe("GET /api/users (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].id).toBe(a.id);
+  });
+
+  it("returns 400 when ?ids= contains id=0", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?ids=0");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid ID format" });
+  });
+
+  it("returns 400 when ?cursor= is non-numeric", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?cursor=abc");
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when ?cursor=0", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app).get("/api/users?cursor=0");
+
+    expect(res.status).toBe(400);
   });
 });
 
@@ -259,7 +303,7 @@ describe("PATCH /api/users/:id (integration)", () => {
       .patch(`/api/users/nonexistent-id`)
       .send({ name: "Ghost" });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 
   it("returns 404 when target user is soft-deleted", async () => {
@@ -391,8 +435,9 @@ describe("POST /api/users/bulk (integration)", () => {
 
 describe("DELETE /api/users/:id (integration)", () => {
   it("soft-deletes the user (sets deletedAt in DB)", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app).delete(`/api/users/${student.id}`);
@@ -404,13 +449,43 @@ describe("DELETE /api/users/:id (integration)", () => {
   });
 
   it("soft-deleted user cannot be found via GET", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     await request(app).delete(`/api/users/${student.id}`);
     const res = await request(app).get(`/api/users/${student.id}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it("ADMIN cannot delete a user in a different school", async () => {
+    const schoolA = await seedSchool();
+    const schoolB = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: schoolA.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: schoolB.id });
+    authenticateAs(admin);
+
+    const res = await request(app).delete(`/api/users/${student.id}`);
+
+    expect(res.status).toBe(404);
+
+    const inDb = await prisma.user.findUnique({ where: { id: student.id } });
+    expect(inDb?.deletedAt).toBeNull();
+  });
+
+  it("SUPER_ADMIN can delete a user in any school", async () => {
+    const school = await seedSchool();
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    authenticateAs(superAdmin);
+
+    const res = await request(app).delete(`/api/users/${student.id}`);
+
+    expect(res.status).toBe(204);
+
+    const inDb = await prisma.user.findUnique({ where: { id: student.id } });
+    expect(inDb?.deletedAt).not.toBeNull();
   });
 });

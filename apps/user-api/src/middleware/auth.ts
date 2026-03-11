@@ -23,8 +23,14 @@ export async function requireAuth(
     return;
   }
 
+  const userId = Number(session.user.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
   const user = await prisma.user.findFirst({
-    where: { id: session.user.id, deletedAt: null },
+    where: { id: userId, deletedAt: null },
   });
 
   if (!user) {
