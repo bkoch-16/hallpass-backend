@@ -1,2 +1,3 @@
 $kind: collection
 order: 3000
+environmentPattern: "Schools Api"
