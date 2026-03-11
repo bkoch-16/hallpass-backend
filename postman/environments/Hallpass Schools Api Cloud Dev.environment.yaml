@@ -1,0 +1,5 @@
+name: Hallpass Schools Api Cloud Dev
+values:
+  - key: Base
+    value: 'https://schools-api-dev-h4c6vzgsua-uw.a.run.app'
+    enabled: true

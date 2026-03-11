@@ -117,6 +117,15 @@ function readOrder(dir: string): number {
   return 9999;
 }
 
+function readEnvironmentPattern(dir: string): string | null {
+  const defPath = path.join(dir, ".resources", "definition.yaml");
+  if (fs.existsSync(defPath)) {
+    const def = readYaml<CollectionDefinitionYaml>(defPath);
+    return def.environmentPattern ?? null;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Parse environments
 // ---------------------------------------------------------------------------
@@ -214,10 +223,11 @@ function parseGroupsForCollection(
     }
 
     if (!groupMap.has(groupName)) {
+      const groupPattern = groupDir ? readEnvironmentPattern(groupDir) : null;
       groupMap.set(groupName, {
         name: groupName,
         order: groupDir ? readOrder(groupDir) : 9999,
-        baseUrls: getBaseUrls(environmentPattern, envs),
+        baseUrls: getBaseUrls(groupPattern ?? environmentPattern, envs),
         subgroups: null,
         endpoints: [],
       });
