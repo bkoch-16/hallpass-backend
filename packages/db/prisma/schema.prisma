@@ -14,6 +14,12 @@ enum Role {
   SERVICE
 }
 
+enum PolicyInterval {
+  DAY
+  WEEK
+  MONTH
+}
+
 model District {
   id        Int       @id @default(autoincrement())
   name      String
@@ -33,8 +39,13 @@ model School {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  district   District? @relation(fields: [districtId], references: [id])
-  users      User[]
+  district      District?        @relation(fields: [districtId], references: [id])
+  users         User[]
+  scheduleTypes ScheduleType[]
+  periods       Period[]
+  calendar      SchoolCalendar[]
+  destinations  Destination[]
+  policy        PassPolicy?
 }
 
 model User {
@@ -79,4 +90,78 @@ model Account {
   updatedAt     DateTime  @updatedAt
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScheduleType {
+  id          String    @id @default(cuid())
+  schoolId    Int
+  name        String
+  startBuffer Int       @default(0)
+  endBuffer   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  school   School           @relation(fields: [schoolId], references: [id])
+  periods  Period[]
+  calendar SchoolCalendar[]
+
+  @@index([schoolId])
+}
+
+model Period {
+  id             String    @id @default(cuid())
+  schoolId       Int
+  scheduleTypeId String
+  name           String
+  startTime      String
+  endTime        String
+  order          Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  school       School       @relation(fields: [schoolId], references: [id])
+  scheduleType ScheduleType @relation(fields: [scheduleTypeId], references: [id])
+
+  @@index([scheduleTypeId])
+}
+
+model SchoolCalendar {
+  id             String    @id @default(cuid())
+  schoolId       Int
+  date           DateTime  @db.Date
+  scheduleTypeId String?
+  note           String?
+
+  school       School        @relation(fields: [schoolId], references: [id])
+  scheduleType ScheduleType? @relation(fields: [scheduleTypeId], references: [id])
+
+  @@unique([schoolId, date])
+}
+
+model Destination {
+  id           String    @id @default(cuid())
+  schoolId     Int
+  name         String
+  maxOccupancy Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+}
+
+model PassPolicy {
+  id             String          @id @default(cuid())
+  schoolId       Int             @unique
+  maxActivePasses Int?
+  interval       PolicyInterval?
+  maxPerInterval Int?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
 }
