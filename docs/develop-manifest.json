@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-11T21:47:07.909Z",
+  "generatedAt": "2026-03-11T21:56:17.853Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "56bd13ebb356011da7d912273564eb41eebacbdd",
@@ -59,8 +59,8 @@
       "summary": "Docker Compose configuration defining three services for local development: a PostgreSQL 16 (Alpine) database, and two API microservices (user-api on port 3001, schools-api on port 3002). Both APIs depend on Postgres with a health check ensuring the database is ready before they start. Environment variables include DATABASE_URL (pointing to the containerized Postgres), BETTER_AUTH_SECRET/URL for authentication, and CORS_ORIGIN for frontend access. Each API service builds from its own Dockerfile in the apps/ directory using the repo root as build context. A named volume `postgres_data` persists database data across container restarts. Developers need to set BETTER_AUTH_SECRET (and optionally BETTER_AUTH_URL/CORS_ORIGIN) via environment or .env file."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "e947cfa2a556ae2fca0f96af067c383f2d0b56ac",
-      "summary": "CI/CD pipeline for the Hallpass monorepo that validates (lint, build, test) on all pushes/PRs, then deploys two services (user-api and schools-api) to Google Cloud Run for dev and prod environments. The `validate` job uses pnpm with Node 22, generates a Prisma client, and runs checks with dummy environment variables since tests mock the DB layer. Deployment is branch-driven: `develop` triggers dev deploys, `main` triggers prod deploys, with manual `workflow_dispatch` override support via an environment input. Docker images are built using Buildx with GitHub Actions cache (`type=gha`), pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. Key secrets required are `GCP_PROJECT_ID` and `GCP_SA_KEY` for GCP authentication."
+      "blobSha": "3672d99579c73552cdc11cc93ef516d5e3b0a075",
+      "summary": "CI/CD pipeline for the HallPass monorepo that validates code (lint, build, test) on all pushes/PRs, then deploys two microservices (user-api and schools-api) to Google Cloud Run. The `validate` job runs in all cases with dummy environment variables (since tests mock the DB), generates the Prisma client, and runs lint/build/test via pnpm. Deployment jobs are split across dev and prod environments: `develop` branch pushes deploy to dev services, `main` branch pushes deploy to prod, with manual `workflow_dispatch` overrides available. Docker images are built using Buildx with GitHub Actions cache, pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. When modifying, note the repeated job structure across the four deploy jobs — changes to the deploy pattern must be replicated in all four, and new microservices require adding analogous job blocks."
     },
     ".github/workflows/index-codebase.yml": {
       "blobSha": "821b594ddd6a7fe908bbeb77e608826f11bae017",

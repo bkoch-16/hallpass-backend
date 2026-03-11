@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T21:47:07.909Z — 20 files indexed_
+_Generated: 2026-03-11T21:56:17.853Z — 20 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD pipeline for the Hallpass monorepo that validates (lint, build, test) on all pushes/PRs, then deploys two services (user-api and schools-api) to Google Cloud Run for dev and prod environments. The `validate` job uses pnpm with Node 22, generates a Prisma client, and runs checks with dummy environment variables since tests mock the DB layer. Deployment is branch-driven: `develop` triggers dev deploys, `main` triggers prod deploys, with manual `workflow_dispatch` override support via an environment input. Docker images are built using Buildx with GitHub Actions cache (`type=gha`), pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. Key secrets required are `GCP_PROJECT_ID` and `GCP_SA_KEY` for GCP authentication.
+CI/CD pipeline for the HallPass monorepo that validates code (lint, build, test) on all pushes/PRs, then deploys two microservices (user-api and schools-api) to Google Cloud Run. The `validate` job runs in all cases with dummy environment variables (since tests mock the DB), generates the Prisma client, and runs lint/build/test via pnpm. Deployment jobs are split across dev and prod environments: `develop` branch pushes deploy to dev services, `main` branch pushes deploy to prod, with manual `workflow_dispatch` overrides available. Docker images are built using Buildx with GitHub Actions cache, pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. When modifying, note the repeated job structure across the four deploy jobs — changes to the deploy pattern must be replicated in all four, and new microservices require adding analogous job blocks.
 
 ### `.github/workflows/index-codebase.yml`
 
