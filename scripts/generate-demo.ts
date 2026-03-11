@@ -29,12 +29,9 @@ interface RequestYaml {
   body?: RequestBody;
 }
 
-interface GroupDefinitionYaml {
-  order?: number;
-}
-
-interface CollectionDefinitionYaml {
+interface DefinitionYaml {
   $kind?: string;
+  order?: number;
   environmentPattern?: string;
 }
 
@@ -111,7 +108,7 @@ function capitalize(s: string): string {
 function readOrder(dir: string): number {
   const defPath = path.join(dir, ".resources", "definition.yaml");
   if (fs.existsSync(defPath)) {
-    const def = readYaml<GroupDefinitionYaml>(defPath);
+    const def = readYaml<DefinitionYaml>(defPath);
     return def.order ?? 9999;
   }
   return 9999;
@@ -120,7 +117,7 @@ function readOrder(dir: string): number {
 function readEnvironmentPattern(dir: string): string | null {
   const defPath = path.join(dir, ".resources", "definition.yaml");
   if (fs.existsSync(defPath)) {
-    const def = readYaml<CollectionDefinitionYaml>(defPath);
+    const def = readYaml<DefinitionYaml>(defPath);
     return def.environmentPattern ?? null;
   }
   return null;
@@ -187,7 +184,7 @@ function parseGroupsForCollection(
   );
   let environmentPattern: string | null = null;
   if (fs.existsSync(collectionDefPath)) {
-    const def = readYaml<CollectionDefinitionYaml>(collectionDefPath);
+    const def = readYaml<DefinitionYaml>(collectionDefPath);
     environmentPattern = def.environmentPattern ?? null;
   }
 
