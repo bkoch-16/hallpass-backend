@@ -30,11 +30,21 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // Sessions and accounts are cascade-deleted with users.
   await prisma.user.deleteMany();
+  await prisma.passPolicy.deleteMany();
+  await prisma.schoolCalendar.deleteMany();
+  await prisma.period.deleteMany();
+  await prisma.scheduleType.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.school.deleteMany();
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany();
+  await prisma.passPolicy.deleteMany();
+  await prisma.schoolCalendar.deleteMany();
+  await prisma.period.deleteMany();
+  await prisma.scheduleType.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.school.deleteMany();
   await prisma.$disconnect();
 });
@@ -248,8 +258,9 @@ describe("POST /api/users (integration)", () => {
 
 describe("PATCH /api/users/:id (integration)", () => {
   it("updates name and persists to DB", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app)
@@ -264,8 +275,9 @@ describe("PATCH /api/users/:id (integration)", () => {
   });
 
   it("updates email and persists to DB", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app)
@@ -280,8 +292,9 @@ describe("PATCH /api/users/:id (integration)", () => {
   });
 
   it("updates role and persists to DB", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app)
@@ -319,8 +332,9 @@ describe("PATCH /api/users/:id (integration)", () => {
   });
 
   it("returns 403 when promoting to role above caller", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app)
@@ -346,8 +360,9 @@ describe("PATCH /api/users/:id (integration)", () => {
   });
 
   it("response does not expose deletedAt or emailVerified", async () => {
-    const admin = await seedUser({ role: "ADMIN" });
-    const student = await seedUser({ role: "STUDENT" });
+    const school = await seedSchool();
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
     const res = await request(app)
