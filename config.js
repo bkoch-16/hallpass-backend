@@ -1,14 +1,12 @@
 const CONFIG = {
   "stages": [
-    "Prod",
-    "Dev"
+    "Prod"
   ],
   "groups": [
     {
       "name": "User-API",
       "order": 1000,
       "baseUrls": {
-        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
       "subgroups": null,
@@ -140,7 +138,6 @@ const CONFIG = {
       "name": "Auth",
       "order": 2000,
       "baseUrls": {
-        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
       "subgroups": null,
@@ -199,7 +196,6 @@ const CONFIG = {
       "name": "Schools-API",
       "order": 3000,
       "baseUrls": {
-        "Dev": "https://schools-api-dev-h4c6vzgsua-uw.a.run.app",
         "Prod": "https://schools-api-h4c6vzgsua-uw.a.run.app"
       },
       "subgroups": [
@@ -764,7 +760,6 @@ const CONFIG = {
       "name": "No group",
       "order": 9999,
       "baseUrls": {
-        "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
       "subgroups": null,
