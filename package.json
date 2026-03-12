@@ -9,7 +9,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "turbo test",
-    "test:integration": "turbo test:integration",
+    "test:integration": "turbo test:integration --concurrency=1",
     "prepare": "husky",
     "demo:generate": "tsx scripts/generate-demo.ts",
     "demo:serve": "npx serve apps/demo-ui"

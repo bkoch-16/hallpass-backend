@@ -143,12 +143,14 @@ function parseEnvironments(): { stages: string[]; envs: ParsedEnvironment[] } {
     envs.push({ label: env.name, stage, baseUrl });
   }
 
-  // Prod first, then alphabetical
+  // Prod first, then alphabetical; exclude dev/local environments
   const stages = [...stageSet].sort((a, b) =>
     a === "Prod" ? -1 : b === "Prod" ? 1 : a.localeCompare(b)
-  );
+  ).filter(s => !/^(dev|local)$/i.test(s));
 
-  return { stages, envs };
+  const filteredEnvs = envs.filter(e => !/^(dev|local)$/i.test(e.stage));
+
+  return { stages, envs: filteredEnvs };
 }
 
 // ---------------------------------------------------------------------------
