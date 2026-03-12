@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-11T21:56:17.853Z — 20 files indexed_
+_Generated: 2026-03-12T17:35:07.266Z — 20 files indexed_
 
 ## File Summaries
 
@@ -74,7 +74,7 @@ Docker Compose configuration defining three services for local development: a Po
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating builds, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` and `demo:serve` for a demo UI, and `prepare` for Husky git hooks. Dev dependencies include ESLint, Prettier, TypeScript, tsx (for running TS scripts), and yaml/micromatch/fast-glob likely used in code generation or scripting. The only production dependency is `@anthropic-ai/sdk`, suggesting AI/LLM integration. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use pnpm and Turbo commands from the root; direct npm/yarn usage is not supported.
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (using tsx to run a TypeScript script) and `demo:serve` for a demo UI. Uses Husky for git hooks and Prettier for formatting. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml for tooling/scripting. The only runtime dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma, indicating the monorepo uses Prisma for database access.
 
 ### `packages/auth/src/index.ts`
 
