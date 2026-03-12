@@ -11,6 +11,7 @@ const CONFIG = {
         "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
+      "subgroups": null,
       "endpoints": [
         {
           "name": "Get Me",
@@ -58,7 +59,7 @@ const CONFIG = {
           "queryParams": [
             {
               "key": "ids",
-              "value": "cmmdth7vq0000k50msye6albt,cmmdth8860002k50mq6euj3zh"
+              "value": "1,2"
             }
           ],
           "body": null
@@ -73,7 +74,7 @@ const CONFIG = {
           "pathVariables": [
             {
               "key": "id",
-              "value": "cmmdth7vq0000k50msye6albt"
+              "value": "1"
             }
           ],
           "queryParams": [],
@@ -89,7 +90,7 @@ const CONFIG = {
           "pathVariables": [
             {
               "key": "id",
-              "value": "cmmdth7vq0000k50msye6albt"
+              "value": "1"
             }
           ],
           "queryParams": [],
@@ -105,7 +106,7 @@ const CONFIG = {
           "pathVariables": [
             {
               "key": "id",
-              "value": "cmmdth7vq0000k50msye6albt"
+              "value": "1"
             }
           ],
           "queryParams": [],
@@ -142,6 +143,7 @@ const CONFIG = {
         "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
+      "subgroups": null,
       "endpoints": [
         {
           "name": "Sign Up",
@@ -194,12 +196,578 @@ const CONFIG = {
       ]
     },
     {
+      "name": "Schools-API",
+      "order": 3000,
+      "baseUrls": {
+        "Dev": "https://schools-api-dev-h4c6vzgsua-uw.a.run.app",
+        "Prod": "https://schools-api-h4c6vzgsua-uw.a.run.app"
+      },
+      "subgroups": [
+        {
+          "name": "Districts",
+          "order": 1000,
+          "endpoints": [
+            {
+              "name": "List Districts",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/districts",
+              "description": "Cursor-paginated list of all districts. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [],
+              "queryParams": [
+                {
+                  "key": "cursor",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ],
+              "body": null
+            },
+            {
+              "name": "Create District",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/districts",
+              "description": "Create a new district. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Demo District\"\n}"
+            },
+            {
+              "name": "Get District",
+              "order": 3000,
+              "method": "GET",
+              "url": "{{Base}}/api/districts/:id",
+              "description": "Get a single district by ID. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            },
+            {
+              "name": "Update District",
+              "order": 4000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/districts/:id",
+              "description": "Update a district's name. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Updated District Name\"\n}"
+            },
+            {
+              "name": "Delete District",
+              "order": 5000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/districts/:id",
+              "description": "Soft-delete a district. Requires SUPER_ADMIN role. Returns 204 on success.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Schools",
+          "order": 2000,
+          "endpoints": [
+            {
+              "name": "List Schools",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools",
+              "description": "Cursor-paginated list of all schools. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [],
+              "queryParams": [
+                {
+                  "key": "cursor",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ],
+              "body": null
+            },
+            {
+              "name": "Create School",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/schools",
+              "description": "Create a new school. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Demo High School\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"districtId\": 1\n}"
+            },
+            {
+              "name": "Get School",
+              "order": 3000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:id",
+              "description": "Get a single school by ID. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            },
+            {
+              "name": "Update School",
+              "order": 4000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/schools/:id",
+              "description": "Update a school's name, timezone, or districtId. Requires SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Updated School Name\"\n}"
+            },
+            {
+              "name": "Delete School",
+              "order": 5000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/schools/:id",
+              "description": "Soft-delete a school. Requires SUPER_ADMIN role. Returns 204 on success.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Schedule Types",
+          "order": 3000,
+          "endpoints": [
+            {
+              "name": "List Schedule Types",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types",
+              "description": "List all schedule types for a school. Requires school membership.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [
+                {
+                  "key": "cursor",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ],
+              "body": null
+            },
+            {
+              "name": "Create Schedule Type",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types",
+              "description": "Create a schedule type for a school. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Standard Day\",\n  \"startBuffer\": 15,\n  \"endBuffer\": 15\n}"
+            },
+            {
+              "name": "Update Schedule Type",
+              "order": 3000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:id",
+              "description": "Update a schedule type's name or buffers. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Updated Schedule Name\"\n}"
+            },
+            {
+              "name": "Delete Schedule Type",
+              "order": 4000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:id",
+              "description": "Soft-delete a schedule type. Fails with 409 if calendar entries reference it. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Periods",
+          "order": 4000,
+          "endpoints": [
+            {
+              "name": "List Periods",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods",
+              "description": "List all periods for a schedule type. Requires school membership.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "scheduleTypeId",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            },
+            {
+              "name": "Create Period",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods",
+              "description": "Create a period within a schedule type. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "scheduleTypeId",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Period 1\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"08:50\",\n  \"order\": 0\n}"
+            },
+            {
+              "name": "Update Period",
+              "order": 3000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id",
+              "description": "Update a period's name, times, or order. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "scheduleTypeId",
+                  "value": ""
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Updated Period Name\"\n}"
+            },
+            {
+              "name": "Delete Period",
+              "order": 4000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id",
+              "description": "Soft-delete a period. Requires ADMIN or SUPER_ADMIN role. Returns 204 on success.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "scheduleTypeId",
+                  "value": ""
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Calendar",
+          "order": 5000,
+          "endpoints": [
+            {
+              "name": "List Calendar",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:schoolId/calendar",
+              "description": "List calendar entries for a school, optionally filtered by date range. Requires school membership.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                }
+              ],
+              "body": null
+            },
+            {
+              "name": "Upsert Calendar Entries",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/schools/:schoolId/calendar",
+              "description": "Bulk upsert calendar entries by date. Accepts a single entry or array. Returns counts of created and updated entries. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "[\n  { \"date\": \"2026-03-11\", \"scheduleTypeId\": null, \"note\": null },\n  { \"date\": \"2026-03-12\", \"scheduleTypeId\": null, \"note\": \"Late Start\" }\n]"
+            },
+            {
+              "name": "Update Calendar Entry",
+              "order": 3000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/schools/:schoolId/calendar/:id",
+              "description": "Update a calendar entry's schedule type or note. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"note\": \"Updated note\"\n}"
+            },
+            {
+              "name": "Delete Calendar Entry",
+              "order": 4000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/schools/:schoolId/calendar/:id",
+              "description": "Hard-delete a calendar entry. Requires ADMIN or SUPER_ADMIN role. Returns 204 on success.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Destinations",
+          "order": 6000,
+          "endpoints": [
+            {
+              "name": "List Destinations",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:schoolId/destinations",
+              "description": "List all destinations for a school. Requires school membership.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            },
+            {
+              "name": "Create Destination",
+              "order": 2000,
+              "method": "POST",
+              "url": "{{Base}}/api/schools/:schoolId/destinations",
+              "description": "Create a destination for a school. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Library\",\n  \"maxOccupancy\": 20\n}"
+            },
+            {
+              "name": "Update Destination",
+              "order": 3000,
+              "method": "PATCH",
+              "url": "{{Base}}/api/schools/:schoolId/destinations/:id",
+              "description": "Update a destination's name or max occupancy. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"name\": \"Updated Destination\"\n}"
+            },
+            {
+              "name": "Delete Destination",
+              "order": 4000,
+              "method": "DELETE",
+              "url": "{{Base}}/api/schools/:schoolId/destinations/:id",
+              "description": "Soft-delete a destination. Requires ADMIN or SUPER_ADMIN role. Returns 204 on success.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                },
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
+        {
+          "name": "Policy",
+          "order": 7000,
+          "endpoints": [
+            {
+              "name": "Get Policy",
+              "order": 1000,
+              "method": "GET",
+              "url": "{{Base}}/api/schools/:schoolId/policy",
+              "description": "Get the pass policy for a school. Returns 404 if no policy has been set. Requires school membership.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": null
+            },
+            {
+              "name": "Upsert Policy",
+              "order": 2000,
+              "method": "PUT",
+              "url": "{{Base}}/api/schools/:schoolId/policy",
+              "description": "Create or replace the pass policy for a school. All fields are optional — omitting them clears the policy. interval and maxPerInterval must both be set or both omitted. Requires ADMIN or SUPER_ADMIN role.",
+              "headers": [],
+              "pathVariables": [
+                {
+                  "key": "schoolId",
+                  "value": "1"
+                }
+              ],
+              "queryParams": [],
+              "body": "{\n  \"maxActivePasses\": 3,\n  \"interval\": \"DAY\",\n  \"maxPerInterval\": 5\n}"
+            }
+          ]
+        }
+      ],
+      "endpoints": []
+    },
+    {
       "name": "No group",
       "order": 9999,
       "baseUrls": {
         "Dev": "https://user-api-dev-509242588558.us-west1.run.app",
         "Prod": "https://user-api-509242588558.us-west1.run.app"
       },
+      "subgroups": null,
       "endpoints": [
         {
           "name": "Health",
