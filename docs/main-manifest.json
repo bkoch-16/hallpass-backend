@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-12T16:05:39.308Z",
+  "generatedAt": "2026-03-12T17:33:49.632Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "56bd13ebb356011da7d912273564eb41eebacbdd",
@@ -75,8 +75,8 @@
       "summary": "Keeps the `develop` branch in sync with `main` by automatically creating a merge PR after each push to `main`. First checks if `develop` already contains all of `main`'s commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a `--no-ff` merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires `contents: write` and `pull-requests: write` permissions."
     },
     "package.json": {
-      "blobSha": "59806c0b5fed61f97ec9b7a10750031df6d395d3",
-      "summary": "Root package.json for the 'hallpass-backend' monorepo managed with pnpm workspaces and Turborepo. Defines scripts for build, dev, lint, test, formatting, and demo generation/serving. Dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, tsx (for script execution), and turbo. The only production dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma."
+      "blobSha": "20a23dfbcbee475f8ecce29162ff22d5000b5b2b",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (using tsx to run a TypeScript script) and `demo:serve` for a demo UI. Uses Husky for git hooks and Prettier for formatting. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml utilities. The only runtime dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma, indicating the monorepo uses Prisma for database access."
     },
     ".github/workflows/demo.yml": {
       "blobSha": "c3533ff9d09af77146465207164d6f776a50cda8",

@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-03-12T16:05:39.308Z — 20 files indexed_
+_Generated: 2026-03-12T17:33:49.632Z — 20 files indexed_
 
 ## File Summaries
 
@@ -74,7 +74,7 @@ Docker Compose configuration defining three services: postgres (PostgreSQL 16 wi
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo managed with pnpm workspaces and Turborepo. Defines scripts for build, dev, lint, test, formatting, and demo generation/serving. Dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, tsx (for script execution), and turbo. The only production dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma.
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (using tsx to run a TypeScript script) and `demo:serve` for a demo UI. Uses Husky for git hooks and Prettier for formatting. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml utilities. The only runtime dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma, indicating the monorepo uses Prisma for database access.
 
 ### `packages/auth/src/index.ts`
 
