@@ -5,9 +5,8 @@
 let currentEndpoint = null;
 
 function getBaseUrl() {
-  const stage = document.getElementById('stage-select').value;
   const group = getSelectedGroup();
-  return group?.baseUrls?.[stage] ?? '';
+  return group?.baseUrls?.[CONFIG.stages[0]] ?? '';
 }
 
 function getSelectedGroup() {
@@ -47,8 +46,7 @@ async function fetchMe() {
       const data = await res.json();
       bar.classList.remove('unauthenticated');
       dot.classList.remove('grey');
-      const stage = document.getElementById('stage-select').value;
-      txt.textContent = [data.name, data.email, data.role, stage].filter(Boolean).join('  \u00b7  ');
+      txt.textContent = [data.name, data.email, data.role].filter(Boolean).join('  \u00b7  ');
     } else {
       bar.classList.add('unauthenticated');
       dot.classList.add('grey');
@@ -219,17 +217,6 @@ async function send() {
 // Populate selectors
 // ---------------------------------------------------------------------------
 
-function populateStageSelect() {
-  const sel = document.getElementById('stage-select');
-  CONFIG.stages.forEach((stage) => {
-    const opt = document.createElement('option');
-    opt.value = stage;
-    opt.textContent = stage;
-    sel.appendChild(opt);
-  });
-  if (CONFIG.stages.includes('Prod')) sel.value = 'Prod';
-}
-
 function populateGroupSelect() {
   const sel = document.getElementById('group-select');
   sel.innerHTML = '';
@@ -310,7 +297,6 @@ function initInfoPanel() {
 
 function init() {
   initInfoPanel();
-  populateStageSelect();
   const firstGroupIdx = populateGroupSelect();
   const firstGroup = CONFIG.groups[firstGroupIdx];
   populateSubgroupSelect(firstGroup);
@@ -318,8 +304,6 @@ function init() {
 
   const ep = getSelectedEndpoint();
   if (ep) renderEndpoint(ep);
-
-  document.getElementById('stage-select').addEventListener('change', fetchMe);
 
   document.getElementById('group-select').addEventListener('change', (e) => {
     const group = CONFIG.groups[parseInt(e.target.value, 10)];
