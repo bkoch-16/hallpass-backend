@@ -1,32 +1,32 @@
 # Codebase Context — main
 
-_Generated: 2026-03-07T22:55:29.584Z — 20 files indexed_
+_Generated: 2026-03-12T16:05:39.308Z — 20 files indexed_
 
 ## File Summaries
 
 ### `.github/workflows/demo.yml`
 
-GitHub Actions workflow that generates and deploys a demo UI to GitHub Pages. Triggered on pushes to `main` affecting Postman collections, the generation script, or demo-ui files, plus manual dispatch. Uses pnpm and Node 22 to install dependencies, runs `pnpm demo:generate` to produce static HTML, then deploys the `apps/demo-ui` directory to the `gh-pages` branch using the peaceiris/actions-gh-pages action. Requires write permissions on contents for the GitHub Pages deployment.
+GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Triggers on pushes to `main` when Postman collections, the demo generation script, or demo-ui app files change, plus manual dispatch. Uses pnpm with Node 22, runs `pnpm demo:generate` to build static HTML, then deploys the `apps/demo-ui` directory to the `gh-pages` branch via `peaceiris/actions-gh-pages`. Requires `contents: write` permission for pushing to the gh-pages branch.
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD workflow for the backend: runs validation (lint, build, test) on all pushes and PRs, then conditionally deploys to Google Cloud Run. Dev deploys trigger from the `develop` branch or manual dispatch with 'dev' environment; prod deploys trigger from `main`. Uses Docker Buildx with GitHub Actions cache for image builds, pushes to GCP Artifact Registry, and deploys via `google-github-actions/deploy-cloudrun`. Environment secrets (DB URL, auth secrets) are managed in GCP Secret Manager, not passed in the workflow. Requires `GCP_PROJECT_ID` and `GCP_SA_KEY` repository secrets.
+Primary CI/CD workflow for the backend monorepo, handling validation (lint, build, test) and deployment of `user-api` and `schools-api` services to Google Cloud Run. Triggers on pushes to `main` (prod) and `develop` (dev), pull requests (validate only), and manual dispatch with environment selection. The `validate` job uses dummy environment variables since tests mock `@hallpass/db` but env validation still requires them; it generates the Prisma client before linting/building/testing. Deployment jobs build Docker images with Buildx + GHA caching, push to GCP Artifact Registry (`us-west1`), and deploy to Cloud Run — environment variables and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow. Depends on `GCP_SA_KEY` and `GCP_PROJECT_ID` repository secrets.
 
 ### `.github/workflows/index-codebase.yml`
 
-GitHub Actions workflow that generates a codebase context/index document on pushes to `develop` or `main` (or via manual dispatch). It checks out the target branch, installs pnpm/Node dependencies, restores a previous manifest from the orphan `docs/index` branch for incremental updates, then runs `scripts/index-codebase.ts` using the Anthropic API. The generated docs are committed and pushed to the `docs/index` branch (not the source branch) with `[skip ci]` to avoid retriggering. Uses `concurrency` with `cancel-in-progress: false` to serialize indexing runs, and requires the `ANTHROPIC_API_KEY` secret.
+Automated codebase indexing workflow that generates AI context documents by running `scripts/index-codebase.ts` with the Anthropic API. Triggers on pushes to `develop`/`main` or manual dispatch with branch selection; uses a concurrency group (`docs-index`) with `cancel-in-progress: false` to serialize runs. It restores a previous manifest from the `docs/index` orphan branch to enable incremental indexing, then pushes updated docs back to that branch with `[skip ci]` commits. Requires the `ANTHROPIC_API_KEY` secret and `contents: write` permission; the branch slug is derived from the ref name to support per-branch context documents.
 
 ### `.github/workflows/review-pr.yml`
 
-GitHub Actions workflow that performs AI-powered PR reviews using Claude (Anthropic API) on pull requests targeting `develop` or `main`. It is gated to only run for the user `bkoch-16` and generates a diff against the PR base, fetches a pre-built context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review output is submitted via `gh pr review` as an approval, change request, or comment depending on whether the review body starts with 'Ship it' or 'Request changes'. Supports manual dispatch by PR number and disables Husky git hooks via the `HUSKY=0` env var.
+AI-powered pull request review workflow using Claude (Anthropic API) that runs on PR events targeting `develop` or `main`, or via manual dispatch with a PR number. Restricted to PRs authored by `bkoch-16` and excludes bot-triggered events. Generates a unified diff (with 20 lines of context) against the base branch, fetches the codebase context document from the `docs/index` branch, then runs `scripts/review-pr.ts` to produce a review. The review is submitted as an approval, change request, or comment based on whether the output starts with "Ship it" or "Request changes". Requires `ANTHROPIC_API_KEY` secret and `pull-requests: write` permission.
 
 ### `.github/workflows/sync-develop.yml`
 
-GitHub Actions workflow that keeps the `develop` branch in sync with `main` after every push to `main` (or via manual dispatch). It checks if `develop` already contains all of `main`'s commits (early exit if so), then creates/updates a `sync/main-to-develop` branch by merging `main` into `develop` with `--no-ff`. If a merge conflict occurs, it aborts and posts a comment on the originating PR or commit notifying about the conflict. If the merge succeeds and produces differences, it opens (or reuses) a PR targeting `develop` for human review, using `--force-with-lease` to update the sync branch.
+Keeps the `develop` branch in sync with `main` by automatically creating a merge PR after each push to `main`. First checks if `develop` already contains all of `main`'s commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a `--no-ff` merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires `contents: write` and `pull-requests: write` permissions.
 
 ### `apps/user-api/Dockerfile`
 
-Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm 10. It uses a layer-caching strategy by copying package manifests first, then source code, to avoid busting the dependency install layer on code-only changes. After installing dependencies, it generates the Prisma client (using a dummy DATABASE_URL since generate doesn't connect to a DB) and builds internal packages in dependency order (@hallpass/db → auth → logger → user-api). The entrypoint is a custom shell script (`docker-entrypoint.sh`), and the service listens on port 3001. Developers modifying this file should ensure any new workspace packages have their package.json copied in the manifest layer and are added to the build chain.
+Multi-stage-style Dockerfile for the user-api Express service, based on node:22-alpine with pnpm@10. It copies package manifests first for Docker layer caching, runs `pnpm install --frozen-lockfile`, then copies source code and generates the Prisma client with a dummy DATABASE_URL. Builds all dependent workspace packages (@hallpass/db, auth, logger, types) before building the user-api itself. Uses a custom docker-entrypoint.sh script and exposes port 3001.
 
 ### `apps/user-api/src/app.ts`
 
@@ -42,7 +42,7 @@ Validates and exports typed environment variables using a Zod schema. Required v
 
 ### `apps/user-api/src/express.d.ts`
 
-Augments the global Express `Request` interface to include an optional `user` property, typed to match the Prisma `User` model fields (id, email, name, emailVerified, role, createdAt, updatedAt). The `role` field uses the `Role` enum imported from `@hallpass/db`. This declaration enables type-safe access to `req.user` throughout middleware and route handlers without casting.
+TypeScript declaration file that augments the Express `Request` interface to include an optional `user` property. The user object contains id, email, name, emailVerified, role (using the UserRole type from @hallpass/types), schoolId, createdAt, and updatedAt fields. This enables type-safe access to `req.user` throughout the user-api middleware and route handlers after authentication.
 
 ### `apps/user-api/src/index.ts`
 
@@ -50,11 +50,11 @@ Entry point for the user-api service. Loads environment variables via `dotenv/co
 
 ### `apps/user-api/src/middleware/auth.ts`
 
-Exports `requireAuth`, an Express middleware that validates the session by calling Better Auth's `getSession` API with converted Node headers. On success, it fetches the full user record from Prisma (excluding soft-deleted users) and attaches it to `req.user`. Returns 401 if the session is invalid, missing, or the user is not found/deleted. Must be applied before any role-checking middleware since they depend on `req.user`.
+Express middleware (`requireAuth`) that validates the user's session using better-auth's `getSession` API with Node headers conversion. It extracts the user ID from the session, verifies it's a valid positive integer, then fetches the full user record from Prisma (excluding soft-deleted users). On success, it attaches the user object to `req.user`; on any failure, it returns a 401 Unauthorized response.
 
 ### `apps/user-api/src/middleware/roleGuard.ts`
 
-Provides role-based authorization middleware and utilities. Defines a `ROLE_RANK` hierarchy (STUDENT=0 through SERVICE=4) and exports `roleRank()` for numeric comparison. `requireRole(...roles)` restricts access to users with any of the specified roles. `requireSelfOrRole(...roles)` additionally allows access when `req.params.id` matches the authenticated user's ID. All guards depend on `req.user` being set by `requireAuth` and return 401/403 as appropriate.
+Express middleware factories for role-based access control. Exports `requireRole(...roles)` which checks if `req.user.role` is in the allowed list, and `requireSelfOrRole(...roles)` which additionally permits access if the request's `:id` param matches the authenticated user's ID. Also exports a `roleRank` function that maps UserRole to a numeric hierarchy (STUDENT=0 through SERVICE=4), used elsewhere for privilege escalation checks.
 
 ### `apps/user-api/src/middleware/validate.ts`
 
@@ -62,24 +62,24 @@ Express middleware factory functions for validating request query parameters, bo
 
 ### `apps/user-api/src/routes/user.ts`
 
-Comprehensive Express router handling all user CRUD operations: GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (create), POST /bulk (bulk create up to 100), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces role-based access control using `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role rank checks preventing privilege escalation. Uses Prisma for database operations and Zod validation middleware for all inputs. Developers should note the soft-delete pattern and that bulk create uses `Promise.allSettled` for partial-failure tolerance.
+Express router implementing full CRUD for users with cursor-based pagination. Endpoints include GET /me, GET / (list with optional ids filter), GET /:id, POST / (create), POST /bulk (batch create up to 100), PATCH /:id (update), and DELETE /:id (soft delete). Enforces role-based access control throughout — SUPER_ADMIN sees all schools, others are scoped to their schoolId. Includes privilege escalation prevention via roleRank checks, Prisma unique constraint error handling (P2002/P2003), and returns typed responses (UserResponse, CursorPage, BulkUserResult from @hallpass/types).
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with coerced numeric limit and defaults), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field via `.refine`). Role values are constrained to the enum `['STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN']`. These schemas are consumed by the validation middleware in the user routes.
+Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (validates route param as numeric string), `listUsersSchema` (role filter, cursor pagination, ids filter, limit with default 50), `createUserSchema` (email, name required, optional role from ASSIGNABLE_ROLES), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId support). All role fields are validated against ASSIGNABLE_ROLES from @hallpass/types.
 
 ### `docker-compose.yml`
 
-Defines local development services: a PostgreSQL 16 (Alpine) database and the `user-api` application container. Postgres is configured with default credentials (postgres/postgres), persists data via a named volume, and includes a health check. The `user-api` service builds from a Dockerfile at `apps/user-api/Dockerfile` with the repo root as build context, exposes port 3001, and injects environment variables including `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CORS_ORIGIN` (with sensible defaults). The API depends on Postgres being healthy before starting.
+Docker Compose configuration defining three services: postgres (PostgreSQL 16 with health checks and persistent volume), user-api (port 3001), and schools-api (port 3002). Both API services depend on postgres being healthy and share the same DATABASE_URL pattern pointing to the postgres service. Environment variables like BETTER_AUTH_SECRET, BETTER_AUTH_URL, and CORS_ORIGIN are configurable via .env with sensible defaults for local development.
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, and tsx for script execution. The only production dependency at the root is `@anthropic-ai/sdk`. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines and esbuild. Developers should use `pnpm` exclusively and run tasks via `turbo` commands; `demo:generate` runs a standalone script for demo UI generation.
+Root package.json for the 'hallpass-backend' monorepo managed with pnpm workspaces and Turborepo. Defines scripts for build, dev, lint, test, formatting, and demo generation/serving. Dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, tsx (for script execution), and turbo. The only production dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma.
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package that wraps BetterAuth with project-specific configuration. The `createAuth` factory configures BetterAuth with a Prisma adapter (PostgreSQL), email/password auth, 7-day sessions with daily refresh, and conditional secure cookie settings for HTTPS deployments. Exports the `createAuth` function, `Auth` and `Session` types (inferred from BetterAuth), and re-exports `toNodeHandler` and `fromNodeHeaders` utilities for Node.js/Express integration. Depends on `@hallpass/db` for the shared Prisma client instance.
+Factory module that creates and configures a better-auth instance via `createAuth()`. Uses Prisma adapter with PostgreSQL, enables email/password authentication, configures serial ID generation, and sets session expiry to 7 days with daily refresh. Automatically enables secure SameSite=none cookies for HTTPS base URLs. Exports the `createAuth` function, inferred `Auth` and `Session` types, plus `toNodeHandler` and `fromNodeHeaders` utilities for Express integration.
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the PostgreSQL database schema using Prisma ORM for the HallPass application. Contains a `Role` enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and three models: `User` (with soft-delete via `deletedAt`), `Session` (token-based with IP/user-agent tracking), and `Account` (multi-provider auth with optional password). Both Session and Account cascade-delete when their parent User is removed. Uses `cuid()` for all primary keys and includes standard `createdAt`/`updatedAt` timestamps. Developers adding models or fields must run Prisma migrations to keep the database in sync.
+Prisma schema defining the PostgreSQL data model for the HallPass application. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, Account, ScheduleType, Period, SchoolCalendar, Destination, and PassPolicy. Users have soft-delete support (deletedAt), sessions use CUID IDs with cascade deletes, and schools have a one-to-one PassPolicy relationship. Key conventions include autoincrement integer IDs for District/School/User and CUID string IDs for other models, with composite unique constraints on SchoolCalendar (schoolId, date).
