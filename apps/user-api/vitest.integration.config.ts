@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    fileParallelism: false,
     root: ".",
     include: ["tests/integration/**/*.test.ts"],
     globalSetup: ["./tests/setup/integration-global.ts"],

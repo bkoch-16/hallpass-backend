@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{Base}}/api/schools"
+method: POST
+description: Create a new school. Requires SUPER_ADMIN role.
+body:
+  type: json
+  content: |-
+    {
+      "name": "Demo High School",
+      "timezone": "America/Los_Angeles",
+      "districtId": 1
+    }
+order: 2000

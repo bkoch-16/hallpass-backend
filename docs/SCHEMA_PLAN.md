@@ -13,31 +13,82 @@ Every user belongs to exactly one school. Nullable to allow SUPER_ADMIN users wh
 ```prisma
 model User {
   // ...existing fields...
-  schoolId  String?
+  schoolId  Int?
   deletedAt DateTime? // soft delete — deleted users cannot authenticate; set by DELETE /users/:id
 
-  school          School?  @relation(fields: [schoolId], references: [id])
-  passes          Pass[]   @relation("StudentPasses")
-  requestedPasses Pass[]   @relation("RequestedPasses")
-  approvedPasses  Pass[]   @relation("ApprovedPasses")
-  deniedPasses    Pass[]   @relation("DeniedPasses")
-  cancelledPasses Pass[]   @relation("CancelledPasses")
+  school          School?   @relation(fields: [schoolId], references: [id])
+  passes          Pass[]    @relation("StudentPasses")
+  requestedPasses Pass[]    @relation("RequestedPasses")
+  approvedPasses  Pass[]    @relation("ApprovedPasses")
+  deniedPasses    Pass[]    @relation("DeniedPasses")
+  cancelledPasses Pass[]    @relation("CancelledPasses")
+  // adminAccess  AdminAccess[] — future
 }
 ```
+
+### `District`
+
+A named group of schools.
+
+```prisma
+model District {
+  id        Int       @id @default(autoincrement())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  schools     School[]
+  // adminAccess AdminAccess[] — future
+}
+```
+
+### `AdminAccess` (future — not yet implemented)
+
+A join table that grants a SUPER_ADMIN (or eventually ADMIN) explicit access to a specific school or an entire district. Replaces the previously planned `districtId`-on-`User` approach, which only supported a single district scope per user.
+
+```prisma
+// Future — not yet implemented
+model AdminAccess {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  schoolId   Int?     // null if scoped to a full district
+  districtId Int?     // null if scoped to a single school
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id])
+  school   School?   @relation(fields: [schoolId], references: [id])
+  district District? @relation(fields: [districtId], references: [id])
+
+  @@index([userId])
+}
+```
+
+**Access rules (future):**
+- A SUPER_ADMIN with **no** `AdminAccess` rows is platform-wide — no restriction, can act on any school.
+- A SUPER_ADMIN with one or more rows is restricted to only the listed schools/districts.
+- A row with `districtId` set grants access to all schools belonging to that district.
+- A row with `schoolId` set grants access to that individual school only.
+- A user may have multiple rows (e.g. two districts plus one standalone school).
+
+**Future ADMIN use:** This same table can eventually allow an ADMIN to manage more than one school, replacing the current hard single-school scope derived from `User.schoolId`. Until then, ADMINs remain single-school and this table is SUPER_ADMIN-only.
 
 ### `School`
 
 ```prisma
 model School {
-  id        String    @id @default(cuid())
-  name      String
-  timezone  String    @default("America/Los_Angeles")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id         Int       @id @default(autoincrement())
+  name       String
+  timezone   String    @default("America/Los_Angeles")
+  districtId Int?      // optional — schools may belong to a district
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
+  district      District?
   users         User[]
   scheduleTypes ScheduleType[]
+  // adminAccess AdminAccess[] — future
   calendar      SchoolCalendar[]
   destinations  Destination[]
   passes        Pass[]
@@ -271,7 +322,7 @@ Indexes are defined inline above on each model. Summary of rationale:
 - `Destination(schoolId)` — list destinations for school
 - `ScheduleType(schoolId)` — list schedule types for school
 
-The `slots:school` and `slots:destination` Redis counters avoid `COUNT(*)` queries for concurrent slot tracking at request time. The `maxPerInterval` limit is intentionally kept as a direct DB `COUNT(*)` — pass requests are infrequent enough that an indexed query is acceptable and avoids stale-counter risk. The indexes above back both the cold-start counter initialization queries and the `maxPerInterval` interval count query.
+The `slots:school` and `slots:destination` Redis counters serve as a fast-path pessimistic guard — they are checked first and avoid a `COUNT(*)` query in the common case. Counters are initialized lazily by passes-api on first use (see **Counter initialization** under the Redis section). When a counter reads `0`, the API falls back to a single indexed `COUNT(*)` query before rejecting; if the DB shows capacity is available, the stale counter is immediately corrected and the request proceeds (see **Self-Healing** under the Redis section). The `maxPerInterval` limit is intentionally kept as a direct DB `COUNT(*)` — pass requests are infrequent enough that an indexed query is acceptable and avoids stale-counter risk. The indexes above back both the lazy-init counter initialization queries and the `maxPerInterval` interval count query.
 
 ---
 
@@ -307,37 +358,40 @@ The `slots:school` and `slots:destination` Redis counters avoid `COUNT(*)` queri
 | Method | Route | Auth | Notes |
 |---|---|---|---|
 | GET | `/users/me` | authenticated | Returns `req.user` (set by `requireAuth`). Used by all clients on load. |
-| GET | `/users` | TEACHER+ | Cursor-paginated (`?cursor=<lastId>&limit=50`, max 100). Filterable by `?role=`. `?ids=a,b,c` fetches specific users (replaces the former `/users/batch` endpoint, max 100). Scoping to `schoolId` is **not yet implemented** — `schoolId` does not exist in the schema. |
+| GET | `/users` | TEACHER+ | Cursor-paginated (`?cursor=<lastId>&limit=50`, max 100). Filterable by `?role=`. `?ids=a,b,c` fetches specific users (replaces the former `/users/batch` endpoint, max 100). Results are scoped to `req.user.schoolId`. |
 | POST | `/users` | ADMIN+ | Create single user. Role hierarchy enforced: cannot create a user with a role higher than your own. |
 | POST | `/users/bulk` | ADMIN+ | Bulk create for school onboarding. Accepts array (max 100). Per-user role hierarchy enforced. Returns `{ created: N, failed: [{ index, email, error }] }`. HTTP 200 on partial success, 400 if all fail. |
 | GET | `/users/:id` | self or TEACHER+ | Fetch single user. Returns select fields only (no `deletedAt`, `emailVerified`). |
-| PATCH | `/users/:id` | self or ADMIN+ | Update name, email, or role. Self (non-admin) may only update name — email and role changes require ADMIN+. Role elevation above caller's own rank is blocked (403). `schoolId` change is **not yet implemented** — field does not exist in schema. |
+| PATCH | `/users/:id` | self or ADMIN+ | Update name, email, or role. Self (non-admin) may only update name — email and role changes require ADMIN+. Role elevation above caller's own rank is blocked (403). `schoolId` changes are restricted to SUPER_ADMIN only. |
 | DELETE | `/users/:id` | ADMIN+ | Soft delete (sets `deletedAt`). Cannot delete a user of equal or higher rank. Self-delete is blocked. |
 
-**Not yet implemented (pending `schoolId` migration):**
-- `GET /users` scoping to `req.user.schoolId`
-- `SUPER_ADMIN` explicit `?schoolId=` override on list endpoint
-- `PATCH /users/:id` restriction on `schoolId` changes to SUPER_ADMIN only
+### `apps/schools-api` — District routes
 
-### `apps/schools-api`
+| Method | Route | Auth | Notes |
+|---|---|---|---|
+| GET | `/districts` | SUPER_ADMIN | List all districts. |
+| POST | `/districts` | SUPER_ADMIN | Create a district. |
+| GET/PATCH/DELETE | `/districts/:id` | SUPER_ADMIN | |
+
+### `apps/schools-api` — School routes
 
 Covers schools, schedule types, periods, calendar, and destinations.
 
 | Method | Route | Auth | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |---|---|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| GET | `/schools` | ADMIN+ |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| GET | `/schools` | SUPER_ADMIN |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | POST | `/schools` | SUPER_ADMIN |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| GET/PATCH/DELETE | `/schools/:id` | ADMIN+ / SUPER_ADMIN write |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| GET/PATCH/DELETE | `/schools/:id` | SUPER_ADMIN |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | GET/POST | `/schools/:schoolId/schedule-types` | GET: authenticated; POST: ADMIN+ |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | PATCH/DELETE | `/schools/:schoolId/schedule-types/:id` | ADMIN+ | Hard DELETE is blocked by FK if any SchoolCalendar entry references this ScheduleType. Soft DELETE is allowed — marks the type as deprecated. New calendar entries are blocked from referencing a soft-deleted type at the application layer. Existing calendar entries that reference a soft-deleted type are treated as a configuration error at schedule resolution time: log and return a 422 so the admin can reassign those dates.    |
 | GET/POST | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods` | GET: authenticated; POST: ADMIN+ |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | PATCH/DELETE | `/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id` | ADMIN+ | If `startTime` or `endTime` changes, the BullMQ expiry job for that period was scheduled against the old time. The corrected job is upserted at the next Cloud Scheduler run (up to 12 hours away) — reschedule at time of change to get around this.                                                                                                                                                                                       |
 | GET/POST | `/schools/:schoolId/calendar` | GET: authenticated; POST: ADMIN+ | POST accepts a single `CalendarEntry` or an array for bulk import. Upserts on `(schoolId, date)` — idempotent. Returns `{ created: N, updated: N }`. A full academic year is ~180 entries; bulk is required for school setup.                                                                                                                                                                                                               |
 | PATCH/DELETE | `/schools/:schoolId/calendar/:id` | ADMIN+ |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | On POST, if `maxOccupancy` is set, immediately initialize `slots:destination:{destinationId}` to `maxOccupancy` — do not wait for cold start. Without this, the cap is silently bypassed until the next service restart.                                                                                                                                                                                                                    |
-| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | If `maxOccupancy` changes, delete and re-initialize `slots:destination:{destinationId}` using the same distributed lock pattern as cold start. If `maxOccupancy` is removed (set to null), delete the key entirely. On soft DELETE, immediately expire all WAITING passes for that destination — they will never be promoted since approvals to a deleted destination are blocked, and waiting for period-end expiry leaves students stuck. |
-| GET | `/schools/:schoolId/policy` | authenticated | Returns the school's PassPolicy, or 404 if none set                                                                                                                                                                                                                                                                                                                                                                                         |
-| PUT | `/schools/:schoolId/policy` | ADMIN+ | Create or replace policy (upsert on `schoolId`). On first creation or update of `maxActivePasses`, immediately initialize `slots:school:{schoolId}` — do not wait for cold start. On subsequent update, delete and re-initialize using the distributed lock pattern. If `maxActivePasses` is removed, delete the key entirely.                                                                                                              |
+| GET/POST | `/schools/:schoolId/destinations` | GET: authenticated; POST: ADMIN+ | |
+| PATCH/DELETE | `/schools/:schoolId/destinations/:id` | ADMIN+ | On soft DELETE, immediately expire all WAITING passes for that destination — they will never be promoted since approvals to a deleted destination are blocked, and waiting for period-end expiry leaves students stuck. |
+| GET | `/schools/:schoolId/policy` | authenticated | Returns the school's PassPolicy, or 404 if none set |
+| PUT | `/schools/:schoolId/policy` | ADMIN+ | Create or replace policy (upsert on `schoolId`). |
 
 ### `apps/passes-api`
 
@@ -372,9 +426,34 @@ Serverless Redis — matches the Cloud Run + Neon zero-scale model.
 - Counters are decremented when a pass moves to `ACTIVE`
 - Counters are incremented only when an `ACTIVE` pass reaches `COMPLETED` — `EXPIRED` only applies to `PENDING`/`WAITING` passes which never held a slot, so they never affect counters
 - Counters are initialized from DB on service cold start using a distributed lock (see below)
+- Counters are **pessimistic**: a value of `0` means "assume full — verify before rejecting" (see Self-Healing below)
 - `slots:school` only tracked if `PassPolicy.maxActivePasses` is set; `slots:destination` only tracked if `Destination.maxOccupancy` is set
 
-**Policy changes require counter re-sync.** If `PassPolicy.maxActivePasses` is updated mid-day, the `slots:school:{schoolId}` counter is stale. The `PUT /schools/:schoolId/policy` endpoint must delete and re-initialize `slots:school:{schoolId}` using the same distributed lock pattern as cold start. Failure to do this leaves WAITING passes stranded until next cold start. If `maxActivePasses` is removed (set to null), delete `slots:school:{schoolId}` entirely — the school no longer has a cap and the key must not linger with a stale value.
+**Counter initialization — lazy / on-demand (passes-api only):**
+
+Slot counters are **not** pre-initialized by `schools-api`. `passes-api` initializes them lazily on first use. A missing key does **not** mean unlimited — before treating a missing counter as "no cap", passes-api checks the DB:
+
+```ts
+// Before claiming a school slot:
+const schoolKey = `slots:school:${schoolId}`;
+const schoolVal = await redis.get(schoolKey);
+if (schoolVal === null) {
+  const policy = await prisma.passPolicy.findUnique({ where: { schoolId } });
+  if (policy?.maxActivePasses != null) {
+    const active = await prisma.pass.count({ where: { schoolId, status: 'ACTIVE' } });
+    const available = policy.maxActivePasses - active;
+    await redis.set(schoolKey, available);
+    // proceed with slot check using `available`
+  }
+  // else: no policy / no cap → unlimited, proceed
+}
+
+// Same pattern for slots:destination:{destinationId}
+```
+
+This preserves the cap guarantee with at most one extra DB lookup + `SET` per cold-start or first-use after a cap is configured.
+
+**Policy/occupancy changes and stale counters:** When `maxActivePasses` or `maxOccupancy` changes mid-day, the existing counter becomes stale. The lazy-init path will not fix this until the key expires or is deleted. The Janitor (see below) re-computes all counters nightly and corrects drift. For immediate mid-day corrections, passes-api's self-healing reconciliation (see Self-Healing below) detects a `0` counter that doesn't match DB and overwrites it inline.
 
 **Cold-start counter initialization (distributed lock):**
 
@@ -386,40 +465,58 @@ Cloud Run scales horizontally — multiple instances can cold-start simultaneous
 
 This ensures exactly one instance writes counters per school per cold-start event.
 
+**Self-Healing (Eager Reconciliation):**
+
+Redis counters can become stale (e.g. after a crash between decrementing and completing promotion, or after a missed increment on COMPLETED). Rather than relying solely on cold-start re-initialization, the API self-corrects inline when a counter is found to be stale.
+
+When a slot check returns `0` (school or destination):
+1. Run a single indexed DB query: `COUNT(*) WHERE status = 'ACTIVE' AND schoolId/destinationId = X`
+2. Compute the true available slots: `max - activeCount`
+3. If `trueAvailable > 0`: the counter was stale
+   - Set the Redis counter to `trueAvailable` using `SET key trueAvailable XX` (the `XX` flag only updates if the key already exists — avoids resurrecting an intentionally-deleted key, e.g. when `maxActivePasses` is removed)
+   - Proceed as if the slot was available (decrement and continue)
+4. If `trueAvailable <= 0`: genuinely full — continue to WAITING as normal
+
+This reconciliation happens **before** returning the response, so the corrected counter is live for the very next request. No additional round-trip is paid in the common path (counter > 0).
+
 **Queue promotion on slot freed:**
 
-When any slot frees (school or destination), promote the next in line. The check-and-decrement is wrapped in a **Redis Lua script** to be fully atomic — without this, two concurrent slot-free events would both see `> 0` and double-promote (TOCTOU race):
+When any slot frees (school or destination), promote the next in line. Each counter is decremented independently using atomic Redis `DECR`.
 
-```lua
--- Called once per WAITING candidate. Returns:
---   1  = promoted (both slots available and decremented)
---   0  = school slot exhausted — stop all promotion
---  -1  = destination slot exhausted — skip this destination, try next
--- nil means that slot type is unlimited (not tracked) — treated as always available.
-local school = tonumber(redis.call('GET', KEYS[1]))  -- slots:school:{schoolId}
-local dest   = tonumber(redis.call('GET', KEYS[2]))  -- slots:destination:{destinationId}
-if (school == nil or school > 0) and (dest == nil or dest > 0) then
-  if school ~= nil then redis.call('DECR', KEYS[1]) end
-  if dest   ~= nil then redis.call('DECR', KEYS[2]) end
-  return 1
-end
-if school ~= nil and school <= 0 then return 0 end  -- school exhausted
-return -1  -- destination exhausted
-```
+**DECR-based slot claim (per counter):**
+1. `DECR slots:school:{schoolId}` → capture returned value
+   - If result `≥ 0`: slot claimed, proceed
+   - If result `< 0`: over-decremented — `INCR` it back, run DB fallback (see Self-Healing above)
+     - If DB shows `trueAvailable > 0`: reconcile counter, retry `DECR` once
+     - If DB confirms school is full: abort promotion entirely
+   - If key does not exist (unlimited): skip this step
+2. Repeat for `slots:destination:{destinationId}` (if tracked):
+   - Same DECR → check → rollback pattern
+   - If destination is full and school slot was already claimed: `INCR` school slot back (rollback), skip this destination, continue to next
+
+`DECR` is a single atomic Redis command — no race condition within a single counter. The only exposure is the gap between decrementing school and decrementing destination; if that window causes over-decrement on destination, the per-counter rollback corrects it.
 
 Promotion loop (destination-grouped — prevents a full destination from starving passes going elsewhere):
 1. Query all distinct `destinationId`s that have WAITING passes for this school
-2. For each destination, check `slots:destination:{destinationId}` — skip if tracked and `= 0`
-3. For each eligible destination, find the oldest WAITING pass (`ORDER BY createdAt ASC LIMIT 1` using `Pass(destinationId, status, createdAt)` index)
-4. Execute the Lua script for that candidate:
-   - Return `1`: promote (set `ACTIVE`, set `issuedAt`, emit `pass:approved`), stop
-   - Return `0`: school slot exhausted (raced by concurrent promoter) — stop entirely, no point trying other destinations
-   - Return `-1`: destination slot raced to 0 since step 2 — skip this destination, continue to next
-5. If no destination had a promotable candidate: no-op
+2. Check school capacity first:
+   - Read `slots:school:{schoolId}` — if `≤ 0`: DB fallback; if DB confirms full, stop entirely
+   - If key absent (unlimited): proceed
+3. For each destination:
+   - Read `slots:destination:{destinationId}` — if `≤ 0`: DB fallback; if DB confirms full, skip this destination
+   - Find the oldest WAITING pass (`ORDER BY createdAt ASC LIMIT 1` using `Pass(destinationId, status, createdAt)` index)
+   - Claim school slot: `DECR slots:school:{schoolId}` — if result `< 0`: `INCR` back, DB fallback (full → stop; stale → reconcile + retry)
+   - Claim destination slot: `DECR slots:destination:{destinationId}` — if result `< 0`: `INCR` dest back, `INCR` school back, DB fallback (full → skip; stale → reconcile + retry)
+   - Both slots claimed: promote pass in DB (set `ACTIVE`, set `issuedAt`, emit `pass:approved`), stop
+4. If no destination had a promotable candidate: no-op
 
-**Trigger:** Promotion runs as a non-blocking async call immediately after the handler responds — not a BullMQ job. The handler updates pass status and returns 200; promotion runs in the background. This keeps the response fast while promotion (typically 1–2 Lua calls) completes asynchronously.
+**Trigger:** Promotion runs as a non-blocking async call immediately after the handler responds — not a BullMQ job. The handler updates pass status and returns 200; promotion runs in the background. This keeps the response fast while promotion (typically 1–2 DECR calls) completes asynchronously.
 
-**Crash recovery:** If the process crashes between decrementing the slot counter and completing promotion, the counter shows available slots with no corresponding ACTIVE pass. Cold-start counter initialization (which recomputes from DB) corrects this on next restart. WAITING passes are not permanently stranded — the next slot-free event retries promotion, and period-end expiry clears any remaining WAITING passes at period end.
+**Crash recovery and the Janitor process:**
+
+If the process crashes between decrementing a slot counter and completing promotion, the counter shows available slots with no corresponding ACTIVE pass. This is corrected by two mechanisms:
+
+- **Eager reconciliation (primary):** The next request that triggers a `0`-counter check will detect the discrepancy via the DB fallback and self-correct before returning. No manual intervention needed.
+- **Janitor (fail-safe):** A background periodic job (e.g. nightly or every 15 minutes) re-computes `slots:school:{schoolId}` and `slots:destination:{destinationId}` from DB for all schools and overwrites stale values. The Janitor is not relied upon for correctness during normal operation — it is a safety net that catches any anomalies that slipped through (e.g. a key that was never triggered again before the counter drifted). WAITING passes are never permanently stranded: the next slot-free event retries promotion, and period-end expiry clears remaining WAITING passes at period end.
 
 ---
 
@@ -482,7 +579,7 @@ For each completed pass: update DB to `COMPLETED`, set `returnedAt`, emit `pass:
 
 All users — STUDENT, TEACHER, ADMIN — are strictly scoped to their own school. Every query across every API is automatically filtered to `req.user.schoolId`. Passing a different `schoolId` in params, query, or body is ignored; the value from the authenticated user is always used.
 
-SUPER_ADMINs are the only role exempt from this — they may pass `schoolId` explicitly to act across schools.
+SUPER_ADMINs are the only role exempt from school scoping — they have no school restriction and can act on any school. When district-level scoping is implemented, it will use a separate `AdminAccess` table (see schema above) rather than a `districtId` field on `User` — this allows both district-level and individual-school grants, and can extend to multi-school ADMIN access in the future.
 
 ---
 

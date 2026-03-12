@@ -11,7 +11,8 @@
     "test": "turbo test",
     "test:integration": "turbo test:integration",
     "prepare": "husky",
-    "demo:generate": "tsx scripts/generate-demo.ts"
+    "demo:generate": "tsx scripts/generate-demo.ts",
+    "demo:serve": "npx serve apps/demo-ui"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

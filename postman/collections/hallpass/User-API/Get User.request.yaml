@@ -1,9 +1,8 @@
 $kind: http-request
-name: Get User
 url: "{{Base}}/api/users/:id"
 method: GET
 description: Get a single user by ID. Users can fetch their own profile; TEACHER role or higher can fetch any user.
 pathVariables:
   - key: id
-    value: cmmdth7vq0000k50msye6albt
+    value: "1"
 order: 2000

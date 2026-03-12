@@ -97,6 +97,27 @@ describe("updateUserSchema", () => {
     const r = updateUserSchema.safeParse({ role: "GOD" });
     expect(r.success).toBe(false);
   });
+
+  it("accepts schoolId as a valid positive integer", () => {
+    const r = updateUserSchema.safeParse({ schoolId: 1 });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts schoolId as null", () => {
+    const r = updateUserSchema.safeParse({ schoolId: null });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects schoolId with invalid format (non-integer string)", () => {
+    const r = updateUserSchema.safeParse({ schoolId: "school-1" });
+    expect(r.success).toBe(false);
+  });
+
+  it("schoolId alone satisfies the at-least-one-field requirement", () => {
+    const r = updateUserSchema.safeParse({ schoolId: 1 });
+    expect(r.success).toBe(true);
+  });
+
 });
 
 describe("listUsersSchema", () => {
@@ -137,9 +158,14 @@ describe("listUsersSchema", () => {
     expect(r.data?.limit).toBe(50);
   });
 
-  it("accepts cursor and ids as strings", () => {
-    const r = listUsersSchema.safeParse({ cursor: "some-id", ids: "a,b,c" });
+  it("accepts numeric cursor and ids as strings", () => {
+    const r = listUsersSchema.safeParse({ cursor: "42", ids: "1,2,3" });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects non-numeric cursor", () => {
+    const r = listUsersSchema.safeParse({ cursor: "some-id" });
+    expect(r.success).toBe(false);
   });
 });
 
@@ -182,9 +208,14 @@ describe("bulkCreateSchema", () => {
 });
 
 describe("userIdSchema", () => {
-  it("accepts valid id", () => {
-    const r = userIdSchema.safeParse({ id: "user-123" });
+  it("accepts valid numeric id", () => {
+    const r = userIdSchema.safeParse({ id: "123" });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects non-numeric id", () => {
+    const r = userIdSchema.safeParse({ id: "user-123" });
+    expect(r.success).toBe(false);
   });
 
   it("rejects empty id", () => {

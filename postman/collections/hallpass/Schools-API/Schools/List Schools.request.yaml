@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{Base}}/api/schools"
+method: GET
+description: Cursor-paginated list of all schools. Requires SUPER_ADMIN role.
+queryParams:
+  - key: cursor
+    value: ""
+  - key: limit
+    value: "50"
+order: 1000

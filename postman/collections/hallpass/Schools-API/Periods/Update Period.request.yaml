@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods/:id"
+method: PATCH
+description: Update a period's name, times, or order. Requires ADMIN or SUPER_ADMIN role.
+pathVariables:
+  - key: schoolId
+    value: "1"
+  - key: scheduleTypeId
+    value: ""
+  - key: id
+    value: ""
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated Period Name"
+    }
+order: 3000

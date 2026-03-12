@@ -14,18 +14,21 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
     emailAndPassword: {
       enabled: true,
     },
-    session: {
-      expiresIn: 60 * 60 * 24 * 7,
-      updateAge: 60 * 60 * 24,
-    },
-    ...(config.baseURL.startsWith("https://") && {
-      advanced: {
+    advanced: {
+      database: {
+        generateId: "serial",
+      },
+      ...(config.baseURL.startsWith("https://") && {
         defaultCookieAttributes: {
           sameSite: "none",
           secure: true,
         },
-      },
-    }),
+      }),
+    },
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+    },
   });
 }
 

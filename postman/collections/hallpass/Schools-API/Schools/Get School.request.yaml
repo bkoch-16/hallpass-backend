@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{Base}}/api/schools/:id"
+method: GET
+description: Get a single school by ID. Requires SUPER_ADMIN role.
+pathVariables:
+  - key: id
+    value: "1"
+order: 3000

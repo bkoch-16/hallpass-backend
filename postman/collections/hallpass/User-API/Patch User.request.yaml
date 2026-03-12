@@ -1,11 +1,10 @@
 $kind: http-request
-name: Patch User
 url: "{{Base}}/api/users/:id"
 method: PATCH
 description: Update a user's name, email, or role. Users can update their own name; ADMIN or higher required to change email or role. Cannot assign a role higher than your own.
 pathVariables:
   - key: id
-    value: cmmdth7vq0000k50msye6albt
+    value: '1'
 body:
   type: json
   content: |-

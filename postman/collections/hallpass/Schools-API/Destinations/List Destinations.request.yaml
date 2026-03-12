@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{Base}}/api/schools/:schoolId/destinations"
+method: GET
+description: List all destinations for a school. Requires school membership.
+pathVariables:
+  - key: schoolId
+    value: "1"
+order: 1000

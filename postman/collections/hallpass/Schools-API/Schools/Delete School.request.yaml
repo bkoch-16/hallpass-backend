@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{Base}}/api/schools/:id"
+method: DELETE
+description: Soft-delete a school. Requires SUPER_ADMIN role. Returns 204 on success.
+pathVariables:
+  - key: id
+    value: "1"
+order: 5000

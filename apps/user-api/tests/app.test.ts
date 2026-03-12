@@ -61,7 +61,7 @@ describe("CORS headers", () => {
 
 describe("Global error handler", () => {
   it("returns 500 with message when an unhandled error propagates from middleware", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "user-1" }, session: {} });
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockRejectedValue(new Error("DB connection lost"));
 
     const res = await request(app).get("/api/users/me");

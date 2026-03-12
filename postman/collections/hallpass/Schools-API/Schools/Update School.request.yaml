@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{Base}}/api/schools/:id"
+method: PATCH
+description: Update a school's name, timezone, or districtId. Requires SUPER_ADMIN role.
+pathVariables:
+  - key: id
+    value: "1"
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated School Name"
+    }
+order: 4000

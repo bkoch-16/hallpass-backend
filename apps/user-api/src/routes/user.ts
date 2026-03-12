@@ -1,5 +1,7 @@
 import { Router, Request, Response } from "express";
-import { prisma, Role } from "@hallpass/db";
+import { prisma } from "@hallpass/db";
+import { UserRole } from "@hallpass/types";
+import type { UserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth";
 import { requireRole, requireSelfOrRole, roleRank } from "../middleware/roleGuard";
 import { validateBody, validateParams, validateQuery } from "../middleware/validate";
@@ -13,17 +15,24 @@ import {
 
 const router = Router();
 
+const USER_SELECT = { id: true, email: true, name: true, role: true, schoolId: true, createdAt: true } as const;
+
+type UserRow = { id: number; email: string; name: string | null; role: UserRole; schoolId: number | null; createdAt: Date };
+
+function toUserResponse(u: UserRow): UserResponse {
+  return { id: u.id, email: u.email, name: u.name, role: u.role, schoolId: u.schoolId, createdAt: u.createdAt };
+}
+
 // GET /me — must come before /:id
 router.get("/me", requireAuth, (req: Request, res: Response) => {
-  const { id, email, name, role, createdAt } = req.user!;
-  res.json({ id, email, name, role, createdAt });
+  res.json(toUserResponse(req.user!));
 });
 
 // GET / — cursor-paginated list; ?ids= replaces the former /batch endpoint
 router.get(
   "/",
   requireAuth,
-  requireRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
+  requireRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateQuery(listUsersSchema),
   async (req: Request, res: Response) => {
     const { role, cursor, ids, limit } = req.query as unknown as {
@@ -34,36 +43,48 @@ router.get(
     };
     const take = limit;
 
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     if (ids) {
-      const idList = ids.split(",").map((id) => id.trim()).filter(Boolean);
-      if (idList.length > 100) {
+      const rawIds = ids.split(",").map((id) => id.trim()).filter(Boolean);
+      if (rawIds.length > 100) {
         res.status(400).json({ message: "Too many IDs (max 100)" });
         return;
       }
-      const users = await prisma.user.findMany({
-        where: { id: { in: idList }, deletedAt: null },
-        select: { id: true, email: true, name: true, role: true, createdAt: true },
-      });
-      res.json({ data: users, nextCursor: null });
+      const idList = rawIds.map(Number);
+      if (idList.some((id) => !Number.isInteger(id) || id <= 0)) {
+        res.status(400).json({ message: "Invalid ID format" });
+        return;
+      }
+      const where: Record<string, unknown> = { id: { in: idList }, deletedAt: null };
+      if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
+      const users = await prisma.user.findMany({ where, select: USER_SELECT });
+      res.json({ data: users.map(toUserResponse), nextCursor: null } satisfies CursorPage<UserResponse>);
       return;
     }
 
     const where: Record<string, unknown> = { deletedAt: null };
+    if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
     if (role) where.role = role;
 
     const users = await prisma.user.findMany({
       where,
       take: take + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
       orderBy: { id: "asc" },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: USER_SELECT,
     });
 
     const hasMore = users.length > take;
     const data = hasMore ? users.slice(0, take) : users;
-    const nextCursor = hasMore ? data[data.length - 1].id : null;
+    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
 
-    res.json({ data, nextCursor });
+    res.json({ data: data.map(toUserResponse), nextCursor } satisfies CursorPage<UserResponse>);
   },
 );
 
@@ -71,19 +92,28 @@ router.get(
   "/:id",
   requireAuth,
   validateParams(userIdSchema),
-  requireSelfOrRole(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN),
+  requireSelfOrRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
+    const userId = Number(req.params.id);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const isSelf = userId === req.user!.id;
+
+    if (!isSuperAdmin && !isSelf && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const where: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin && !isSelf) where.schoolId = req.user!.schoolId;
+
+    const user = await prisma.user.findFirst({ where, select: USER_SELECT });
 
     if (!user) {
       res.status(404).json({ message: "User not found" });
       return;
     }
 
-    res.json(user);
+    res.json(toUserResponse(user));
   },
 );
 
@@ -91,20 +121,26 @@ router.post(
   "/",
   requireAuth,
   validateBody(createUserSchema),
-  requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const targetRole = req.body.role ?? Role.STUDENT;
-    if (roleRank(targetRole) > roleRank(req.user!.role as Role)) {
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const targetRole: UserRole = req.body.role ?? UserRole.STUDENT;
+    if (roleRank(targetRole) > roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
 
     try {
       const user = await prisma.user.create({
-        data: { email: req.body.email, name: req.body.name, role: targetRole },
-        select: { id: true, email: true, name: true, role: true, createdAt: true },
+        data: {
+          email: req.body.email,
+          name: req.body.name,
+          role: targetRole,
+          ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+        },
+        select: USER_SELECT,
       });
-      res.status(201).json(user);
+      res.status(201).json(toUserResponse(user));
     } catch (err: unknown) {
       if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
         res.status(409).json({ message: "Email already in use" });
@@ -118,14 +154,14 @@ router.post(
 router.post(
   "/bulk",
   requireAuth,
-  requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateBody(bulkCreateSchema),
   async (req: Request, res: Response) => {
-    const users: Array<{ email: string; name: string; role?: string }> = req.body;
-    const callerRank = roleRank(req.user!.role as Role);
+    const users: Array<{ email: string; name: string; role?: UserRole }> = req.body;
+    const callerRank = roleRank(req.user!.role);
 
     for (const u of users) {
-      if (roleRank((u.role ?? Role.STUDENT) as Role) > callerRank) {
+      if (roleRank(u.role ?? "STUDENT") > callerRank) {
         res.status(403).json({ message: "Forbidden" });
         return;
       }
@@ -134,8 +170,13 @@ router.post(
     const results = await Promise.allSettled(
       users.map((u) =>
         prisma.user.create({
-          data: { email: u.email, name: u.name, role: (u.role as Role) ?? Role.STUDENT },
-          select: { id: true, email: true, name: true, role: true, createdAt: true },
+          data: {
+            email: u.email,
+            name: u.name,
+            role: u.role ?? UserRole.STUDENT,
+            ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
+          },
+          select: USER_SELECT,
         }),
       ),
     );
@@ -146,7 +187,7 @@ router.post(
       .filter(({ result }) => result.status === "rejected")
       .map(({ index }) => ({ index, email: users[index].email, error: "Failed to create user" }));
 
-    res.status(failed.length === users.length ? 400 : 200).json({ created, failed });
+    res.status(failed.length === users.length ? 400 : 200).json({ created, failed } satisfies BulkUserResult);
   },
 );
 
@@ -155,34 +196,56 @@ router.patch(
   requireAuth,
   validateParams(userIdSchema),
   validateBody(updateUserSchema),
-  requireSelfOrRole(Role.ADMIN, Role.SUPER_ADMIN),
+  requireSelfOrRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
-    const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
-    });
+    const userId = Number(req.params.id);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const isSelf = userId === req.user!.id;
+
+    if (!isSuperAdmin && !isSelf && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    if ("schoolId" in req.body && !isSuperAdmin) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const findWhere: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin && !isSelf) findWhere.schoolId = req.user!.schoolId;
+
+    const user = await prisma.user.findFirst({ where: findWhere });
 
     if (!user) {
       res.status(404).json({ message: "User not found" });
       return;
     }
 
-    if (req.body.email && roleRank(req.user!.role as Role) < roleRank(Role.ADMIN)) {
+    if (req.body.email && roleRank(req.user!.role) < roleRank(UserRole.ADMIN)) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
 
-    if (req.body.role && roleRank(req.body.role) > roleRank(req.user!.role as Role)) {
+    if (req.body.role && roleRank(req.body.role) > roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
 
-    const updated = await prisma.user.update({
-      where: { id: req.params.id as string },
-      data: req.body,
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
-
-    res.json(updated);
+    try {
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: req.body,
+        select: USER_SELECT,
+      });
+      res.json(toUserResponse(updated));
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+        res.status(400).json({ message: "Invalid schoolId" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -190,10 +253,20 @@ router.delete(
   "/:id",
   requireAuth,
   validateParams(userIdSchema),
-  requireRole(Role.ADMIN, Role.SUPER_ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   async (req: Request, res: Response) => {
+    const userId = Number(req.params.id);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const findWhere: Record<string, unknown> = { id: userId, deletedAt: null };
+    if (!isSuperAdmin) findWhere.schoolId = req.user!.schoolId;
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id as string, deletedAt: null },
+      where: findWhere,
     });
 
     if (!user) {
@@ -201,13 +274,13 @@ router.delete(
       return;
     }
 
-    if (roleRank(user.role as Role) >= roleRank(req.user!.role as Role)) {
+    if (roleRank(user.role as UserRole) >= roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
 
     await prisma.user.update({
-      where: { id: req.params.id as string },
+      where: { id: userId },
       data: { deletedAt: new Date() },
     });
 
