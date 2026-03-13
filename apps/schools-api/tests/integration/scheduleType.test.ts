@@ -186,7 +186,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id (integration)", () => 
     authenticateAs(admin);
 
     const res = await request(app)
-      .patch(`/api/schools/${school.id}/schedule-types/nonexistent-id`)
+      .patch(`/api/schools/${school.id}/schedule-types/99999`)
       .send({ name: "X" });
 
     expect(res.status).toBe(404);
@@ -235,7 +235,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id (integration)", () =>
     authenticateAs(admin);
 
     const res = await request(app).delete(
-      `/api/schools/${school.id}/schedule-types/nonexistent`,
+      `/api/schools/${school.id}/schedule-types/99999`,
     );
 
     expect(res.status).toBe(404);

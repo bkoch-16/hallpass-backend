@@ -1,0 +1,5 @@
+name: Hallpass User Api Local
+values:
+  - key: Base
+    value: 'http://localhost:3001'
+    enabled: true

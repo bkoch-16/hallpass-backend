@@ -212,7 +212,7 @@ describe("PATCH /api/schools/:schoolId/destinations/:id (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app)
-      .patch(`/api/schools/${school.id}/destinations/nonexistent`)
+      .patch(`/api/schools/${school.id}/destinations/99999`)
       .send({ name: "X" });
 
     expect(res.status).toBe(404);
@@ -245,7 +245,7 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
     await request(app).delete(`/api/schools/${school.id}/destinations/${dest.id}`);
     const res = await request(app).get(`/api/schools/${school.id}/destinations`);
 
-    expect(res.body.map((d: { id: string }) => d.id)).not.toContain(dest.id);
+    expect(res.body.map((d: { id: number }) => d.id)).not.toContain(dest.id);
   });
 
   it("returns 404 when destination not found", async () => {
@@ -254,7 +254,7 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app).delete(
-      `/api/schools/${school.id}/destinations/nonexistent`,
+      `/api/schools/${school.id}/destinations/99999`,
     );
 
     expect(res.status).toBe(404);

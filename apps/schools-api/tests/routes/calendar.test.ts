@@ -84,7 +84,7 @@ function authenticateAs(user: FakeUser) {
 }
 
 const fakeEntry = {
-  id: "cal1",
+  id: 1,
   schoolId: 1,
   date: new Date("2025-09-01"),
   scheduleTypeId: null,
@@ -200,7 +200,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
     const res = await request(app)
       .post(BASE)
-      .send([{ date: "2025-09-01", scheduleTypeId: "nonexistent" }]);
+      .send([{ date: "2025-09-01", scheduleTypeId: 999 }]);
 
     expect(res.status).toBe(422);
     expect(mockPrisma.schoolCalendar.create).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
 
     const res = await request(app)
-      .patch(`${BASE}/missing`)
+      .patch(`${BASE}/99999`)
       .send({ note: "Updated" });
 
     expect(res.status).toBe(404);
@@ -235,7 +235,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.schoolCalendar.update.mockResolvedValue(updated);
 
     const res = await request(app)
-      .patch(`${BASE}/cal1`)
+      .patch(`${BASE}/1`)
       .send({ note: "Holiday" });
 
     expect(res.status).toBe(200);
@@ -245,7 +245,7 @@ describe(`PATCH ${BASE}/:id`, () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch(`${BASE}/cal1`).send({});
+    const res = await request(app).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -257,11 +257,11 @@ describe(`DELETE ${BASE}/:id`, () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeEntry);
     mockPrisma.schoolCalendar.delete.mockResolvedValue(fakeEntry);
 
-    const res = await request(app).delete(`${BASE}/cal1`);
+    const res = await request(app).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
     expect(mockPrisma.schoolCalendar.delete).toHaveBeenCalledWith({
-      where: { id: "cal1" },
+      where: { id: 1 },
     });
   });
 
@@ -269,7 +269,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete(`${BASE}/missing`);
+    const res = await request(app).delete(`${BASE}/999`);
 
     expect(res.status).toBe(404);
     expect(mockPrisma.schoolCalendar.delete).not.toHaveBeenCalled();
@@ -278,7 +278,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("returns 403 when TEACHER attempts delete", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).delete(`${BASE}/cal1`);
+    const res = await request(app).delete(`${BASE}/1`);
 
     expect(res.status).toBe(403);
   });

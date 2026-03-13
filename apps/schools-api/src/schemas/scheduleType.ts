@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const scheduleTypeIdSchema = z.object({
-  schoolId: z.string().regex(/^\d+$/, "schoolId must be a positive integer"),
-  id: z.string().min(1, "id is required"),
+  schoolId: z.coerce.number().int().positive(),
+  id: z.coerce.number().int().positive(),
 });
 
 export const createScheduleTypeSchema = z.object({

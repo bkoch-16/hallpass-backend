@@ -18,7 +18,7 @@ const SCHEDULE_TYPE_SELECT = {
   endBuffer: true,
 } as const;
 
-type ScheduleTypeRow = { id: string; schoolId: number; name: string; startBuffer: number; endBuffer: number };
+type ScheduleTypeRow = { id: number; schoolId: number; name: string; startBuffer: number; endBuffer: number };
 
 function toScheduleTypeResponse(s: ScheduleTypeRow): ScheduleTypeResponse {
   return { id: s.id, schoolId: s.schoolId, name: s.name, startBuffer: s.startBuffer, endBuffer: s.endBuffer };
@@ -72,7 +72,7 @@ router.patch(
   validateBody(updateScheduleTypeSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.scheduleType.findFirst({
       where: { id, schoolId, deletedAt: null },
@@ -101,7 +101,7 @@ router.delete(
   validateParams(scheduleTypeIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.scheduleType.findFirst({
       where: { id, schoolId, deletedAt: null },

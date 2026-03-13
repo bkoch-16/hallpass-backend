@@ -9,11 +9,15 @@ import {
 
 describe("calendarIdSchema", () => {
   it("accepts valid schoolId and id", () => {
-    expect(calendarIdSchema.safeParse({ schoolId: "1", id: "clxyz" }).success).toBe(true);
+    expect(calendarIdSchema.safeParse({ schoolId: "1", id: "1" }).success).toBe(true);
   });
 
   it("rejects non-numeric schoolId", () => {
-    expect(calendarIdSchema.safeParse({ schoolId: "abc", id: "x" }).success).toBe(false);
+    expect(calendarIdSchema.safeParse({ schoolId: "abc", id: "1" }).success).toBe(false);
+  });
+
+  it("rejects non-numeric id", () => {
+    expect(calendarIdSchema.safeParse({ schoolId: "1", id: "abc" }).success).toBe(false);
   });
 
   it("rejects empty id", () => {
@@ -50,7 +54,7 @@ describe("calendarEntrySchema", () => {
   });
 
   it("accepts date with optional scheduleTypeId", () => {
-    const r = calendarEntrySchema.safeParse({ date: "2025-09-01", scheduleTypeId: "clxyz" });
+    const r = calendarEntrySchema.safeParse({ date: "2025-09-01", scheduleTypeId: 1 });
     expect(r.success).toBe(true);
   });
 
@@ -84,7 +88,7 @@ describe("calendarBulkSchema", () => {
   it("accepts an array of entries", () => {
     const r = calendarBulkSchema.safeParse([
       { date: "2025-09-01" },
-      { date: "2025-09-02", scheduleTypeId: "clxyz" },
+      { date: "2025-09-02", scheduleTypeId: 2 },
     ]);
     expect(r.success).toBe(true);
   });
@@ -100,7 +104,7 @@ describe("calendarBulkSchema", () => {
 
 describe("updateCalendarSchema", () => {
   it("accepts scheduleTypeId update", () => {
-    expect(updateCalendarSchema.safeParse({ scheduleTypeId: "clxyz" }).success).toBe(true);
+    expect(updateCalendarSchema.safeParse({ scheduleTypeId: 1 }).success).toBe(true);
   });
 
   it("accepts note update", () => {

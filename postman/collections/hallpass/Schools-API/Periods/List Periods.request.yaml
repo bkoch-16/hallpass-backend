@@ -6,5 +6,5 @@ pathVariables:
   - key: schoolId
     value: "1"
   - key: scheduleTypeId
-    value: ""
+    value: "1"
 order: 1000
