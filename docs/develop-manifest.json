@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-12T17:35:07.266Z",
+  "generatedAt": "2026-03-13T03:32:18.462Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "56bd13ebb356011da7d912273564eb41eebacbdd",
-      "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Core models include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication (compatible with better-auth). School-related models include ScheduleType, Period (with time slots and ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (per-school limits on active passes and interval-based quotas). Soft deletes are supported via optional `deletedAt` fields on most entities. Key relationships: District→Schools→Users, School→ScheduleTypes→Periods, School→PassPolicy (1:1). Developers modifying this file must run `prisma migrate` to update the database and `prisma generate` to regenerate the client."
+      "blobSha": "4da8920e8122fe0c09d10eb841dfc9fe0189531e",
+      "summary": "Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication/authorization. School-specific models include ScheduleType, Period (with time-based ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (controlling active pass limits and interval-based quotas using DAY/WEEK/MONTH enum). Soft deletes are supported via optional `deletedAt` fields on most entities; timestamps follow `createdAt`/`updatedAt` conventions. Key relationships: Districts have many Schools, Schools have many Users, ScheduleTypes, Periods, Destinations, and one optional PassPolicy. Sessions and Accounts cascade delete with their parent User. Developers modifying this file must run Prisma migrations afterward and should note the indexed fields (schoolId, scheduleTypeId) and unique constraints (User.email, SchoolCalendar schoolId+date, PassPolicy.schoolId)."
     },
     "apps/user-api/src/app.ts": {
       "blobSha": "47d7bd37349c0a440bbff0d12325b216597917b5",
