@@ -428,7 +428,7 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -448,7 +448,7 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -474,7 +474,7 @@ const CONFIG = {
                 },
                 {
                   "key": "scheduleTypeId",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -494,7 +494,7 @@ const CONFIG = {
                 },
                 {
                   "key": "scheduleTypeId",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -514,11 +514,11 @@ const CONFIG = {
                 },
                 {
                   "key": "scheduleTypeId",
-                  "value": ""
+                  "value": "1"
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -538,11 +538,11 @@ const CONFIG = {
                 },
                 {
                   "key": "scheduleTypeId",
-                  "value": ""
+                  "value": "1"
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -593,7 +593,7 @@ const CONFIG = {
                 }
               ],
               "queryParams": [],
-              "body": "[\n  { \"date\": \"2026-03-11\", \"scheduleTypeId\": null, \"note\": null },\n  { \"date\": \"2026-03-12\", \"scheduleTypeId\": null, \"note\": \"Late Start\" }\n]"
+              "body": "[\n  { \"date\": \"2026-03-11\", \"scheduleTypeId\": 1, \"note\": null },\n  { \"date\": \"2026-03-12\", \"scheduleTypeId\": 2, \"note\": \"Late Start Wednesday\" }\n]"
             },
             {
               "name": "Update Calendar Entry",
@@ -609,11 +609,11 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
-              "body": "{\n  \"note\": \"Updated note\"\n}"
+              "body": "{\n  \"scheduleTypeId\": 1,\n  \"note\": \"Updated note\"\n}"
             },
             {
               "name": "Delete Calendar Entry",
@@ -629,7 +629,7 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -687,7 +687,7 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
@@ -707,7 +707,7 @@ const CONFIG = {
                 },
                 {
                   "key": "id",
-                  "value": ""
+                  "value": "1"
                 }
               ],
               "queryParams": [],
