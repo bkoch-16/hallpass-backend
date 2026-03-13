@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { prisma } from "@hallpass/db";
@@ -11,6 +12,7 @@ export function createAuth(config: { baseURL: string; secret: string; trustedOri
     database: prismaAdapter(prisma, {
       provider: "postgresql",
     }),
+    plugins: [bearer()],
     emailAndPassword: {
       enabled: true,
     },
