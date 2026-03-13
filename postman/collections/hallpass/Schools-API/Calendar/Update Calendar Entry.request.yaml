@@ -6,11 +6,12 @@ pathVariables:
   - key: schoolId
     value: "1"
   - key: id
-    value: ""
+    value: "1"
 body:
   type: json
   content: |-
     {
+      "scheduleTypeId": 1,
       "note": "Updated note"
     }
 order: 3000

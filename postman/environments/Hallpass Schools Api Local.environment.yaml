@@ -1,0 +1,5 @@
+name: Hallpass Schools Api Local
+values:
+  - key: Base
+    value: 'http://localhost:3002'
+    enabled: true

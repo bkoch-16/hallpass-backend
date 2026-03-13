@@ -98,7 +98,7 @@ function authenticateAs(user: FakeUser) {
 }
 
 const fakePolicy = {
-  id: "pol1",
+  id: 1,
   schoolId: 1,
   maxActivePasses: 5,
   interval: "DAY",
@@ -145,7 +145,7 @@ describe(`GET ${BASE}`, () => {
     const res = await request(app).get(BASE);
 
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe("pol1");
+    expect(res.body.id).toBe(1);
     expect(res.body.maxActivePasses).toBe(5);
     expect(res.body.interval).toBe("DAY");
   });
@@ -233,7 +233,7 @@ describe(`PUT ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });
     mockPrisma.passPolicy.upsert.mockResolvedValue({
-      id: "pol1",
+      id: 1,
       schoolId: 1,
       maxActivePasses: null,
       interval: null,

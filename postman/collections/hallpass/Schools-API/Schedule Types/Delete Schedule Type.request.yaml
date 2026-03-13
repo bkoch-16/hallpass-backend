@@ -6,5 +6,5 @@ pathVariables:
   - key: schoolId
     value: "1"
   - key: id
-    value: ""
+    value: "1"
 order: 4000

@@ -7,11 +7,15 @@ import {
 
 describe("destinationIdSchema", () => {
   it("accepts valid schoolId and id", () => {
-    expect(destinationIdSchema.safeParse({ schoolId: "1", id: "clxyz" }).success).toBe(true);
+    expect(destinationIdSchema.safeParse({ schoolId: "1", id: "1" }).success).toBe(true);
   });
 
   it("rejects non-numeric schoolId", () => {
-    expect(destinationIdSchema.safeParse({ schoolId: "abc", id: "x" }).success).toBe(false);
+    expect(destinationIdSchema.safeParse({ schoolId: "abc", id: "1" }).success).toBe(false);
+  });
+
+  it("rejects non-numeric id", () => {
+    expect(destinationIdSchema.safeParse({ schoolId: "1", id: "abc" }).success).toBe(false);
   });
 
   it("rejects empty id", () => {

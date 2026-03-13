@@ -17,7 +17,7 @@ const DESTINATION_SELECT = {
   maxOccupancy: true,
 } as const;
 
-type DestinationRow = { id: string; schoolId: number; name: string; maxOccupancy: number | null };
+type DestinationRow = { id: number; schoolId: number; name: string; maxOccupancy: number | null };
 
 function toDestinationResponse(d: DestinationRow): DestinationResponse {
   return { id: d.id, schoolId: d.schoolId, name: d.name, maxOccupancy: d.maxOccupancy };
@@ -70,7 +70,7 @@ router.patch(
   validateBody(updateDestinationSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.destination.findFirst({
       where: { id, schoolId, deletedAt: null },
@@ -99,7 +99,7 @@ router.delete(
   validateParams(destinationIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.destination.findFirst({
       where: { id, schoolId, deletedAt: null },

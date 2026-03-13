@@ -69,7 +69,7 @@ export interface SchoolResponse {
 }
 
 export interface PassPolicyResponse {
-  id: string;
+  id: number;
   schoolId: number;
   maxActivePasses: number | null;
   interval: PolicyInterval | null;
@@ -77,7 +77,7 @@ export interface PassPolicyResponse {
 }
 
 export interface ScheduleTypeResponse {
-  id: string;
+  id: number;
   schoolId: number;
   name: string;
   startBuffer: number;
@@ -85,8 +85,8 @@ export interface ScheduleTypeResponse {
 }
 
 export interface PeriodResponse {
-  id: string;
-  scheduleTypeId: string;
+  id: number;
+  scheduleTypeId: number;
   name: string;
   startTime: string;
   endTime: string;
@@ -94,15 +94,15 @@ export interface PeriodResponse {
 }
 
 export interface SchoolCalendarResponse {
-  id: string;
+  id: number;
   schoolId: number;
   date: Date;
-  scheduleTypeId: string | null;
+  scheduleTypeId: number | null;
   note: string | null;
 }
 
 export interface DestinationResponse {
-  id: string;
+  id: number;
   schoolId: number;
   name: string;
   maxOccupancy: number | null;

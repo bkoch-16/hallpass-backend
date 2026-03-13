@@ -9,7 +9,7 @@ body:
   type: json
   content: |-
     [
-      { "date": "2026-03-11", "scheduleTypeId": null, "note": null },
-      { "date": "2026-03-12", "scheduleTypeId": null, "note": "Late Start" }
+      { "date": "2026-03-11", "scheduleTypeId": 1, "note": null },
+      { "date": "2026-03-12", "scheduleTypeId": 2, "note": "Late Start Wednesday" }
     ]
 order: 2000

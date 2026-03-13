@@ -93,7 +93,7 @@ model Account {
 }
 
 model ScheduleType {
-  id          String    @id @default(cuid())
+  id          Int       @id @default(autoincrement())
   schoolId    Int
   name        String
   startBuffer Int       @default(0)
@@ -110,9 +110,9 @@ model ScheduleType {
 }
 
 model Period {
-  id             String    @id @default(cuid())
+  id             Int       @id @default(autoincrement())
   schoolId       Int
-  scheduleTypeId String
+  scheduleTypeId Int
   name           String
   startTime      String
   endTime        String
@@ -128,10 +128,10 @@ model Period {
 }
 
 model SchoolCalendar {
-  id             String    @id @default(cuid())
+  id             Int       @id @default(autoincrement())
   schoolId       Int
   date           DateTime  @db.Date
-  scheduleTypeId String?
+  scheduleTypeId Int?
   note           String?
 
   school       School        @relation(fields: [schoolId], references: [id])
@@ -141,7 +141,7 @@ model SchoolCalendar {
 }
 
 model Destination {
-  id           String    @id @default(cuid())
+  id           Int       @id @default(autoincrement())
   schoolId     Int
   name         String
   maxOccupancy Int?
@@ -155,7 +155,7 @@ model Destination {
 }
 
 model PassPolicy {
-  id             String          @id @default(cuid())
+  id             Int             @id @default(autoincrement())
   schoolId       Int             @unique
   maxActivePasses Int?
   interval       PolicyInterval?

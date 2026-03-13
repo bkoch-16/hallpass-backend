@@ -18,7 +18,7 @@ const CALENDAR_SELECT = {
   note: true,
 } as const;
 
-type CalendarRow = { id: string; schoolId: number; date: Date; scheduleTypeId: string | null; note: string | null };
+type CalendarRow = { id: number; schoolId: number; date: Date; scheduleTypeId: number | null; note: string | null };
 
 function toCalendarResponse(c: CalendarRow): SchoolCalendarResponse {
   return { id: c.id, schoolId: c.schoolId, date: c.date, scheduleTypeId: c.scheduleTypeId, note: c.note };
@@ -66,7 +66,7 @@ router.post(
     for (const entry of entries) {
       if (entry.scheduleTypeId) {
         const scheduleType = await prisma.scheduleType.findFirst({
-          where: { id: String(entry.scheduleTypeId), schoolId },
+          where: { id: Number(entry.scheduleTypeId), schoolId },
         });
         if (!scheduleType) {
           res.status(422).json({ message: `Schedule type ${entry.scheduleTypeId} not found for this school` });
@@ -119,7 +119,7 @@ router.patch(
   validateBody(updateCalendarSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.schoolCalendar.findFirst({
       where: { id, schoolId },
@@ -132,7 +132,7 @@ router.patch(
 
     if (req.body.scheduleTypeId) {
       const scheduleType = await prisma.scheduleType.findFirst({
-        where: { id: String(req.body.scheduleTypeId), schoolId },
+        where: { id: Number(req.body.scheduleTypeId), schoolId },
       });
       if (!scheduleType) {
         res.status(422).json({ message: `Schedule type ${req.body.scheduleTypeId} not found for this school` });
@@ -162,7 +162,7 @@ router.delete(
   validateParams(calendarIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const id = String(req.params.id);
+    const id = Number(req.params.id);
 
     const existing = await prisma.schoolCalendar.findFirst({
       where: { id, schoolId },
