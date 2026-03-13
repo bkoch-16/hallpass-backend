@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-03-12T17:33:49.632Z — 20 files indexed_
+_Generated: 2026-03-13T03:36:39.800Z — 20 files indexed_
 
 ## File Summaries
 
@@ -82,4 +82,4 @@ Factory module that creates and configures a better-auth instance via `createAut
 
 ### `packages/db/prisma/schema.prisma`
 
-Prisma schema defining the PostgreSQL data model for the HallPass application. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, Account, ScheduleType, Period, SchoolCalendar, Destination, and PassPolicy. Users have soft-delete support (deletedAt), sessions use CUID IDs with cascade deletes, and schools have a one-to-one PassPolicy relationship. Key conventions include autoincrement integer IDs for District/School/User and CUID string IDs for other models, with composite unique constraints on SchoolCalendar (schoolId, date).
+Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User, Session, Account, ScheduleType, Period, SchoolCalendar, Destination, and PassPolicy, with a Role enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and PolicyInterval enum (DAY, WEEK, MONTH). The schema follows a hierarchical structure: Districts contain Schools, Schools contain Users, ScheduleTypes, Periods, Destinations, a Calendar, and an optional PassPolicy. Authentication is modeled via Session and Account tables linked to User with cascade deletes. Soft deletes are supported via optional `deletedAt` fields on most entities, and standard `createdAt`/`updatedAt` timestamps are used throughout. Key constraints include unique email on User, unique (schoolId, date) on SchoolCalendar, unique schoolId on PassPolicy (one-to-one with School), and indexed foreign keys on schedule/period/destination tables.
