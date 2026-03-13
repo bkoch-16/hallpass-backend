@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-13T03:32:18.462Z",
+  "generatedAt": "2026-03-13T05:03:02.978Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "4da8920e8122fe0c09d10eb841dfc9fe0189531e",
@@ -47,8 +47,8 @@
       "summary": "Defines Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with cursor pagination, optional role filter, and comma-separated ids), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId). Role fields are constrained to `ASSIGNABLE_ROLES` from `@hallpass/types`. The `limit` field uses `z.coerce.number()` for query string parsing with a default of 50."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "01d7ba83bce6d6f26339e51c554fe0f9e34d5e67",
-      "summary": "Factory module that creates and configures a `better-auth` authentication instance. The `createAuth` function accepts baseURL, secret, and optional trustedOrigins, wiring up the Prisma adapter with PostgreSQL and enabling email/password authentication. Uses serial (autoincrement) ID generation to match the Prisma schema. Configures secure cookie attributes (SameSite=none, Secure) for HTTPS deployments and sets session expiry to 7 days with a 1-day refresh age. Exports the `Auth` and `Session` inferred types plus `toNodeHandler` and `fromNodeHeaders` utilities for Express integration."
+      "blobSha": "ff36554a505bfb5413a7e45198ee41afebd8d645",
+      "summary": "This file is the central authentication configuration module for the project, responsible for creating and exporting a `betterAuth` instance. It exports `createAuth`, a factory function that configures BetterAuth with a Prisma/PostgreSQL adapter (using the shared `@hallpass/db` prisma client), the `bearer` plugin, email/password authentication, serial ID generation, and session settings (7-day expiry, 1-day update age). When the `baseURL` is HTTPS, it automatically sets `sameSite: 'none'` and `secure: true` on cookies for cross-origin support. Key exports include the `Auth` and `Session` types (inferred from the auth instance), plus `toNodeHandler` and `fromNodeHeaders` re-exported from `better-auth/node` for HTTP integration. Developers modifying this file should be aware that changes here affect all authentication behavior across the monorepo, and the Prisma adapter depends on the `@hallpass/db` package's schema being in sync."
     },
     "apps/user-api/Dockerfile": {
       "blobSha": "9c932f9365889c7fbe8fdfcc6f3b22ade2afb735",
