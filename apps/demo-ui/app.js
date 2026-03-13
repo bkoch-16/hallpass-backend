@@ -3,6 +3,12 @@
 // ---------------------------------------------------------------------------
 
 let currentEndpoint = null;
+let sessionToken = null;
+
+function getUserApiBase() {
+  const group = CONFIG.groups.find(g => g.name === 'User-API');
+  return group?.baseUrls?.[CONFIG.stages[0]] ?? '';
+}
 
 function getBaseUrl() {
   const group = getSelectedGroup();
@@ -35,10 +41,10 @@ function getSelectedEndpoint() {
 // ---------------------------------------------------------------------------
 
 async function fetchMe() {
-  const base = getBaseUrl();
-  if (!base) return;
+  const userApiBase = getUserApiBase();
+  if (!userApiBase) return;
   try {
-    const res = await fetch(base + '/api/users/me', { credentials: 'include' });
+    const res = await fetch(userApiBase + '/api/users/me', { credentials: 'include' });
     const bar = document.getElementById('user-bar');
     const dot = document.getElementById('user-dot');
     const txt = document.getElementById('user-text');
@@ -47,10 +53,21 @@ async function fetchMe() {
       bar.classList.remove('unauthenticated');
       dot.classList.remove('grey');
       txt.textContent = [data.name, data.email, data.role].filter(Boolean).join('  \u00b7  ');
+      // Fetch session token for cross-service auth
+      try {
+        const sessRes = await fetch(userApiBase + '/api/auth/get-session', { credentials: 'include' });
+        if (sessRes.ok) {
+          const sessData = await sessRes.json();
+          sessionToken = sessData?.session?.token ?? null;
+        }
+      } catch {
+        // Non-fatal — token stays null
+      }
     } else {
       bar.classList.add('unauthenticated');
       dot.classList.add('grey');
       txt.textContent = 'Not logged in';
+      sessionToken = null;
     }
   } catch {
     // Network error — leave as-is
@@ -167,6 +184,9 @@ async function send() {
   const headers = {};
   for (const h of (ep.headers ?? [])) {
     headers[h.key] = h.value.replace('{{Base}}', getBaseUrl());
+  }
+  if (sessionToken) {
+    headers['Authorization'] = 'Bearer ' + sessionToken;
   }
 
   const opts = {
