@@ -247,7 +247,7 @@ describe("PATCH /api/schools/:schoolId/calendar/:id (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app)
-      .patch(`/api/schools/${school.id}/calendar/nonexistent`)
+      .patch(`/api/schools/${school.id}/calendar/99999`)
       .send({ note: "X" });
 
     expect(res.status).toBe(404);
@@ -279,7 +279,7 @@ describe("DELETE /api/schools/:schoolId/calendar/:id (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app).delete(
-      `/api/schools/${school.id}/calendar/nonexistent`,
+      `/api/schools/${school.id}/calendar/99999`,
     );
 
     expect(res.status).toBe(404);

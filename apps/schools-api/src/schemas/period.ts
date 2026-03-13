@@ -3,9 +3,9 @@ import { z } from "zod";
 const timeString = z.string().regex(/^\d{2}:\d{2}$/, "must be HH:MM format");
 
 export const periodIdSchema = z.object({
-  schoolId: z.string().regex(/^\d+$/, "schoolId must be a positive integer"),
-  scheduleTypeId: z.string().min(1, "scheduleTypeId is required"),
-  id: z.string().min(1, "id is required"),
+  schoolId: z.coerce.number().int().positive(),
+  scheduleTypeId: z.coerce.number().int().positive(),
+  id: z.coerce.number().int().positive(),
 });
 
 export const createPeriodSchema = z.object({

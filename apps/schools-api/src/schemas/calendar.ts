@@ -3,8 +3,8 @@ import { z } from "zod";
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD format");
 
 export const calendarIdSchema = z.object({
-  schoolId: z.string().regex(/^\d+$/, "schoolId must be a positive integer"),
-  id: z.string().min(1, "id is required"),
+  schoolId: z.coerce.number().int().positive(),
+  id: z.coerce.number().int().positive(),
 });
 
 export const calendarQuerySchema = z.object({
@@ -14,7 +14,7 @@ export const calendarQuerySchema = z.object({
 
 export const calendarEntrySchema = z.object({
   date: dateString,
-  scheduleTypeId: z.string().nullable().optional(),
+  scheduleTypeId: z.number().int().positive().nullable().optional(),
   note: z.string().nullable().optional(),
 });
 
@@ -25,7 +25,7 @@ export const calendarBulkSchema = z.union([
 
 export const updateCalendarSchema = z
   .object({
-    scheduleTypeId: z.string().nullable().optional(),
+    scheduleTypeId: z.number().int().positive().nullable().optional(),
     note: z.string().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

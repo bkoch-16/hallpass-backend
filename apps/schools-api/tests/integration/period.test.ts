@@ -47,7 +47,7 @@ async function seedScheduleType(schoolId: number) {
   });
 }
 
-async function seedPeriod(scheduleTypeId: string, schoolId: number, order = 0) {
+async function seedPeriod(scheduleTypeId: number, schoolId: number, order = 0) {
   return prisma.period.create({
     data: {
       schoolId,
@@ -168,7 +168,7 @@ describe("POST .../periods (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app)
-      .post(`/api/schools/${school.id}/schedule-types/nonexistent/periods`)
+      .post(`/api/schools/${school.id}/schedule-types/99999/periods`)
       .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
 
     expect(res.status).toBe(404);
@@ -199,7 +199,7 @@ describe("PATCH .../periods/:id (integration)", () => {
     authenticateAs(admin);
 
     const res = await request(app)
-      .patch(`/api/schools/${school.id}/schedule-types/${st.id}/periods/nonexistent`)
+      .patch(`/api/schools/${school.id}/schedule-types/${st.id}/periods/99999`)
       .send({ name: "X" });
 
     expect(res.status).toBe(404);
@@ -238,6 +238,6 @@ describe("DELETE .../periods/:id (integration)", () => {
     const res = await request(app).get(
       `/api/schools/${school.id}/schedule-types/${st.id}/periods`,
     );
-    expect(res.body.map((p: { id: string }) => p.id)).not.toContain(period.id);
+    expect(res.body.map((p: { id: number }) => p.id)).not.toContain(period.id);
   });
 });

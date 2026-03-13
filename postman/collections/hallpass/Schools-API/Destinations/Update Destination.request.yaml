@@ -6,7 +6,7 @@ pathVariables:
   - key: schoolId
     value: "1"
   - key: id
-    value: ""
+    value: "1"
 body:
   type: json
   content: |-

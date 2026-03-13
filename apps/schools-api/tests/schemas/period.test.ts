@@ -7,20 +7,28 @@ import {
 
 describe("periodIdSchema", () => {
   it("accepts valid schoolId, scheduleTypeId, and id", () => {
-    const r = periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "clxyz", id: "clabc" });
+    const r = periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "2", id: "3" });
     expect(r.success).toBe(true);
   });
 
   it("rejects non-numeric schoolId", () => {
-    expect(periodIdSchema.safeParse({ schoolId: "abc", scheduleTypeId: "x", id: "y" }).success).toBe(false);
+    expect(periodIdSchema.safeParse({ schoolId: "abc", scheduleTypeId: "2", id: "3" }).success).toBe(false);
+  });
+
+  it("rejects non-numeric scheduleTypeId", () => {
+    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "abc", id: "3" }).success).toBe(false);
   });
 
   it("rejects empty scheduleTypeId", () => {
-    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "", id: "y" }).success).toBe(false);
+    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "", id: "3" }).success).toBe(false);
+  });
+
+  it("rejects non-numeric id", () => {
+    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "2", id: "abc" }).success).toBe(false);
   });
 
   it("rejects empty id", () => {
-    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "x", id: "" }).success).toBe(false);
+    expect(periodIdSchema.safeParse({ schoolId: "1", scheduleTypeId: "2", id: "" }).success).toBe(false);
   });
 });
 

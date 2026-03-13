@@ -19,7 +19,7 @@ const PERIOD_SELECT = {
   order: true,
 } as const;
 
-type PeriodRow = { id: string; scheduleTypeId: string; name: string; startTime: string; endTime: string; order: number };
+type PeriodRow = { id: number; scheduleTypeId: number; name: string; startTime: string; endTime: string; order: number };
 
 function toPeriodResponse(p: PeriodRow): PeriodResponse {
   return { id: p.id, scheduleTypeId: p.scheduleTypeId, name: p.name, startTime: p.startTime, endTime: p.endTime, order: p.order };
@@ -27,7 +27,7 @@ function toPeriodResponse(p: PeriodRow): PeriodResponse {
 
 router.get("/", requireAuth, requireSchoolAccess, async (req: Request, res: Response) => {
   const schoolId = Number(req.params.schoolId);
-  const scheduleTypeId = String(req.params.scheduleTypeId);
+  const scheduleTypeId = Number(req.params.scheduleTypeId);
 
   const scheduleType = await prisma.scheduleType.findFirst({
     where: { id: scheduleTypeId, schoolId, deletedAt: null },
@@ -55,7 +55,7 @@ router.post(
   validateBody(createPeriodSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const scheduleTypeId = String(req.params.scheduleTypeId);
+    const scheduleTypeId = Number(req.params.scheduleTypeId);
 
     const scheduleType = await prisma.scheduleType.findFirst({
       where: { id: scheduleTypeId, schoolId, deletedAt: null },
@@ -91,8 +91,8 @@ router.patch(
   validateBody(updatePeriodSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const scheduleTypeId = String(req.params.scheduleTypeId);
-    const id = String(req.params.id);
+    const scheduleTypeId = Number(req.params.scheduleTypeId);
+    const id = Number(req.params.id);
 
     const existing = await prisma.period.findFirst({
       where: { id, scheduleTypeId, schoolId, deletedAt: null },
@@ -121,8 +121,8 @@ router.delete(
   validateParams(periodIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
-    const scheduleTypeId = String(req.params.scheduleTypeId);
-    const id = String(req.params.id);
+    const scheduleTypeId = Number(req.params.scheduleTypeId);
+    const id = Number(req.params.id);
 
     const existing = await prisma.period.findFirst({
       where: { id, scheduleTypeId, schoolId, deletedAt: null },

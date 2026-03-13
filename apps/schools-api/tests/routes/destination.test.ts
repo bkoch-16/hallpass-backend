@@ -113,7 +113,7 @@ function authenticateAs(user: FakeUser) {
 }
 
 const fakeDestination = {
-  id: "dest1",
+  id: 1,
   schoolId: 1,
   name: "Library",
   maxOccupancy: 30,
@@ -233,7 +233,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.destination.findFirst.mockResolvedValue(null);
 
     const res = await request(app)
-      .patch(`${BASE}/missing`)
+      .patch(`${BASE}/99999`)
       .send({ name: "Updated" });
 
     expect(res.status).toBe(404);
@@ -246,7 +246,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.destination.update.mockResolvedValue(updated);
 
     const res = await request(app)
-      .patch(`${BASE}/dest1`)
+      .patch(`${BASE}/1`)
       .send({ name: "Updated Library" });
 
     expect(res.status).toBe(200);
@@ -256,7 +256,7 @@ describe(`PATCH ${BASE}/:id`, () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch(`${BASE}/dest1`).send({});
+    const res = await request(app).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -268,11 +268,11 @@ describe(`DELETE ${BASE}/:id`, () => {
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
-    const res = await request(app).delete(`${BASE}/dest1`);
+    const res = await request(app).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
     expect(mockPrisma.destination.update).toHaveBeenCalledWith({
-      where: { id: "dest1" },
+      where: { id: 1 },
       data: { deletedAt: expect.any(Date) },
     });
   });
@@ -281,7 +281,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete(`${BASE}/missing`);
+    const res = await request(app).delete(`${BASE}/999`);
 
     expect(res.status).toBe(404);
     expect(mockPrisma.destination.update).not.toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("returns 403 when STUDENT attempts delete", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).delete(`${BASE}/dest1`);
+    const res = await request(app).delete(`${BASE}/1`);
 
     expect(res.status).toBe(403);
   });
@@ -314,7 +314,7 @@ describe("SUPER_ADMIN write access", () => {
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
     mockPrisma.destination.update.mockResolvedValue(updated);
 
-    const res = await request(app).patch(`${BASE}/dest1`).send({ name: "Updated Library" });
+    const res = await request(app).patch(`${BASE}/1`).send({ name: "Updated Library" });
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Updated Library");
@@ -325,7 +325,7 @@ describe("SUPER_ADMIN write access", () => {
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
-    const res = await request(app).delete(`${BASE}/dest1`);
+    const res = await request(app).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
   });

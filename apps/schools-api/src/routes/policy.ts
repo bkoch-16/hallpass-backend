@@ -19,7 +19,7 @@ const POLICY_SELECT = {
 } as const;
 
 type PolicyRow = {
-  id: string;
+  id: number;
   schoolId: number;
   maxActivePasses: number | null;
   interval: string | null;
