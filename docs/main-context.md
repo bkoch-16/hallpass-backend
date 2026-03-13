@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-03-13T03:36:39.800Z — 20 files indexed_
+_Generated: 2026-03-13T04:39:35.030Z — 20 files indexed_
 
 ## File Summaries
 
@@ -78,7 +78,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Factory module that creates and configures a better-auth instance via `createAuth()`. Uses Prisma adapter with PostgreSQL, enables email/password authentication, configures serial ID generation, and sets session expiry to 7 days with daily refresh. Automatically enables secure SameSite=none cookies for HTTPS base URLs. Exports the `createAuth` function, inferred `Auth` and `Session` types, plus `toNodeHandler` and `fromNodeHeaders` utilities for Express integration.
+This file is the central authentication configuration module for the project, responsible for creating and exporting a `betterAuth` instance. The main export is `createAuth`, a factory function that accepts a config object (`baseURL`, `secret`, `trustedOrigins`) and returns a configured Better Auth instance using the Prisma adapter with PostgreSQL and the `bearer` plugin. It enables email/password authentication, uses serial ID generation, and conditionally sets secure/sameSite cookie attributes for HTTPS origins. Session configuration is set to expire in 7 days with a 1-day update age. Key type exports include `Auth` (the return type of `createAuth`) and `Session` (inferred session type from Better Auth). It also re-exports `toNodeHandler` and `fromNodeHeaders` from `better-auth/node` for use in Node.js HTTP server integrations, and depends on `@hallpass/db` for the shared Prisma client.
 
 ### `packages/db/prisma/schema.prisma`
 
