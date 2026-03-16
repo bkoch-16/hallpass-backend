@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { logger, httpLogger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
 import { env } from "./env";
+import passesRouter from "./routes/passes";
 
 const app = express();
 
@@ -45,6 +46,8 @@ app.get("/health", async (_req, res) => {
     res.status(503).json({ status: "error", service: "passes-api" });
   }
 });
+
+app.use("/api/passes", passesRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });
