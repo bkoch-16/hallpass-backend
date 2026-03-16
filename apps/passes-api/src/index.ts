@@ -3,6 +3,7 @@ import http from "node:http";
 import { env } from "./env";
 import app from "./app";
 import { initSocket } from "./lib/socket.js";
+import { startExpiryWorker } from "./lib/queue.js";
 
 const PORT = env.PORT ?? 3003;
 
@@ -20,4 +21,5 @@ const httpServer = http.createServer(app);
 initSocket(httpServer);
 httpServer.listen(PORT, () => {
   console.log(`passes-api listening on port ${PORT}`);
+  startExpiryWorker();
 });

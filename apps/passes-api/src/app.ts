@@ -6,6 +6,7 @@ import { logger, httpLogger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
 import { env } from "./env";
 import passesRouter from "./routes/passes";
+import internalRouter from "./routes/internal";
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/api/passes", passesRouter);
+app.use("/internal", internalRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });

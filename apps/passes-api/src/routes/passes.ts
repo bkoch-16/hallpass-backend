@@ -14,6 +14,7 @@ import {
 } from "../schemas/passes";
 import { claimSlot, releaseSlot, promoteFromQueue } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
+import { schedulePassExpiry } from "../lib/queue.js";
 
 const router = Router({ mergeParams: true });
 
@@ -182,6 +183,14 @@ router.post(
       } else if (pass.status === "WAITING") {
         emitPassEvent(pass, "pass:queued");
       }
+
+      if (pass.periodId && activePeriod) {
+        const [hours, minutes] = activePeriod.endTime.split(":").map(Number);
+        const endTime = new Date();
+        endTime.setHours(hours, minutes + (activePeriod.scheduleType?.endBuffer ?? 0), 0, 0);
+        await schedulePassExpiry(pass.id, endTime);
+      }
+
       res.status(201).json(pass);
     } catch (err: unknown) {
       if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {

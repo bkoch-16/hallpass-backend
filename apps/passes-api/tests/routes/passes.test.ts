@@ -36,6 +36,11 @@ vi.mock("../../src/lib/socket.js", () => ({
   initSocket: vi.fn(),
 }));
 
+vi.mock("../../src/lib/queue.js", () => ({
+  schedulePassExpiry: vi.fn().mockResolvedValue(undefined),
+  startExpiryWorker: vi.fn(),
+}));
+
 vi.mock("@hallpass/auth", () => ({
   createAuth: vi.fn(() => ({
     api: { getSession: mockGetSession },
