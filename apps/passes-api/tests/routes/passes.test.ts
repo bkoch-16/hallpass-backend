@@ -31,6 +31,11 @@ vi.mock("../../src/lib/slots.js", () => ({
   reconcileSlots: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../src/lib/socket.js", () => ({
+  emitPassEvent: vi.fn(),
+  initSocket: vi.fn(),
+}));
+
 vi.mock("@hallpass/auth", () => ({
   createAuth: vi.fn(() => ({
     api: { getSession: mockGetSession },

@@ -1,5 +1,6 @@
 import { prisma } from '@hallpass/db';
 import { redis } from './redis.js';
+import { emitPassEvent } from './socket.js';
 
 function slotKey(destinationId: number): string {
   return `slots:destination:${destinationId}`;
@@ -90,7 +91,7 @@ export async function promoteFromQueue(destinationId: number, maxOccupancy: numb
   const claimed = await claimSlot(destinationId, maxOccupancy);
   if (!claimed) return;
 
-  await prisma.pass.update({
+  const promoted = await prisma.pass.update({
     where: { id: waiting.id },
     data: {
       status: 'ACTIVE',
@@ -98,5 +99,5 @@ export async function promoteFromQueue(destinationId: number, maxOccupancy: numb
     },
   });
 
-  // TODO: emit socket event pass:promoted (Phase 5 will add this)
+  emitPassEvent(promoted, 'pass:promoted');
 }

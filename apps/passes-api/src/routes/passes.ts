@@ -13,6 +13,7 @@ import {
   listPassesQuery,
 } from "../schemas/passes";
 import { claimSlot, releaseSlot, promoteFromQueue } from "../lib/slots.js";
+import { emitPassEvent } from "../lib/socket.js";
 
 const router = Router({ mergeParams: true });
 
@@ -176,6 +177,11 @@ router.post(
           status: "PENDING",
         },
       });
+      if (pass.status === "PENDING") {
+        emitPassEvent(pass, "pass:created");
+      } else if (pass.status === "WAITING") {
+        emitPassEvent(pass, "pass:queued");
+      }
       res.status(201).json(pass);
     } catch (err: unknown) {
       if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
@@ -274,6 +280,12 @@ router.post(
       },
     });
 
+    if (updated.status === "ACTIVE") {
+      emitPassEvent(updated, "pass:approved");
+    } else if (updated.status === "WAITING") {
+      emitPassEvent(updated, "pass:queued");
+    }
+
     res.json(updated);
   },
 );
@@ -312,6 +324,8 @@ router.post(
         ...(req.body.approverNote !== undefined ? { approverNote: req.body.approverNote } : {}),
       },
     });
+
+    emitPassEvent(updated, "pass:denied");
 
     res.json(updated);
   },
@@ -355,6 +369,8 @@ router.post(
         returnedAt: new Date(),
       },
     });
+
+    emitPassEvent(updated, "pass:returned");
 
     await releaseSlot(pass.destinationId, destination?.maxOccupancy ?? null);
     await promoteFromQueue(pass.destinationId, destination?.maxOccupancy ?? null);
@@ -401,6 +417,8 @@ router.post(
         cancelledAt: new Date(),
       },
     });
+
+    emitPassEvent(updated, "pass:cancelled");
 
     if (pass.status === "ACTIVE") {
       const destination = await prisma.destination.findUnique({ where: { id: pass.destinationId } });

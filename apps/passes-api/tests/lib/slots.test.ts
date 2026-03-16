@@ -44,6 +44,13 @@ vi.mock("../../src/env.js", () => ({
   env: { REDIS_URL: "redis://localhost:6379" },
 }));
 
+// ─── Mock socket (slots now imports emitPassEvent) ────────────────────────────
+
+vi.mock("../../src/lib/socket.js", () => ({
+  emitPassEvent: vi.fn(),
+  initSocket: vi.fn(),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { claimSlot, releaseSlot, initSlots, reconcileSlots, promoteFromQueue } from "../../src/lib/slots.js";

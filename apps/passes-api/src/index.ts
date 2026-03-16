@@ -1,6 +1,8 @@
 import "dotenv/config";
+import http from "node:http";
 import { env } from "./env";
 import app from "./app";
+import { initSocket } from "./lib/socket.js";
 
 const PORT = env.PORT ?? 3003;
 
@@ -14,6 +16,8 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-app.listen(PORT, () => {
-  console.log(`passes-api running on port ${PORT}`);
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+httpServer.listen(PORT, () => {
+  console.log(`passes-api listening on port ${PORT}`);
 });
