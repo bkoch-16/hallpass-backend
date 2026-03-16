@@ -1,5 +1,5 @@
 name: Hallpass Schools Api Cloud Prod
 values:
   - key: Base
-    value: 'https://schools-api-h4c6vzgsua-uw.a.run.app'
+    value: 'https://schools-api-509242588558.us-west1.run.app'
     enabled: true
