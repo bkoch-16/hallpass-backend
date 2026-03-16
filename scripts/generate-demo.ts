@@ -309,7 +309,7 @@ function main() {
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
     path.join(outDir, "config.js"),
-    `const CONFIG = ${JSON.stringify(config, null, 2)};\n`,
+    `// GENERATED FILE — DO NOT EDIT\nconst CONFIG = ${JSON.stringify(config, null, 2)};\n`,
     "utf8"
   );
 
