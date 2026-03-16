@@ -1,11 +1,11 @@
-import { Queue, Worker, type Job } from 'bullmq';
+import { Queue, Worker, type Job, type ConnectionOptions } from 'bullmq';
 import Redis from 'ioredis';
 import { env } from '../env.js';
 import { prisma } from '@hallpass/db';
 import { releaseSlot, promoteFromQueue } from './slots.js';
 import { emitPassEvent } from './socket.js';
 
-const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }) as unknown as ConnectionOptions;
 
 export const passExpiryQueue = new Queue('pass-expiry', {
   connection: bullmqConnection,
@@ -64,7 +64,7 @@ export async function processPassExpiry(job: Job): Promise<void> {
 
 export function startExpiryWorker(): Worker {
   const worker = new Worker('pass-expiry', processPassExpiry, {
-    connection: new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }),
+    connection: new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }) as unknown as ConnectionOptions,
   });
 
   worker.on('error', (err) => console.error('[queue] worker error:', err.message));

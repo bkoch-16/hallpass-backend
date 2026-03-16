@@ -399,7 +399,7 @@ router.post(
     const user = req.user!;
     const id = Number(req.params.id);
 
-    const isTeacherOrAbove = [UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role as UserRole);
+    const isTeacherOrAbove = user.role === UserRole.TEACHER || user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
 
     // Students can only cancel their own passes; teachers/admins can cancel any pass in their school
     const where = isTeacherOrAbove

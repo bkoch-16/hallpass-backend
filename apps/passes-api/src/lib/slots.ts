@@ -13,7 +13,7 @@ function slotKey(destinationId: number): string {
  */
 export async function initSlots(destinationId: number, maxOccupancy: number | null | undefined): Promise<boolean> {
   if (maxOccupancy == null) return false;
-  const result = await redis.set(slotKey(destinationId), maxOccupancy, 'NX', 'EX', 86400);
+  const result = await redis.set(slotKey(destinationId), maxOccupancy, 'EX', 86400, 'NX');
   return result === 'OK';
 }
 

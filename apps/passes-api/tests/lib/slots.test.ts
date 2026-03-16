@@ -67,7 +67,7 @@ describe("initSlots", () => {
 
     const result = await initSlots(1, 10);
 
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 10, "NX", "EX", 86400);
+    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 10, "EX", 86400, "NX");
     expect(result).toBe(true);
   });
 
@@ -122,7 +122,7 @@ describe("claimSlot", () => {
     const result = await claimSlot(3, 10);
 
     expect(result).toBe(true);
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:3", 10, "NX", "EX", 86400);
+    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:3", 10, "EX", 86400, "NX");
     // INCR once (to restore before init), not twice
     expect(mockRedis.incr).toHaveBeenCalledTimes(1);
   });
