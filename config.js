@@ -1,3 +1,4 @@
+// GENERATED FILE — DO NOT EDIT
 const CONFIG = {
   "stages": [
     "Prod"
@@ -196,7 +197,7 @@ const CONFIG = {
       "name": "Schools-API",
       "order": 3000,
       "baseUrls": {
-        "Prod": "https://schools-api-h4c6vzgsua-uw.a.run.app"
+        "Prod": "https://schools-api-509242588558.us-west1.run.app"
       },
       "subgroups": [
         {
