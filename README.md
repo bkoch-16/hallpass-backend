@@ -27,6 +27,7 @@ See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API desi
 ## Structure
 
 - `apps/user-api` - User management REST API (Express)
+- `apps/schools-api` - Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API (Express)
 - `packages/auth` - Authentication layer (better-auth)
 - `packages/db` - Database access layer (Prisma + PostgreSQL)
 
@@ -38,8 +39,8 @@ Four GitHub Actions workflows run on this repo:
 Runs on every push and PR.
 
 1. **Lint, Build & Test** — runs on all pushes and PRs
-2. **Deploy to Cloud Run (dev)** — triggers on push to `develop`; builds and pushes a Docker image to GCP Artifact Registry (`us-west1`) then deploys the `user-api-dev` Cloud Run service
-3. **Deploy to Cloud Run (prod)** — same pipeline, triggers on push to `main`, targets the `user-api` Cloud Run service
+2. **Deploy to Cloud Run (dev)** — triggers on push to `develop`; builds and pushes Docker images to GCP Artifact Registry (`us-west1`) then deploys the `user-api-dev` and `schools-api-dev` Cloud Run services
+3. **Deploy to Cloud Run (prod)** — same pipeline, triggers on push to `main`, targets the `user-api` and `schools-api` Cloud Run services
 
 Environment variables and secrets are managed directly on each Cloud Run service via GCP Secret Manager — nothing is passed through the workflow.
 
