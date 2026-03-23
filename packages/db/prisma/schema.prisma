@@ -20,6 +20,16 @@ enum PolicyInterval {
   MONTH
 }
 
+enum PassStatus {
+  PENDING
+  WAITING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DENIED
+  EXPIRED
+}
+
 model District {
   id        Int       @id @default(autoincrement())
   name      String
@@ -46,6 +56,7 @@ model School {
   calendar      SchoolCalendar[]
   destinations  Destination[]
   policy        PassPolicy?
+  passes        Pass[]
 }
 
 model User {
@@ -62,6 +73,11 @@ model User {
   school    School?   @relation(fields: [schoolId], references: [id])
   sessions  Session[]
   accounts  Account[]
+
+  studentPasses   Pass[] @relation("StudentPasses")
+  approvedPasses  Pass[] @relation("ApproverPasses")
+  deniedPasses    Pass[] @relation("DenierPasses")
+  cancelledPasses Pass[] @relation("CancellerPasses")
 }
 
 model Session {
@@ -123,6 +139,7 @@ model Period {
 
   school       School       @relation(fields: [schoolId], references: [id])
   scheduleType ScheduleType @relation(fields: [scheduleTypeId], references: [id])
+  passes       Pass[]
 
   @@index([scheduleTypeId])
 }
@@ -150,6 +167,7 @@ model Destination {
   deletedAt    DateTime?
 
   school School @relation(fields: [schoolId], references: [id])
+  passes Pass[]
 
   @@index([schoolId])
 }
@@ -164,4 +182,36 @@ model PassPolicy {
   updatedAt      DateTime        @updatedAt
 
   school School @relation(fields: [schoolId], references: [id])
+}
+
+model Pass {
+  id            Int        @id @default(autoincrement())
+  schoolId      Int
+  studentId     Int
+  destinationId Int
+  periodId      Int?
+  approverId    Int?
+  denierId      Int?
+  cancellerId   Int?
+  status        PassStatus @default(PENDING)
+  note          String?
+  approverNote  String?
+  requestedAt   DateTime   @default(now())
+  approvedAt    DateTime?
+  returnedAt    DateTime?
+  cancelledAt   DateTime?
+  deniedAt      DateTime?
+  expiredAt     DateTime?
+
+  school      School      @relation(fields: [schoolId], references: [id])
+  student     User        @relation("StudentPasses", fields: [studentId], references: [id])
+  destination Destination @relation(fields: [destinationId], references: [id])
+  period      Period?     @relation(fields: [periodId], references: [id])
+  approver    User?       @relation("ApproverPasses", fields: [approverId], references: [id])
+  denier      User?       @relation("DenierPasses", fields: [denierId], references: [id])
+  canceller   User?       @relation("CancellerPasses", fields: [cancellerId], references: [id])
+
+  @@index([schoolId])
+  @@index([studentId])
+  @@index([status])
 }
