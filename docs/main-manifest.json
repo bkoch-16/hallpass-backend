@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-13T04:39:35.030Z",
+  "generatedAt": "2026-06-15T04:07:32.353Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "4da8920e8122fe0c09d10eb841dfc9fe0189531e",
       "summary": "Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User, Session, Account, ScheduleType, Period, SchoolCalendar, Destination, and PassPolicy, with a Role enum (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE) and PolicyInterval enum (DAY, WEEK, MONTH). The schema follows a hierarchical structure: Districts contain Schools, Schools contain Users, ScheduleTypes, Periods, Destinations, a Calendar, and an optional PassPolicy. Authentication is modeled via Session and Account tables linked to User with cascade deletes. Soft deletes are supported via optional `deletedAt` fields on most entities, and standard `createdAt`/`updatedAt` timestamps are used throughout. Key constraints include unique email on User, unique (schoolId, date) on SchoolCalendar, unique schoolId on PassPolicy (one-to-one with School), and indexed foreign keys on schedule/period/destination tables."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "47d7bd37349c0a440bbff0d12325b216597917b5",
-      "summary": "Main Express application setup for the user-api service, responsible for wiring all middleware and routes. It configures helmet (security headers), CORS (configurable origins via env), pino HTTP logging, JSON body parsing, and two rate limiters (general 100 req/15min, auth 10 req/15min). Routes include BetterAuth handler at `/api/auth/*splat`, user CRUD at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. It includes a 404 catch-all and a global error handler. The `trust proxy` setting is enabled for deployment behind a reverse proxy (Cloud Run)."
+      "blobSha": "e66d97d499f2a356762e40fa7e935a5348a061d0",
+      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters: a general one (100 req/15min) and a stricter auth-specific one (10 req/15min). Routes include `/api/auth/*` for authentication (delegated to Better Auth via `toNodeHandler`), `/api/users` for user routes, and `/health` for a database connectivity health check using Prisma. The app trusts one proxy hop (`trust proxy: 1`) and includes a global 404 handler and error handler that logs via the shared logger. Key dependencies are shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local modules for auth config, env validation, and user routes."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "aa8d1ba49d0d3724366df100a1a69a43b264bde9",

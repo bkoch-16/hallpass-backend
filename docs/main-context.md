@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-03-13T04:39:35.030Z — 20 files indexed_
+_Generated: 2026-06-15T04:07:32.353Z — 20 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Multi-stage-style Dockerfile for the user-api Express service, based on node:22-
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service, responsible for wiring all middleware and routes. It configures helmet (security headers), CORS (configurable origins via env), pino HTTP logging, JSON body parsing, and two rate limiters (general 100 req/15min, auth 10 req/15min). Routes include BetterAuth handler at `/api/auth/*splat`, user CRUD at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. It includes a 404 catch-all and a global error handler. The `trust proxy` setting is enabled for deployment behind a reverse proxy (Cloud Run).
+Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters: a general one (100 req/15min) and a stricter auth-specific one (10 req/15min). Routes include `/api/auth/*` for authentication (delegated to Better Auth via `toNodeHandler`), `/api/users` for user routes, and `/health` for a database connectivity health check using Prisma. The app trusts one proxy hop (`trust proxy: 1`) and includes a global 404 handler and error handler that logs via the shared logger. Key dependencies are shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local modules for auth config, env validation, and user routes.
 
 ### `apps/user-api/src/auth.ts`
 
