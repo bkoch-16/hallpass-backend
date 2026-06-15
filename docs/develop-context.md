@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-03-13T05:03:02.978Z — 20 files indexed_
+_Generated: 2026-06-15T03:58:22.819Z — 20 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with p
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters—a general 100 req/15min limit and a stricter 10 req/15min limit for auth routes. Routes include Better Auth integration at `/api/auth/*splat`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth`, `env`, and `userRouter` modules. Includes a 404 catch-all and a global error handler that logs errors and returns 500. The `trust proxy` setting is enabled for running behind a reverse proxy (important for rate limiting accuracy).
+Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` using Better Auth's `toNodeHandler`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth` config and `env` validation. Includes a global 404 handler and error handler that logs errors and returns generic 500 responses. Developers modifying this file should note `trust proxy` is enabled (important for rate limiting behind reverse proxies) and that the CORS origin supports both wildcard and comma-separated whitelist configurations.
 
 ### `apps/user-api/src/auth.ts`
 

@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-13T05:03:02.978Z",
+  "generatedAt": "2026-06-15T03:58:22.819Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "4da8920e8122fe0c09d10eb841dfc9fe0189531e",
       "summary": "Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication/authorization. School-specific models include ScheduleType, Period (with time-based ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (controlling active pass limits and interval-based quotas using DAY/WEEK/MONTH enum). Soft deletes are supported via optional `deletedAt` fields on most entities; timestamps follow `createdAt`/`updatedAt` conventions. Key relationships: Districts have many Schools, Schools have many Users, ScheduleTypes, Periods, Destinations, and one optional PassPolicy. Sessions and Accounts cascade delete with their parent User. Developers modifying this file must run Prisma migrations afterward and should note the indexed fields (schoolId, scheduleTypeId) and unique constraints (User.email, SchoolCalendar schoolId+date, PassPolicy.schoolId)."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "47d7bd37349c0a440bbff0d12325b216597917b5",
-      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and two rate limiters—a general 100 req/15min limit and a stricter 10 req/15min limit for auth routes. Routes include Better Auth integration at `/api/auth/*splat`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth`, `env`, and `userRouter` modules. Includes a 404 catch-all and a global error handler that logs errors and returns 500. The `trust proxy` setting is enabled for running behind a reverse proxy (important for rate limiting accuracy)."
+      "blobSha": "e66d97d499f2a356762e40fa7e935a5348a061d0",
+      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` using Better Auth's `toNodeHandler`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth` config and `env` validation. Includes a global 404 handler and error handler that logs errors and returns generic 500 responses. Developers modifying this file should note `trust proxy` is enabled (important for rate limiting behind reverse proxies) and that the CORS origin supports both wildcard and comma-separated whitelist configurations."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "aa8d1ba49d0d3724366df100a1a69a43b264bde9",
