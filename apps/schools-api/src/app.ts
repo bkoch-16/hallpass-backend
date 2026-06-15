@@ -29,6 +29,7 @@ app.use(
     credentials: corsOrigins !== "*",
   }),
 );
+app.options("/*splat", cors({ origin: corsOrigins, credentials: corsOrigins !== "*" }));
 
 app.use(httpLogger);
 app.use(express.json());
