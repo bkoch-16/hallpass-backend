@@ -3,6 +3,7 @@ Hallpass backend — a Node.js monorepo providing API services for a digital hal
 
 ## Packages
 - `apps/user-api` — Main Express 5 REST API
+- `apps/schools-api` — Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API
 - `packages/auth` — Authentication layer (better-auth)
 - `packages/db` — Database access (Prisma + PostgreSQL)
 - `packages/logger` — Shared structured logging (Pino)
@@ -58,6 +59,8 @@ pnpm format:check  # Check formatting without writing
 # Run for a specific package
 pnpm --filter @hallpass/user-api test
 pnpm --filter @hallpass/user-api lint
+pnpm --filter @hallpass/schools-api test
+pnpm --filter @hallpass/schools-api lint
 ```
 
 ## Environment Variables
@@ -82,6 +85,17 @@ apps/user-api/src/
 ├── middleware/       # Express middleware
 ├── schemas/          # Zod validation schemas
 └── lib/              # Utilities
+```
+
+```
+apps/schools-api/src/
+├── index.ts          # Entry point
+├── app.ts            # Express app setup
+├── env.ts            # Env var validation (Zod)
+├── auth.ts           # Auth configuration
+├── routes/           # Route handlers (district, school, scheduleType, period, calendar, destination, policy)
+├── middleware/       # Express middleware (auth, roleGuard, schoolScope, validate)
+└── schemas/          # Zod validation schemas
 ```
 
 **Layers:**
@@ -135,12 +149,16 @@ pnpm --filter @hallpass/db exec prisma studio
 - General endpoints: 100 req / 15 min
 - Auth endpoints: 10 req / 15 min
 
+**ID strategy:** All domain models (`District`, `School`, `User`, `ScheduleType`, `Period`, `SchoolCalendar`, `Destination`, `PassPolicy`) use `Int @id @default(autoincrement())`. Auth-infrastructure tables (`Session`, `Account`) use `String` (cuid) IDs — these are generated and managed by better-auth and are not part of the domain schema.
+
 ## Deployment
 
 | Branch | Environment | Service |
 |---|---|---|
 | `develop` | Dev | `user-api-dev` |
+| `develop` | Dev | `schools-api-dev` |
 | `main` | Prod | `user-api` |
+| `main` | Prod | `schools-api` |
 
 GitHub Actions workflow: lint → build → test → Docker build → push to GCP Artifact Registry → deploy to Cloud Run → run migrations.
 
