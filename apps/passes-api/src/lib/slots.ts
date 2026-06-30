@@ -6,6 +6,17 @@ function slotKey(destinationId: number): string {
   return `slots:destination:${destinationId}`;
 }
 
+// Atomically initialise the key if it doesn't exist, then decrement.
+// Returns the new counter value (>= 0 = claimed, < 0 = no slot).
+const LUA_CLAIM_SLOT = `
+local key = KEYS[1]
+local max = tonumber(ARGV[1])
+if redis.call('EXISTS', key) == 0 then
+  redis.call('SET', key, max, 'EX', 86400)
+end
+return redis.call('DECR', key)
+`;
+
 /**
  * SET slots:destination:{id} {maxOccupancy} NX EX 86400
  * Returns true if the key was newly set, false if it already existed.
@@ -18,31 +29,20 @@ export async function initSlots(destinationId: number, maxOccupancy: number | nu
 }
 
 /**
- * Atomically claim one slot via DECR.
+ * Atomically claim one slot.
  * - If maxOccupancy is null → unlimited, return true immediately.
- * - If the key didn't exist (DECR yields -1 starting from 0): init and retry once.
- * - If DECR result >= 0 → claimed, return true.
- * - If DECR result < 0 → no slots, INCR back and return false.
+ * - Uses a Lua script to init-if-missing then DECR in one round trip.
+ * - Returns true if a slot was claimed, false if none available.
  */
 export async function claimSlot(destinationId: number, maxOccupancy: number | null): Promise<boolean> {
   if (maxOccupancy === null) return true;
 
   const key = slotKey(destinationId);
-  let remaining = await redis.decr(key);
+  const remaining = await redis.eval(LUA_CLAIM_SLOT, 1, key, maxOccupancy) as number;
 
-  // Key didn't exist: DECR on a missing key creates it at 0 then decrements to -1
-  if (remaining === -1) {
-    await redis.incr(key); // restore to 0 before reinitialising
-    await initSlots(destinationId, maxOccupancy);
-    remaining = await redis.decr(key);
-  }
+  if (remaining >= 0) return true;
 
-  if (remaining >= 0) {
-    return true;
-  }
-
-  // Overdrawn — restore the counter
-  await redis.incr(key);
+  await redis.incr(key); // restore the counter
   return false;
 }
 
@@ -62,6 +62,15 @@ export async function releaseSlot(destinationId: number, maxOccupancy: number | 
 }
 
 /**
+ * Release a slot then promote the oldest WAITING pass if one is available.
+ * Used in return, cancel, and expiry paths to keep the queue moving.
+ */
+export async function releaseAndPromote(destinationId: number, maxOccupancy: number | null): Promise<void> {
+  await releaseSlot(destinationId, maxOccupancy);
+  await promoteFromQueue(destinationId, maxOccupancy);
+}
+
+/**
  * Reconcile the Redis counter against actual DB state.
  * SET counter = maxOccupancy - (# ACTIVE passes for this destination).
  * No-op when maxOccupancy is null.
@@ -78,7 +87,7 @@ export async function reconcileSlots(destinationId: number, maxOccupancy: number
 
 /**
  * Promote the oldest WAITING pass for a destination if a slot is available.
- * No-op when maxOccupancy is null (unlimited — passes go straight to ACTIVE anyway).
+ * Uses updateMany with a status guard to be safe under concurrent promotions.
  */
 export async function promoteFromQueue(destinationId: number, maxOccupancy: number | null): Promise<void> {
   const waiting = await prisma.pass.findFirst({
@@ -91,13 +100,17 @@ export async function promoteFromQueue(destinationId: number, maxOccupancy: numb
   const claimed = await claimSlot(destinationId, maxOccupancy);
   if (!claimed) return;
 
-  const promoted = await prisma.pass.update({
-    where: { id: waiting.id },
-    data: {
-      status: 'ACTIVE',
-      approvedAt: new Date(),
-    },
+  const { count } = await prisma.pass.updateMany({
+    where: { id: waiting.id, status: 'WAITING' },
+    data: { status: 'ACTIVE', approvedAt: new Date() },
   });
 
+  if (count === 0) {
+    // Another worker already promoted this pass — release the slot we claimed
+    await releaseSlot(destinationId, maxOccupancy);
+    return;
+  }
+
+  const promoted = await prisma.pass.findUniqueOrThrow({ where: { id: waiting.id } });
   emitPassEvent(promoted, 'pass:promoted');
 }

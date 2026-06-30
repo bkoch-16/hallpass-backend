@@ -2,7 +2,7 @@ import { Queue, Worker, type Job, type ConnectionOptions } from 'bullmq';
 import Redis from 'ioredis';
 import { env } from '../env.js';
 import { prisma } from '@hallpass/db';
-import { releaseSlot, promoteFromQueue } from './slots.js';
+import { releaseAndPromote } from './slots.js';
 import { emitPassEvent } from './socket.js';
 
 const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }) as unknown as ConnectionOptions;
@@ -48,16 +48,14 @@ export async function processPassExpiry(job: Job): Promise<void> {
         data: { status: 'COMPLETED', returnedAt: new Date() },
       });
       emitPassEvent(updated, 'pass:returned');
-      await releaseSlot(pass.destinationId, destination?.maxOccupancy ?? null);
-      await promoteFromQueue(pass.destinationId, destination?.maxOccupancy ?? null);
+      await releaseAndPromote(pass.destinationId, destination?.maxOccupancy ?? null);
     } else {
       const updated = await prisma.pass.update({
         where: { id: passId },
         data: { status: 'EXPIRED', expiredAt: new Date() },
       });
       emitPassEvent(updated, 'pass:expired');
-      await releaseSlot(pass.destinationId, destination?.maxOccupancy ?? null);
-      await promoteFromQueue(pass.destinationId, destination?.maxOccupancy ?? null);
+      await releaseAndPromote(pass.destinationId, destination?.maxOccupancy ?? null);
     }
   }
 }

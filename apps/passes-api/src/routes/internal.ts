@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roleGuard.js';
 import { prisma } from '@hallpass/db';
 import { schedulePassExpiry } from '../lib/queue.js';
+import { periodEndDate } from '../lib/time.js';
 import { UserRole } from '@hallpass/types';
 
 const router = Router();
@@ -14,20 +15,23 @@ router.post('/reconcile-expiry', requireAuth, requireRole(UserRole.SERVICE), asy
   });
 
   let scheduled = 0;
+  const errors: { passId: number; error: string }[] = [];
   const now = Date.now();
+
   for (const pass of activePasses) {
     if (!pass.period) continue;
-    const [hours, minutes] = pass.period.endTime.split(':').map(Number);
-    const endBuffer = pass.period.scheduleType?.endBuffer ?? 0;
-    const endTime = new Date();
-    endTime.setHours(hours, minutes + endBuffer, 0, 0);
-    if (endTime.getTime() > now) {
-      await schedulePassExpiry(pass.id, endTime);
-      scheduled++;
+    try {
+      const endTime = periodEndDate(pass.period.endTime, pass.period.scheduleType?.endBuffer ?? 0);
+      if (endTime.getTime() > now) {
+        await schedulePassExpiry(pass.id, endTime);
+        scheduled++;
+      }
+    } catch (err) {
+      errors.push({ passId: pass.id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
-  res.json({ scheduled });
+  res.json({ scheduled, ...(errors.length > 0 ? { errors } : {}) });
 });
 
 export default router;

@@ -12,9 +12,10 @@ import {
   passIdParams,
   listPassesQuery,
 } from "../schemas/passes";
-import { claimSlot, releaseSlot, promoteFromQueue } from "../lib/slots.js";
-import { emitPassEvent } from "../lib/socket.js";
-import { schedulePassExpiry } from "../lib/queue.js";
+import { claimSlot, releaseAndPromote } from "../lib/slots";
+import { emitPassEvent } from "../lib/socket";
+import { schedulePassExpiry } from "../lib/queue";
+import { periodEndDate } from "../lib/time";
 
 const router = Router({ mergeParams: true });
 
@@ -185,10 +186,7 @@ router.post(
       }
 
       if (pass.periodId && activePeriod) {
-        const [hours, minutes] = activePeriod.endTime.split(":").map(Number);
-        const endTime = new Date();
-        endTime.setHours(hours, minutes + (activePeriod.scheduleType?.endBuffer ?? 0), 0, 0);
-        await schedulePassExpiry(pass.id, endTime);
+        await schedulePassExpiry(pass.id, periodEndDate(activePeriod.endTime, activePeriod.scheduleType?.endBuffer ?? 0));
       }
 
       res.status(201).json(pass);
@@ -319,8 +317,8 @@ router.post(
       return;
     }
 
-    if (pass.status !== "PENDING") {
-      res.status(400).json({ error: "Pass must be PENDING to deny" });
+    if (pass.status !== "PENDING" && pass.status !== "WAITING") {
+      res.status(400).json({ error: "Pass must be PENDING or WAITING to deny" });
       return;
     }
 
@@ -381,8 +379,7 @@ router.post(
 
     emitPassEvent(updated, "pass:returned");
 
-    await releaseSlot(pass.destinationId, destination?.maxOccupancy ?? null);
-    await promoteFromQueue(pass.destinationId, destination?.maxOccupancy ?? null);
+    await releaseAndPromote(pass.destinationId, destination?.maxOccupancy ?? null);
 
     res.json(updated);
   },
@@ -392,7 +389,6 @@ router.post(
 router.post(
   "/:id/cancel",
   requireAuth,
-  requireRole(UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateParams(passIdParams),
   validateBody(cancelPassBody),
   async (req: Request, res: Response) => {
@@ -431,8 +427,7 @@ router.post(
 
     if (pass.status === "ACTIVE") {
       const destination = await prisma.destination.findUnique({ where: { id: pass.destinationId } });
-      await releaseSlot(pass.destinationId, destination?.maxOccupancy ?? null);
-      await promoteFromQueue(pass.destinationId, destination?.maxOccupancy ?? null);
+      await releaseAndPromote(pass.destinationId, destination?.maxOccupancy ?? null);
     }
 
     res.json(updated);
