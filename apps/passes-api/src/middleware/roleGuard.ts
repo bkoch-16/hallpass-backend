@@ -30,3 +30,19 @@ export function requireRole(...roles: UserRole[]) {
     next();
   };
 }
+
+export function requireMinRole(minRole: UserRole) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (roleRank(req.user.role) < roleRank(minRole)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    next();
+  };
+}

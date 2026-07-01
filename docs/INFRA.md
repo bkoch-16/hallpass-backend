@@ -188,6 +188,7 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 | `BETTER_AUTH_SECRET` | Shared secret for better-auth session verification       |
 | `REDIS_URL`          | Upstash Redis URL (used by Socket.io adapter and BullMQ) |
 | `CORS_ORIGIN`        | Allowed CORS origin(s)                                   |
+| `INTERNAL_SECRET`    | Shared secret for the /internal/* routes (Cloud Scheduler) |
 | `PORT`               | HTTP listen port (defaults to `3003`)                    |
 
 ### Notes

@@ -4,6 +4,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Full auth-based integration tests would require a live better-auth server.
 
 // We need to mock dependencies before importing the module under test
+vi.mock('ioredis', () => ({
+  default: class MockRedis {
+    constructor(_url: string, _opts?: unknown) {}
+    duplicate() { return this; }
+    on() { return this; }
+  },
+}));
+
+vi.mock('@socket.io/redis-adapter', () => ({
+  createAdapter: vi.fn().mockReturnValue(
+    class MockAdapter {
+      constructor(_ns: unknown) {}
+      init() {}
+      close() {}
+    }
+  ),
+}));
+
 vi.mock('../../src/auth.js', () => ({
   auth: {
     api: {
@@ -42,7 +60,7 @@ describe('emitPassEvent', () => {
 
     const httpServer = createServer();
 
-    const ioServer = initSocket(httpServer);
+    const { io: ioServer } = initSocket(httpServer);
 
     expect(ioServer).toBeDefined();
     expect(typeof ioServer.to).toBe('function');
@@ -53,12 +71,12 @@ describe('emitPassEvent', () => {
     httpServer.close();
   });
 
-  it('emitPassEvent emits to school and user rooms after init', async () => {
+  it('emitPassEvent emits to school room only after init', async () => {
     const { createServer } = await import('node:http');
     const { initSocket, emitPassEvent } = await import('../../src/lib/socket.js');
 
     const httpServer = createServer();
-    const ioServer = initSocket(httpServer);
+    const { io: ioServer } = initSocket(httpServer);
 
     const toSpy = vi.spyOn(ioServer, 'to');
     // to() returns a BroadcastOperator; mock it to allow chained .emit()
@@ -69,11 +87,12 @@ describe('emitPassEvent', () => {
     emitPassEvent(pass, 'pass:approved');
 
     expect(toSpy).toHaveBeenCalledWith('school:5');
-    expect(toSpy).toHaveBeenCalledWith('user:42');
-    expect(emitMock).toHaveBeenCalledTimes(2);
+    expect(toSpy).not.toHaveBeenCalledWith('user:42');
+    expect(emitMock).toHaveBeenCalledTimes(1);
     expect(emitMock).toHaveBeenCalledWith('pass:approved', pass);
 
     ioServer.close();
     httpServer.close();
   });
 });
+

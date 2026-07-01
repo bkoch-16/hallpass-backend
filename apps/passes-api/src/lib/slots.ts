@@ -1,71 +1,89 @@
-import { prisma } from '@hallpass/db';
-import { redis } from './redis.js';
-import { emitPassEvent } from './socket.js';
+import { prisma, PassStatus } from "@hallpass/db";
+import { redis } from "./redis.js";
+import { emitPassEvent } from "./socket.js";
+
+const SLOT_TTL_SECONDS = 86400;
 
 function slotKey(destinationId: number): string {
   return `slots:destination:${destinationId}`;
 }
 
-// Atomically initialise the key if it doesn't exist, then decrement.
-// Returns the new counter value (>= 0 = claimed, < 0 = no slot).
+// Atomically initialise if missing, decrement, and restore if over-claimed — all in one round trip.
+// Returns the remaining count (>= 0) on success, or -1 when no slot was available (counter already restored).
 const LUA_CLAIM_SLOT = `
 local key = KEYS[1]
 local max = tonumber(ARGV[1])
 if redis.call('EXISTS', key) == 0 then
-  redis.call('SET', key, max, 'EX', 86400)
+  redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
 end
-return redis.call('DECR', key)
+local remaining = redis.call('DECR', key)
+if remaining < 0 then
+  redis.call('INCR', key)
+  return -1
+end
+redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
+return remaining
 `;
 
-/**
- * SET slots:destination:{id} {maxOccupancy} NX EX 86400
- * Returns true if the key was newly set, false if it already existed.
- * No-op (returns false) when maxOccupancy is null/undefined.
- */
-export async function initSlots(destinationId: number, maxOccupancy: number | null | undefined): Promise<boolean> {
-  if (maxOccupancy == null) return false;
-  const result = await redis.set(slotKey(destinationId), maxOccupancy, 'EX', 86400, 'NX');
-  return result === 'OK';
-}
+// Atomically increment then cap at max in a single round trip.
+const LUA_RELEASE_SLOT = `
+local key = KEYS[1]
+local max = tonumber(ARGV[1])
+local val = redis.call('INCR', key)
+if val > max then
+  redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
+  return max
+end
+redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
+return val
+`;
 
 /**
  * Atomically claim one slot.
  * - If maxOccupancy is null → unlimited, return true immediately.
+ * - If maxOccupancy is 0 → never allow, return false immediately (avoids a Redis
+ *   TTL-expiry race where the restore INCR could create a key at 1).
  * - Uses a Lua script to init-if-missing then DECR in one round trip.
  * - Returns true if a slot was claimed, false if none available.
  */
-export async function claimSlot(destinationId: number, maxOccupancy: number | null): Promise<boolean> {
+export async function claimSlot(
+  destinationId: number,
+  maxOccupancy: number | null,
+): Promise<boolean> {
   if (maxOccupancy === null) return true;
+  if (maxOccupancy === 0) return false;
 
   const key = slotKey(destinationId);
-  const remaining = await redis.eval(LUA_CLAIM_SLOT, 1, key, maxOccupancy) as number;
+  const remaining = (await redis.eval(
+    LUA_CLAIM_SLOT,
+    1,
+    key,
+    maxOccupancy,
+  )) as number;
 
-  if (remaining >= 0) return true;
-
-  await redis.incr(key); // restore the counter
-  return false;
+  return remaining >= 0;
 }
 
 /**
- * Release one slot back via INCR, then cap at maxOccupancy.
+ * Atomically release one slot via INCR, capped at maxOccupancy.
  * No-op when maxOccupancy is null.
  */
-export async function releaseSlot(destinationId: number, maxOccupancy: number | null): Promise<void> {
+export async function releaseSlot(
+  destinationId: number,
+  maxOccupancy: number | null,
+): Promise<void> {
   if (maxOccupancy === null) return;
-
-  const key = slotKey(destinationId);
-  const current = await redis.incr(key);
-
-  if (current > maxOccupancy) {
-    await redis.set(key, maxOccupancy);
-  }
+  await redis.eval(LUA_RELEASE_SLOT, 1, slotKey(destinationId), maxOccupancy);
 }
 
 /**
  * Release a slot then promote the oldest WAITING pass if one is available.
  * Used in return, cancel, and expiry paths to keep the queue moving.
  */
-export async function releaseAndPromote(destinationId: number, maxOccupancy: number | null): Promise<void> {
+export async function releaseAndPromote(
+  destinationId: number,
+  maxOccupancy: number | null,
+): Promise<void> {
   await releaseSlot(destinationId, maxOccupancy);
   await promoteFromQueue(destinationId, maxOccupancy);
 }
@@ -75,24 +93,36 @@ export async function releaseAndPromote(destinationId: number, maxOccupancy: num
  * SET counter = maxOccupancy - (# ACTIVE passes for this destination).
  * No-op when maxOccupancy is null.
  */
-export async function reconcileSlots(destinationId: number, maxOccupancy: number | null): Promise<void> {
+export async function reconcileSlots(
+  destinationId: number,
+  maxOccupancy: number | null,
+): Promise<void> {
   if (maxOccupancy === null) return;
 
   const activeCount = await prisma.pass.count({
-    where: { destinationId, status: 'ACTIVE' },
+    where: { destinationId, status: PassStatus.ACTIVE },
   });
 
-  await redis.set(slotKey(destinationId), maxOccupancy - activeCount);
+  await redis.set(
+    slotKey(destinationId),
+    Math.max(0, maxOccupancy - activeCount),
+    "EX",
+    SLOT_TTL_SECONDS,
+  );
 }
 
 /**
  * Promote the oldest WAITING pass for a destination if a slot is available.
  * Uses updateMany with a status guard to be safe under concurrent promotions.
  */
-export async function promoteFromQueue(destinationId: number, maxOccupancy: number | null): Promise<void> {
+export async function promoteFromQueue(
+  destinationId: number,
+  maxOccupancy: number | null,
+  _isRetry = false,
+): Promise<void> {
   const waiting = await prisma.pass.findFirst({
-    where: { destinationId, status: 'WAITING' },
-    orderBy: { requestedAt: 'asc' },
+    where: { destinationId, status: PassStatus.WAITING },
+    orderBy: { requestedAt: "asc" },
   });
 
   if (!waiting) return;
@@ -101,16 +131,21 @@ export async function promoteFromQueue(destinationId: number, maxOccupancy: numb
   if (!claimed) return;
 
   const { count } = await prisma.pass.updateMany({
-    where: { id: waiting.id, status: 'WAITING' },
-    data: { status: 'ACTIVE', approvedAt: new Date() },
+    where: { id: waiting.id, status: PassStatus.WAITING },
+    data: { status: PassStatus.ACTIVE, activatedAt: new Date() },
   });
 
   if (count === 0) {
     // Another worker already promoted this pass — release the slot we claimed
     await releaseSlot(destinationId, maxOccupancy);
+    if (!_isRetry) {
+      await promoteFromQueue(destinationId, maxOccupancy, true);
+    }
     return;
   }
 
-  const promoted = await prisma.pass.findUniqueOrThrow({ where: { id: waiting.id } });
-  emitPassEvent(promoted, 'pass:promoted');
+  const promoted = await prisma.pass.findUniqueOrThrow({
+    where: { id: waiting.id },
+  });
+  emitPassEvent(promoted, "pass:promoted");
 }

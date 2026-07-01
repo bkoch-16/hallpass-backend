@@ -15,6 +15,7 @@
     "@hallpass/db": "workspace:*",
     "@hallpass/logger": "workspace:*",
     "@hallpass/types": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bullmq": "^5.71.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

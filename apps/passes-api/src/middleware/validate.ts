@@ -10,6 +10,7 @@ export function validateQuery(schema: ZodSchema) {
         .json({ message: "Invalid query", errors: result.error.flatten() });
       return;
     }
+    // req.query is read-only in Express; Object.defineProperty bypasses the getter restriction.
     Object.defineProperty(req, "query", {
       value: result.data,
       writable: true,

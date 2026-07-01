@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { passStatusMock } from "../utils/passStatusMock.js";
 
 // ─── Hoisted mocks (must be declared before vi.mock calls) ────────────────────
 
@@ -6,7 +7,7 @@ const { mockRedis, mockPrisma } = vi.hoisted(() => {
   const mockRedis = {
     set: vi.fn(),
     get: vi.fn(),
-    decr: vi.fn(),
+    eval: vi.fn(),
     incr: vi.fn(),
     on: vi.fn(),
   };
@@ -14,7 +15,8 @@ const { mockRedis, mockPrisma } = vi.hoisted(() => {
     pass: {
       count: vi.fn(),
       findFirst: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
     },
   };
   return { mockRedis, mockPrisma };
@@ -26,7 +28,7 @@ vi.mock("ioredis", () => ({
   default: class MockRedis {
     set = mockRedis.set;
     get = mockRedis.get;
-    decr = mockRedis.decr;
+    eval = mockRedis.eval;
     incr = mockRedis.incr;
     on = mockRedis.on;
   },
@@ -35,6 +37,7 @@ vi.mock("ioredis", () => ({
 // ─── Mock @hallpass/db ────────────────────────────────────────────────────────
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
   prisma: mockPrisma,
 }));
 
@@ -53,7 +56,7 @@ vi.mock("../../src/lib/socket.js", () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
-import { claimSlot, releaseSlot, initSlots, reconcileSlots, promoteFromQueue } from "../../src/lib/slots.js";
+import { claimSlot, releaseSlot, reconcileSlots, promoteFromQueue } from "../../src/lib/slots.js";
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -61,44 +64,18 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("initSlots", () => {
-  it("calls SET NX EX and returns true when key was newly created", async () => {
-    mockRedis.set.mockResolvedValue("OK");
-
-    const result = await initSlots(1, 10);
-
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 10, "EX", 86400, "NX");
-    expect(result).toBe(true);
-  });
-
-  it("returns false when key already existed (SET NX returned null)", async () => {
-    mockRedis.set.mockResolvedValue(null);
-
-    const result = await initSlots(1, 10);
-
-    expect(result).toBe(false);
-  });
-
-  it("returns false and does not call SET when maxOccupancy is null", async () => {
-    const result = await initSlots(1, null);
-
-    expect(mockRedis.set).not.toHaveBeenCalled();
-    expect(result).toBe(false);
-  });
-});
-
 describe("claimSlot", () => {
-  it("returns true when DECR yields a value >= 0 (slots available)", async () => {
-    mockRedis.decr.mockResolvedValue(5);
+  it("returns true when Lua script yields a value >= 0 (slots available)", async () => {
+    mockRedis.eval.mockResolvedValue(5);
 
     const result = await claimSlot(1, 10);
 
     expect(result).toBe(true);
-    expect(mockRedis.decr).toHaveBeenCalledWith("slots:destination:1");
+    expect(mockRedis.eval).toHaveBeenCalledWith(expect.any(String), 1, "slots:destination:1", 10);
   });
 
-  it("returns true when DECR yields 0 (last slot claimed)", async () => {
-    mockRedis.decr.mockResolvedValue(0);
+  it("returns true when Lua script yields 0 (last slot claimed)", async () => {
+    mockRedis.eval.mockResolvedValue(0);
 
     const result = await claimSlot(2, 5);
 
@@ -109,80 +86,47 @@ describe("claimSlot", () => {
     const result = await claimSlot(1, null);
 
     expect(result).toBe(true);
-    expect(mockRedis.decr).not.toHaveBeenCalled();
+    expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 
-  it("initialises and retries when DECR returns -1 (missing key) and succeeds on retry", async () => {
-    mockRedis.decr
-      .mockResolvedValueOnce(-1) // key was missing
-      .mockResolvedValueOnce(9); // after init with maxOccupancy=10, DECR → 9
-    mockRedis.incr.mockResolvedValueOnce(0); // restore the -1 overshoot
-    mockRedis.set.mockResolvedValue("OK"); // initSlots
-
-    const result = await claimSlot(3, 10);
-
-    expect(result).toBe(true);
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:3", 10, "EX", 86400, "NX");
-    // INCR once (to restore before init), not twice
-    expect(mockRedis.incr).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns false and restores counter when retry after init also fails", async () => {
-    mockRedis.decr
-      .mockResolvedValueOnce(-1) // key was missing
-      .mockResolvedValueOnce(-1); // retry still negative (e.g. maxOccupancy=0)
-    mockRedis.incr.mockResolvedValue(0);
-    mockRedis.set.mockResolvedValue("OK");
-
-    const result = await claimSlot(1, 0);
-
-    expect(result).toBe(false);
-    // INCR called twice: once to restore before initSlots, once to undo second failed DECR
-    expect(mockRedis.incr).toHaveBeenCalledTimes(2);
-  });
-
-  it("returns false and INCRs back when DECR goes negative (no slots)", async () => {
-    // Counter was at 0, so DECR → -1 and the key existed (not a missing-key scenario)
-    // We simulate: first DECR = -2 (clearly negative, not -1 missing-key ambiguity)
-    mockRedis.decr.mockResolvedValue(-2);
-    mockRedis.incr.mockResolvedValue(-1);
+  it("returns false when Lua script returns -1 (no slots, counter already restored by Lua)", async () => {
+    mockRedis.eval.mockResolvedValue(-1);
 
     const result = await claimSlot(1, 5);
 
     expect(result).toBe(false);
-    expect(mockRedis.incr).toHaveBeenCalledWith("slots:destination:1");
+    expect(mockRedis.incr).not.toHaveBeenCalled();
   });
 });
 
 describe("releaseSlot", () => {
-  it("INCRs the counter", async () => {
-    mockRedis.incr.mockResolvedValue(5);
+  it("calls eval with the correct key and maxOccupancy", async () => {
+    mockRedis.eval.mockResolvedValue(5);
 
     await releaseSlot(1, 10);
 
-    expect(mockRedis.incr).toHaveBeenCalledWith("slots:destination:1");
-  });
-
-  it("caps counter at maxOccupancy if INCR overshoots", async () => {
-    mockRedis.incr.mockResolvedValue(11); // went over maxOccupancy=10
-
-    await releaseSlot(1, 10);
-
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 10);
-  });
-
-  it("does not SET when INCR result is within bounds", async () => {
-    mockRedis.incr.mockResolvedValue(7);
-
-    await releaseSlot(1, 10);
-
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      "slots:destination:1",
+      10,
+    );
   });
 
   it("is a no-op when maxOccupancy is null", async () => {
     await releaseSlot(1, null);
 
-    expect(mockRedis.incr).not.toHaveBeenCalled();
+    expect(mockRedis.eval).not.toHaveBeenCalled();
+  });
+
+  it("Lua script includes EXPIRE call on normal INCR path (val <= max)", async () => {
+    mockRedis.eval.mockResolvedValue(5); // val = 5, within max
+
+    await releaseSlot(1, 10);
+
+    const luaScript = mockRedis.eval.mock.calls[0][0] as string;
+    expect(luaScript).toContain("EXPIRE");
+    expect(luaScript).toContain("86400");
   });
 });
 
@@ -195,7 +139,7 @@ describe("reconcileSlots", () => {
     expect(mockPrisma.pass.count).toHaveBeenCalledWith({
       where: { destinationId: 1, status: "ACTIVE" },
     });
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 7);
+    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 7, "EX", 86400);
   });
 
   it("is a no-op when maxOccupancy is null", async () => {
@@ -204,18 +148,29 @@ describe("reconcileSlots", () => {
     expect(mockPrisma.pass.count).not.toHaveBeenCalled();
     expect(mockRedis.set).not.toHaveBeenCalled();
   });
+
+  it("clamps counter to 0 when activeCount exceeds maxOccupancy", async () => {
+    mockPrisma.pass.count.mockResolvedValue(5);
+
+    await reconcileSlots(1, 3);
+
+    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 0, "EX", 86400);
+  });
 });
 
 describe("promoteFromQueue", () => {
   it("promotes the oldest WAITING pass when a slot is available", async () => {
     const waitingPass = { id: 50, destinationId: 1, status: "WAITING", requestedAt: new Date() };
+    const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
     mockPrisma.pass.findFirst.mockResolvedValue(waitingPass);
-    mockRedis.decr.mockResolvedValue(3); // slot available
+    mockRedis.eval.mockResolvedValue(3); // slot available
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
 
     await promoteFromQueue(1, 10);
 
-    expect(mockPrisma.pass.update).toHaveBeenCalledWith({
-      where: { id: 50 },
+    expect(mockPrisma.pass.updateMany).toHaveBeenCalledWith({
+      where: { id: 50, status: "WAITING" },
       data: expect.objectContaining({ status: "ACTIVE" }),
     });
   });
@@ -225,30 +180,47 @@ describe("promoteFromQueue", () => {
 
     await promoteFromQueue(1, 10);
 
-    expect(mockPrisma.pass.update).not.toHaveBeenCalled();
+    expect(mockPrisma.pass.updateMany).not.toHaveBeenCalled();
   });
 
   it("does not update pass if slot claim fails", async () => {
     const waitingPass = { id: 50, destinationId: 1, status: "WAITING", requestedAt: new Date() };
     mockPrisma.pass.findFirst.mockResolvedValue(waitingPass);
-    // DECR -2 → clearly negative, INCR to restore
-    mockRedis.decr.mockResolvedValue(-2);
-    mockRedis.incr.mockResolvedValue(-1);
+    mockRedis.eval.mockResolvedValue(-1); // negative → no slot
+    mockRedis.incr.mockResolvedValue(0); // restore call
 
     await promoteFromQueue(1, 5);
 
-    expect(mockPrisma.pass.update).not.toHaveBeenCalled();
+    expect(mockPrisma.pass.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("retries once when another worker already promoted the pass (count=0 then count=1)", async () => {
+    const waitingPass = { id: 60, destinationId: 1, status: "WAITING", requestedAt: new Date() };
+    const promotedPass = { ...waitingPass, status: "ACTIVE", activatedAt: new Date() };
+    mockPrisma.pass.findFirst.mockResolvedValue(waitingPass);
+    mockRedis.eval.mockResolvedValue(3); // slot always available
+    mockPrisma.pass.updateMany
+      .mockResolvedValueOnce({ count: 0 }) // first call: race lost
+      .mockResolvedValueOnce({ count: 1 }); // retry: success
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
+
+    await promoteFromQueue(1, 10);
+
+    expect(mockPrisma.pass.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it("promotes regardless of maxOccupancy=null (unlimited)", async () => {
     const waitingPass = { id: 51, destinationId: 1, status: "WAITING", requestedAt: new Date() };
+    const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
     mockPrisma.pass.findFirst.mockResolvedValue(waitingPass);
-    // claimSlot returns true immediately for null maxOccupancy
+    // claimSlot returns true immediately for null maxOccupancy (no eval call)
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
 
     await promoteFromQueue(1, null);
 
-    expect(mockPrisma.pass.update).toHaveBeenCalledWith({
-      where: { id: 51 },
+    expect(mockPrisma.pass.updateMany).toHaveBeenCalledWith({
+      where: { id: 51, status: "WAITING" },
       data: expect.objectContaining({ status: "ACTIVE" }),
     });
   });

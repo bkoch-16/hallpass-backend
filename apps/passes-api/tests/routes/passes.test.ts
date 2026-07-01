@@ -1,23 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { passStatusMock } from "../utils/passStatusMock.js";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
   prisma: {
     user: { findFirst: vi.fn() },
     school: { findFirst: vi.fn() },
     schoolCalendar: { findFirst: vi.fn() },
     period: { findFirst: vi.fn(), findMany: vi.fn() },
     passPolicy: { findFirst: vi.fn() },
-    destination: { findUnique: vi.fn() },
+    destination: { findUnique: vi.fn(), findFirst: vi.fn() },
     pass: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
     $queryRaw: vi.fn(),
@@ -27,6 +31,7 @@ vi.mock("@hallpass/db", () => ({
 vi.mock("../../src/lib/slots.js", () => ({
   claimSlot: vi.fn().mockResolvedValue(true),
   releaseSlot: vi.fn().mockResolvedValue(undefined),
+  releaseAndPromote: vi.fn().mockResolvedValue(undefined),
   promoteFromQueue: vi.fn().mockResolvedValue(undefined),
   reconcileSlots: vi.fn().mockResolvedValue(undefined),
 }));
@@ -59,12 +64,14 @@ const mockPrisma = prisma as unknown as {
   schoolCalendar: { findFirst: ReturnType<typeof vi.fn> };
   period: { findFirst: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   passPolicy: { findFirst: ReturnType<typeof vi.fn> };
-  destination: { findUnique: ReturnType<typeof vi.fn> };
+  destination: { findUnique: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn> };
   pass: {
     findMany: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
+    findUniqueOrThrow: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
   };
 };
@@ -72,6 +79,7 @@ const mockPrisma = prisma as unknown as {
 const mockSlots = slotsModule as unknown as {
   claimSlot: ReturnType<typeof vi.fn>;
   releaseSlot: ReturnType<typeof vi.fn>;
+  releaseAndPromote: ReturnType<typeof vi.fn>;
   promoteFromQueue: ReturnType<typeof vi.fn>;
 };
 
@@ -183,12 +191,13 @@ const fakePass = {
   cancelledAt: null,
   deniedAt: null,
   expiredAt: null,
+  destination: { maxOccupancy: 10 },
 };
 
 const BASE = "/api/passes";
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 // ─── POST /passes ──────────────────────────────────────────────────────────────
@@ -208,6 +217,7 @@ describe("POST /api/passes", () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
     mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
     mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
+    mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
     mockPrisma.pass.create.mockResolvedValue(fakePass);
 
     const res = await request(app).post(BASE).send({ destinationId: 1 });
@@ -217,6 +227,20 @@ describe("POST /api/passes", () => {
     expect(res.body.status).toBe("PENDING");
   });
 
+  it("returns 422 when destination does not belong to school", async () => {
+    authenticateAs(fakeStudent);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
+    mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
+    mockPrisma.destination.findFirst.mockResolvedValue(null);
+
+    const res = await request(app).post(BASE).send({ destinationId: 99 });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Destination not found");
+  });
+
   it("returns 422 when no calendar entry for today", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
@@ -224,7 +248,7 @@ describe("POST /api/passes", () => {
     const res = await request(app).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
-    expect(res.body.error).toBe("No active period");
+    expect(res.body.message).toBe("No active period");
   });
 
   it("returns 422 when calendar has null scheduleTypeId", async () => {
@@ -234,7 +258,7 @@ describe("POST /api/passes", () => {
     const res = await request(app).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
-    expect(res.body.error).toBe("No active period");
+    expect(res.body.message).toBe("No active period");
   });
 
   it("returns 422 when no active period found", async () => {
@@ -246,7 +270,7 @@ describe("POST /api/passes", () => {
     const res = await request(app).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
-    expect(res.body.error).toBe("No active period");
+    expect(res.body.message).toBe("No active period");
   });
 
   it("returns 422 when pass limit reached", async () => {
@@ -266,22 +290,7 @@ describe("POST /api/passes", () => {
     const res = await request(app).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
-    expect(res.body.error).toBe("Pass limit reached");
-  });
-
-  it("returns 409 when active pass already exists (P2002)", async () => {
-    authenticateAs(fakeStudent);
-    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
-    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
-    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
-    mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
-    const prismaError = Object.assign(new Error("Unique constraint"), { code: "P2002" });
-    mockPrisma.pass.create.mockRejectedValue(prismaError);
-
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
-
-    expect(res.status).toBe(409);
-    expect(res.body.error).toBe("Active pass already exists");
+    expect(res.body.message).toBe("Pass limit reached");
   });
 
   it("returns 400 for missing destinationId", async () => {
@@ -445,7 +454,8 @@ describe("POST /api/passes/:id/approve", () => {
       approverId: 20,
       approvedAt: new Date(),
     };
-    mockPrisma.pass.update.mockResolvedValue(approvedPass);
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(approvedPass);
 
     const res = await request(app).post(`${BASE}/100/approve`).send({});
 
@@ -465,7 +475,8 @@ describe("POST /api/passes/:id/approve", () => {
       approverId: 20,
       approvedAt: new Date(),
     };
-    mockPrisma.pass.update.mockResolvedValue(waitingPass);
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(waitingPass);
 
     const res = await request(app).post(`${BASE}/100/approve`).send({});
 
@@ -478,12 +489,40 @@ describe("POST /api/passes/:id/approve", () => {
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
     mockSlots.claimSlot.mockResolvedValue(true);
-    mockPrisma.pass.update.mockResolvedValue({ ...fakePass, status: "ACTIVE", approverId: 30, approvedAt: new Date() });
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({ ...fakePass, status: "ACTIVE", approverId: 30, approvedAt: new Date() });
 
     const res = await request(app).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ACTIVE");
+  });
+
+  it("returns 409 and releases the slot when the pass was transitioned concurrently", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
+    mockSlots.claimSlot.mockResolvedValue(true);
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await request(app).post(`${BASE}/100/approve`).send({});
+
+    expect(res.status).toBe(409);
+    expect(mockSlots.releaseSlot).toHaveBeenCalledWith(
+      fakePass.destinationId,
+      fakePass.destination.maxOccupancy,
+    );
+  });
+
+  it("returns 409 without releasing a slot when no slot was claimed (WAITING path)", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
+    mockSlots.claimSlot.mockResolvedValue(false);
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await request(app).post(`${BASE}/100/approve`).send({});
+
+    expect(res.status).toBe(409);
+    expect(mockSlots.releaseSlot).not.toHaveBeenCalled();
   });
 
   it("returns 400 when pass is not PENDING", async () => {
@@ -533,7 +572,8 @@ describe("POST /api/passes/:id/deny", () => {
       denierId: 20,
       deniedAt: new Date(),
     };
-    mockPrisma.pass.update.mockResolvedValue(deniedPass);
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(deniedPass);
 
     const res = await request(app).post(`${BASE}/100/deny`).send({});
 
@@ -541,7 +581,7 @@ describe("POST /api/passes/:id/deny", () => {
     expect(res.body.status).toBe("DENIED");
   });
 
-  it("returns 400 when pass is WAITING (not deniable)", async () => {
+  it("returns 400 when pass is WAITING (use cancel instead)", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "WAITING" });
 
@@ -584,7 +624,8 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "COMPLETED",
       returnedAt: new Date(),
@@ -600,7 +641,8 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "COMPLETED",
       returnedAt: new Date(),
@@ -616,7 +658,8 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "COMPLETED",
       returnedAt: new Date(),
@@ -669,7 +712,8 @@ describe("POST /api/passes/:id/cancel", () => {
   it("student owner can cancel a PENDING pass", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "CANCELLED",
       cancellerId: 10,
@@ -685,7 +729,8 @@ describe("POST /api/passes/:id/cancel", () => {
   it("student owner can cancel a WAITING pass", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "WAITING" });
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "CANCELLED",
       cancellerId: 10,
@@ -701,7 +746,8 @@ describe("POST /api/passes/:id/cancel", () => {
   it("TEACHER can cancel a WAITING pass", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "WAITING" });
-    mockPrisma.pass.update.mockResolvedValue({
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
       ...fakePass,
       status: "CANCELLED",
       cancellerId: 20,
@@ -725,23 +771,15 @@ describe("POST /api/passes/:id/cancel", () => {
     expect(res.status).toBe(404);
   });
 
-  it("student owner can cancel an ACTIVE pass — slot is released", async () => {
+  it("returns 400 when pass is ACTIVE (use return instead)", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
-    mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockPrisma.pass.update.mockResolvedValue({
-      ...fakePass,
-      status: "CANCELLED",
-      cancellerId: 10,
-      cancelledAt: new Date(),
-    });
 
     const res = await request(app).post(`${BASE}/100/cancel`).send({});
 
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("CANCELLED");
-    expect(mockSlots.releaseSlot).toHaveBeenCalled();
-    expect(mockSlots.promoteFromQueue).toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Pass must be PENDING or WAITING to cancel");
+    expect(mockSlots.releaseAndPromote).not.toHaveBeenCalled();
   });
 
   it("returns 400 when pass is COMPLETED (not cancellable)", async () => {

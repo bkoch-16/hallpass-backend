@@ -1,11 +1,12 @@
-import Redis from 'ioredis';
-import { env } from '../env.js';
+import Redis from "ioredis";
+import { logger } from "@hallpass/logger";
+import { env } from "../env.js";
 
 export const redis = new Redis(env.REDIS_URL, {
   lazyConnect: true,
   maxRetriesPerRequest: 3,
 });
 
-redis.on('error', (err) => {
-  console.error('[redis] connection error:', err.message);
+redis.on("error", (err) => {
+  logger.error(err, "[redis] connection error");
 });

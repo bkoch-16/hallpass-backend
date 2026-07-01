@@ -16,6 +16,7 @@ CREATE TABLE "Pass" (
     "approverNote" TEXT,
     "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "approvedAt" TIMESTAMP(3),
+    "activatedAt" TIMESTAMP(3),
     "returnedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
     "deniedAt" TIMESTAMP(3),
@@ -32,6 +33,9 @@ CREATE INDEX "Pass_studentId_idx" ON "Pass"("studentId");
 
 -- CreateIndex
 CREATE INDEX "Pass_status_idx" ON "Pass"("status");
+
+-- CreateIndex
+CREATE INDEX "Pass_destinationId_status_idx" ON "Pass"("destinationId", "status");
 
 -- AddForeignKey
 ALTER TABLE "Pass" ADD CONSTRAINT "Pass_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

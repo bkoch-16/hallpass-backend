@@ -4,9 +4,10 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logger, httpLogger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
-import { env } from "./env";
-import passesRouter from "./routes/passes";
-import internalRouter from "./routes/internal";
+import { env } from "./env.js";
+import { corsOrigins } from "./lib/cors.js";
+import passesRouter from "./routes/passes.js";
+import internalRouter from "./routes/internal.js";
 
 const app = express();
 
@@ -14,14 +15,10 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 
-const corsOrigins =
-  env.CORS_ORIGIN === "*"
-    ? "*"
-    : env.CORS_ORIGIN.split(",").map((o) => o.trim());
 app.use(
   cors({
     origin: corsOrigins,
-    credentials: corsOrigins !== "*",
+    credentials: env.CORS_ORIGIN !== "*",
   }),
 );
 
@@ -62,7 +59,7 @@ app.use(
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    logger.error(err);
+    logger.error(err, "Unhandled route error");
     res.status(500).json({ message: "Internal server error" });
   },
 );

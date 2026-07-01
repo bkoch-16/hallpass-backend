@@ -6,13 +6,14 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 
-const { mockGetSession, mockClaimSlot, mockReleaseSlot, mockPromoteFromQueue, mockReconcileSlots } =
+const { mockGetSession, mockClaimSlot, mockReleaseSlot, mockPromoteFromQueue, mockReconcileSlots, mockReleaseAndPromote } =
   vi.hoisted(() => ({
     mockGetSession: vi.fn(),
     mockClaimSlot: vi.fn().mockResolvedValue(true),
     mockReleaseSlot: vi.fn().mockResolvedValue(undefined),
     mockPromoteFromQueue: vi.fn().mockResolvedValue(undefined),
     mockReconcileSlots: vi.fn().mockResolvedValue(undefined),
+    mockReleaseAndPromote: vi.fn().mockResolvedValue(undefined),
   }));
 
 vi.mock("@hallpass/auth", () => ({
@@ -28,7 +29,7 @@ vi.mock("../../src/lib/slots.js", () => ({
   releaseSlot: mockReleaseSlot,
   promoteFromQueue: mockPromoteFromQueue,
   reconcileSlots: mockReconcileSlots,
-  releaseAndPromote: vi.fn().mockResolvedValue(undefined),
+  releaseAndPromote: mockReleaseAndPromote,
 }));
 
 vi.mock("../../src/lib/socket.js", () => ({
@@ -197,30 +198,26 @@ function authenticateAs(user: { id: number }) {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+async function cleanDb() {
+  await prisma.pass.deleteMany();
+  await prisma.passPolicy.deleteMany();
+  await prisma.destination.deleteMany();
+  await prisma.period.deleteMany();
+  await prisma.schoolCalendar.deleteMany();
+  await prisma.scheduleType.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.school.deleteMany();
+  await prisma.district.deleteMany();
+}
+
 beforeEach(async () => {
   vi.clearAllMocks();
   mockClaimSlot.mockResolvedValue(true);
-  await prisma.pass.deleteMany();
-  await prisma.passPolicy.deleteMany();
-  await prisma.destination.deleteMany();
-  await prisma.period.deleteMany();
-  await prisma.schoolCalendar.deleteMany();
-  await prisma.scheduleType.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.school.deleteMany();
-  await prisma.district.deleteMany();
+  await cleanDb();
 });
 
 afterAll(async () => {
-  await prisma.pass.deleteMany();
-  await prisma.passPolicy.deleteMany();
-  await prisma.destination.deleteMany();
-  await prisma.period.deleteMany();
-  await prisma.schoolCalendar.deleteMany();
-  await prisma.scheduleType.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.school.deleteMany();
-  await prisma.district.deleteMany();
+  await cleanDb();
   await prisma.$disconnect();
 });
 
@@ -296,7 +293,7 @@ describe("POST /api/passes (integration)", () => {
       .send({ destinationId: destination.id });
 
     expect(res.status).toBe(422);
-    expect(res.body.error).toBe("No active period");
+    expect(res.body.message).toBe("No active period");
   });
 
   it("400 missing destinationId in body", async () => {
@@ -309,6 +306,34 @@ describe("POST /api/passes (integration)", () => {
       .send({});
 
     expect(res.status).toBe(400);
+  });
+
+  it("422 destination belongs to a different school", async () => {
+    const { school } = await seedActiveSchool();
+    const otherSchool = await seedSchool({ name: "Other School" });
+    const otherDestination = await seedDestination(otherSchool.id);
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    authenticateAs(student);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: otherDestination.id });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Destination not found");
+  });
+
+  it("409 second pass request rejected when student already has a PENDING pass (exercises partial unique index)", async () => {
+    const { school, destination } = await seedActiveSchool();
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    authenticateAs(student);
+
+    const first = await request(app).post("/api/passes").send({ destinationId: destination.id });
+    expect(first.status).toBe(201);
+
+    const second = await request(app).post("/api/passes").send({ destinationId: destination.id });
+    expect(second.status).toBe(409);
+    expect(second.body.message).toBe("Active pass already exists");
   });
 });
 
@@ -510,7 +535,7 @@ describe("POST /api/passes/:id/deny (integration)", () => {
     expect(res.body.denierId).toBe(teacher.id);
   });
 
-  it("200 teacher denies WAITING pass → DENIED", async () => {
+  it("400 cannot deny a WAITING pass (must cancel instead)", async () => {
     const school = await seedSchool();
     const destination = await seedDestination(school.id);
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
@@ -520,11 +545,10 @@ describe("POST /api/passes/:id/deny (integration)", () => {
 
     const res = await request(app).post(`/api/passes/${pass.id}/deny`).send({});
 
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("DENIED");
+    expect(res.status).toBe(400);
   });
 
-  it("400 cannot deny a pass that is not PENDING or WAITING", async () => {
+  it("400 cannot deny a pass that is not PENDING", async () => {
     const school = await seedSchool();
     const destination = await seedDestination(school.id);
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
@@ -644,6 +668,19 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     expect(res.body.cancellerId).toBe(teacher.id);
   });
 
+  it("400 cannot cancel a pass that is ACTIVE (use return instead)", async () => {
+    const school = await seedSchool();
+    const destination = await seedDestination(school.id);
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
+    authenticateAs(student);
+
+    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Pass must be PENDING or WAITING to cancel");
+  });
+
   it("400 cannot cancel a pass that is already COMPLETED", async () => {
     const school = await seedSchool();
     const destination = await seedDestination(school.id);
@@ -655,5 +692,19 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(400);
+  });
+
+  it("200 student cancels WAITING pass → CANCELLED without releasing a slot", async () => {
+    const school = await seedSchool();
+    const destination = await seedDestination(school.id);
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const pass = await seedPass(school.id, student.id, destination.id, { status: "WAITING" });
+    authenticateAs(student);
+
+    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("CANCELLED");
+    expect(mockReleaseAndPromote).not.toHaveBeenCalled();
   });
 });

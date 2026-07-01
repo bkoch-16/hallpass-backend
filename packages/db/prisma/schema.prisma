@@ -184,6 +184,12 @@ model PassPolicy {
   school School @relation(fields: [schoolId], references: [id])
 }
 
+// WARNING: Pass has a partial unique index that Prisma cannot express:
+//   one_active_pass_per_student — UNIQUE ("studentId") WHERE status IN ('PENDING', 'WAITING', 'ACTIVE')
+// It lives only in migration 20260316171044_add_pass_model. Because it is absent from this
+// schema, `prisma migrate dev` will generate a `DROP INDEX "one_active_pass_per_student"` in
+// any new migration — delete that DROP from the generated SQL before committing; never apply it.
+// passes-api relies on this index (P2002 → 409 "Active pass already exists" on create).
 model Pass {
   id            Int        @id @default(autoincrement())
   schoolId      Int
@@ -198,6 +204,7 @@ model Pass {
   approverNote  String?
   requestedAt   DateTime   @default(now())
   approvedAt    DateTime?
+  activatedAt   DateTime?
   returnedAt    DateTime?
   cancelledAt   DateTime?
   deniedAt      DateTime?
@@ -214,4 +221,5 @@ model Pass {
   @@index([schoolId])
   @@index([studentId])
   @@index([status])
+  @@index([destinationId, status])
 }

@@ -14,6 +14,7 @@ export default defineConfig({
       BETTER_AUTH_SECRET: "test-secret",
       CORS_ORIGIN: "http://localhost:3000",
       REDIS_URL: "redis://localhost:6379",
+      INTERNAL_SECRET: "test-internal-secret",
     },
   },
 });
