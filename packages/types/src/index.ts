@@ -109,23 +109,25 @@ export interface DestinationResponse {
 }
 
 export interface PassResponse {
-  id: string;
+  id: number;
   schoolId: number;
-  studentId: string;
-  destinationId: string;
-  periodId: string;
-  requestedById: string;
-  approvedById: string | null;
-  deniedById: string | null;
-  cancelledById: string | null;
+  studentId: number;
+  requesterId: number;
+  destinationId: number;
+  periodId: number | null;
+  approverId: number | null;
+  denierId: number | null;
+  cancellerId: number | null;
   status: PassStatus;
   note: string | null;
-  issuedAt: Date | null;
+  approverNote: string | null;
+  requestedAt: Date;
+  approvedAt: Date | null;
+  activatedAt: Date | null;
   returnedAt: Date | null;
-  expiredAt: Date | null;
   cancelledAt: Date | null;
   deniedAt: Date | null;
-  createdAt: Date;
+  expiredAt: Date | null;
 }
 
 // ─── Request bodies ───────────────────────────────────────────────────────────
@@ -199,8 +201,8 @@ export interface UpsertPassPolicyBody {
 }
 
 export interface CreatePassBody {
-  studentId?: string; // ignored for STUDENT role; required for TEACHER+
-  destinationId: string;
+  studentId?: number; // ignored for STUDENT role; required for TEACHER+
+  destinationId: number;
   note?: string;
 }
 

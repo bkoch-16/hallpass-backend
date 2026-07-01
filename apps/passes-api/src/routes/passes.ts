@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
-import { UserRole, type CursorPage } from "@hallpass/types";
+import { UserRole, type CursorPage, type PassResponse } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
@@ -30,12 +30,87 @@ import {
 
 const router = Router({ mergeParams: true });
 
+const PASS_SELECT = {
+  id: true,
+  schoolId: true,
+  studentId: true,
+  requesterId: true,
+  destinationId: true,
+  periodId: true,
+  approverId: true,
+  denierId: true,
+  cancellerId: true,
+  status: true,
+  note: true,
+  approverNote: true,
+  requestedAt: true,
+  approvedAt: true,
+  activatedAt: true,
+  returnedAt: true,
+  cancelledAt: true,
+  deniedAt: true,
+  expiredAt: true,
+} as const;
+
+type PassRow = {
+  id: number;
+  schoolId: number;
+  studentId: number;
+  requesterId: number;
+  destinationId: number;
+  periodId: number | null;
+  approverId: number | null;
+  denierId: number | null;
+  cancellerId: number | null;
+  status: PassStatus;
+  note: string | null;
+  approverNote: string | null;
+  requestedAt: Date;
+  approvedAt: Date | null;
+  activatedAt: Date | null;
+  returnedAt: Date | null;
+  cancelledAt: Date | null;
+  deniedAt: Date | null;
+  expiredAt: Date | null;
+};
+
+function toPassResponse(p: PassRow): PassResponse {
+  return {
+    id: p.id,
+    schoolId: p.schoolId,
+    studentId: p.studentId,
+    requesterId: p.requesterId,
+    destinationId: p.destinationId,
+    periodId: p.periodId,
+    approverId: p.approverId,
+    denierId: p.denierId,
+    cancellerId: p.cancellerId,
+    status: p.status,
+    note: p.note,
+    approverNote: p.approverNote,
+    requestedAt: p.requestedAt,
+    approvedAt: p.approvedAt,
+    activatedAt: p.activatedAt,
+    returnedAt: p.returnedAt,
+    cancelledAt: p.cancelledAt,
+    deniedAt: p.deniedAt,
+    expiredAt: p.expiredAt,
+  };
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err !== null && typeof err === "object" && "code" in err && err.code === "P2002"
+  );
+}
+
 // Works because "HH:MM" strings are zero-padded and equal-length.
 function timeLeq(a: string, b: string): boolean {
   return a <= b;
 }
 
-// POST /passes — any authenticated user (student) can create a pass
+// POST /passes — students create their own pass (PENDING); TEACHER+ create a
+// pass on behalf of a student (auto-approved: ACTIVE, or WAITING when full)
 router.post(
   "/",
   requireAuth,
@@ -44,6 +119,7 @@ router.post(
   async (req: Request, res: Response) => {
     const user = req.user!;
     const schoolId = user.schoolId!;
+    const isTeacherOrAbove = roleRank(user.role) >= roleRank(UserRole.TEACHER);
 
     // 1. Resolve school timezone
     const school = await prisma.school.findFirst({
@@ -104,14 +180,38 @@ router.post(
       return;
     }
 
-    // 6. Check PassPolicy — only count in-flight/completed passes; denied/expired/cancelled don't burn quota
+    // 6. Resolve the target student. Students always request for themselves
+    // (body.studentId is ignored); TEACHER+ must name the student the pass is for.
+    let studentId = user.id;
+    if (isTeacherOrAbove) {
+      if (req.body.studentId === undefined) {
+        res.status(400).json({ message: "studentId is required" });
+        return;
+      }
+      const student = await prisma.user.findFirst({
+        where: {
+          id: req.body.studentId,
+          schoolId,
+          role: UserRole.STUDENT,
+          deletedAt: null,
+        },
+      });
+      if (!student) {
+        res.status(422).json({ message: "Student not found" });
+        return;
+      }
+      studentId = student.id;
+    }
+
+    // 7. Check PassPolicy — the target student always burns their own quota;
+    // only count in-flight/completed passes; denied/expired/cancelled don't burn quota
     const policy = await prisma.passPolicy.findFirst({ where: { schoolId } });
 
     if (policy && policy.interval && policy.maxPerInterval !== null) {
       const intervalStart = getIntervalStart(policy.interval, timezone);
       const passCount = await prisma.pass.count({
         where: {
-          studentId: user.id,
+          studentId,
           schoolId,
           requestedAt: { gte: intervalStart },
           status: {
@@ -130,7 +230,7 @@ router.post(
       }
     }
 
-    // 7. Validate destination belongs to this school
+    // 8. Validate destination belongs to this school
     const destination = await prisma.destination.findFirst({
       where: { id: req.body.destinationId, schoolId, deletedAt: null },
     });
@@ -139,27 +239,67 @@ router.post(
       return;
     }
 
-    // 8. Create pass (always PENDING; slot is claimed at approve step)
+    // 9. Create pass. Student flow: PENDING (slot is claimed at approve step).
+    // Teacher flow: the creation is the approval — claim a slot up front and
+    // create in the final state (ACTIVE, or WAITING when the destination is full).
     let pass;
-    try {
-      pass = await prisma.pass.create({
-        data: {
-          schoolId,
-          studentId: user.id,
-          destinationId: destination.id,
-          periodId: activePeriod.id,
-          note: req.body.note,
-          status: PassStatus.PENDING,
-        },
-      });
-    } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-        res.status(409).json({ message: "Active pass already exists" });
-        return;
+    if (!isTeacherOrAbove) {
+      try {
+        pass = await prisma.pass.create({
+          data: {
+            schoolId,
+            studentId,
+            requesterId: user.id,
+            destinationId: destination.id,
+            periodId: activePeriod.id,
+            note: req.body.note,
+            status: PassStatus.PENDING,
+          },
+          select: PASS_SELECT,
+        });
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          res.status(409).json({ message: "Active pass already exists" });
+          return;
+        }
+        throw err;
       }
-      throw err;
+      emitPassEvent(pass, "pass:requested");
+    } else {
+      const slotClaimed = await claimSlot(destination.id, destination.maxOccupancy);
+      const now = new Date();
+      try {
+        pass = await prisma.pass.create({
+          data: {
+            schoolId,
+            studentId,
+            requesterId: user.id,
+            destinationId: destination.id,
+            periodId: activePeriod.id,
+            note: req.body.note,
+            status: slotClaimed ? PassStatus.ACTIVE : PassStatus.WAITING,
+            approverId: user.id,
+            approvedAt: now,
+            ...(slotClaimed ? { activatedAt: now } : {}),
+          },
+          select: PASS_SELECT,
+        });
+      } catch (err: unknown) {
+        if (slotClaimed) {
+          try {
+            await releaseSlot(destination.id, destination.maxOccupancy);
+          } catch (releaseErr) {
+            logger.error(releaseErr, "Failed to release slot after teacher-create error");
+          }
+        }
+        if (isUniqueViolation(err)) {
+          res.status(409).json({ message: "Active pass already exists" });
+          return;
+        }
+        throw err;
+      }
+      emitPassEvent(pass, slotClaimed ? "pass:approved" : "pass:waiting");
     }
-    emitPassEvent(pass, "pass:requested");
 
     void Promise.resolve(
       schedulePassExpiry(
@@ -172,7 +312,7 @@ router.post(
       ),
     ).catch((err) => logger.warn(err, "Failed to schedule pass expiry — will be recovered by reconcile"));
 
-    res.status(201).json(pass);
+    res.status(201).json(toPassResponse(pass));
   },
 );
 
@@ -202,13 +342,17 @@ router.get(
       take: take + 1,
       ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
       orderBy: { id: "asc" },
+      select: PASS_SELECT,
     });
 
     const hasMore = passes.length > take;
     const data = hasMore ? passes.slice(0, take) : passes;
     const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
 
-    res.json({ data, nextCursor } satisfies CursorPage<(typeof passes)[number]>);
+    res.json({
+      data: data.map(toPassResponse),
+      nextCursor,
+    } satisfies CursorPage<PassResponse>);
   },
 );
 
@@ -229,6 +373,7 @@ router.get(
         schoolId: user.schoolId!,
         ...(isStudent ? { studentId: user.id } : {}),
       },
+      select: PASS_SELECT,
     });
 
     if (!pass) {
@@ -236,7 +381,7 @@ router.get(
       return;
     }
 
-    res.json(pass);
+    res.json(toPassResponse(pass));
   },
 );
 
@@ -309,7 +454,7 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id } });
+    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
 
     if (updated.status === PassStatus.ACTIVE) {
       emitPassEvent(updated, "pass:approved");
@@ -317,7 +462,7 @@ router.post(
       emitPassEvent(updated, "pass:waiting");
     }
 
-    res.json(updated);
+    res.json(toPassResponse(updated));
   },
 );
 
@@ -365,11 +510,11 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id } });
+    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
 
     emitPassEvent(updated, "pass:denied");
 
-    res.json(updated);
+    res.json(toPassResponse(updated));
   },
 );
 
@@ -417,7 +562,7 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id } });
+    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
 
     emitPassEvent(updated, "pass:returned");
 
@@ -429,7 +574,7 @@ router.post(
       logger.error(err, "Failed to release/promote after return — will be recovered by reconcile");
     }
 
-    res.json(updated);
+    res.json(toPassResponse(updated));
   },
 );
 
@@ -479,11 +624,11 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id } });
+    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
 
     emitPassEvent(updated, "pass:cancelled");
 
-    res.json(updated);
+    res.json(toPassResponse(updated));
   },
 );
 

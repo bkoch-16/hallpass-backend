@@ -21,7 +21,7 @@ process.on("uncaughtException", (err) => {
 });
 
 const httpServer = http.createServer(app);
-const { pubClient, subClient } = initSocket(httpServer);
+const { io, pubClient, subClient } = initSocket(httpServer);
 const expiryWorker = startExpiryWorker();
 
 process.on("SIGTERM", async () => {
@@ -29,7 +29,11 @@ process.on("SIGTERM", async () => {
   // Safety net: don't let a hung close outlive the Cloud Run grace period
   setTimeout(() => process.exit(1), 10_000).unref();
 
-  httpServer.close(() => logger.info("HTTP server closed"));
+  // io.close() disconnects Socket.io clients and closes the underlying HTTP
+  // server — plain httpServer.close() would wait on open WebSockets forever.
+  // Await it so in-flight requests finish before connections are torn down.
+  await new Promise<void>((resolve) => io.close(() => resolve()));
+  logger.info("HTTP server closed");
   try {
     await expiryWorker.close();
   } catch (err) {

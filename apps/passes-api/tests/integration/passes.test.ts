@@ -179,6 +179,7 @@ async function seedPass(
     data: {
       schoolId,
       studentId,
+      requesterId: studentId,
       destinationId,
       periodId: overrides.periodId ?? null,
       status: overrides.status ?? "PENDING",
@@ -334,6 +335,89 @@ describe("POST /api/passes (integration)", () => {
     const second = await request(app).post("/api/passes").send({ destinationId: destination.id });
     expect(second.status).toBe(409);
     expect(second.body.message).toBe("Active pass already exists");
+  });
+
+  it("201 teacher creates an auto-approved pass for a student", async () => {
+    const { school, destination } = await seedActiveSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: destination.id, studentId: student.id });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("ACTIVE");
+    expect(res.body.studentId).toBe(student.id);
+    expect(res.body.requesterId).toBe(teacher.id);
+    expect(res.body.approverId).toBe(teacher.id);
+    expect(res.body.activatedAt).not.toBeNull();
+
+    const inDb = await prisma.pass.findUnique({ where: { id: res.body.id } });
+    expect(inDb?.status).toBe("ACTIVE");
+    expect(inDb?.requesterId).toBe(teacher.id);
+  });
+
+  it("400 teacher omits studentId", async () => {
+    const { school, destination } = await seedActiveSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(teacher);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: destination.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("studentId is required");
+  });
+
+  it("422 teacher targets a student from another school", async () => {
+    const { school, destination } = await seedActiveSchool();
+    const otherSchool = await seedSchool({ name: "Other School" });
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const otherStudent = await seedUser({ role: "STUDENT", schoolId: otherSchool.id });
+    authenticateAs(teacher);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: destination.id, studentId: otherStudent.id });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Student not found");
+  });
+
+  it("422 teacher-created pass burns the target student's quota", async () => {
+    const { school, destination } = await seedActiveSchool();
+    await seedPassPolicy(school.id, { interval: "DAY", maxPerInterval: 1 });
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    // Student already used today's quota with a completed pass
+    await seedPass(school.id, student.id, destination.id, { status: "COMPLETED" });
+    authenticateAs(teacher);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: destination.id, studentId: student.id });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Pass limit reached");
+  });
+
+  it("409 teacher-created pass conflicts with the target's existing in-flight pass and releases the slot", async () => {
+    const { school, destination } = await seedActiveSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
+    authenticateAs(teacher);
+
+    const res = await request(app)
+      .post("/api/passes")
+      .send({ destinationId: destination.id, studentId: student.id });
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe("Active pass already exists");
+    expect(mockReleaseSlot).toHaveBeenCalledWith(destination.id, destination.maxOccupancy);
   });
 });
 

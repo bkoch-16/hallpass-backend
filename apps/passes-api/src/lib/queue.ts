@@ -11,23 +11,37 @@ const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }
 
 export const passExpiryQueue = new Queue("pass-expiry", {
   connection: bullmqConnection,
-  defaultJobOptions: { removeOnComplete: 100, removeOnFail: 50 },
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    // processPassExpiry is idempotent (status-guarded updateMany), so retrying
+    // a transiently failed job is safe
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5_000 },
+  },
 });
 
 // Uses a stable jobId so duplicate calls are idempotent (safe to call on pass creation and via
-// reconcile-expiry). BullMQ silently ignores add() if a job with this id is already in the
-// delayed queue, so reconcile cannot correct a stale fire time for an existing delayed job —
-// it only re-queues jobs that were lost entirely (e.g. after a Redis flush).
+// reconcile-expiry). BullMQ silently ignores add() while a job with this id exists in any state,
+// so a job lingering in the completed/failed sets would block reconcile from re-arming expiry
+// (e.g. a pass promoted WAITING→ACTIVE concurrently with its expiry fire, or a job that
+// exhausted its retries) — evict those before adding. Live delayed/waiting/active jobs are left
+// untouched, so reconcile still cannot correct a stale fire time for an existing delayed job —
+// it only re-queues jobs that are dead or were lost entirely (e.g. after a Redis flush).
 export async function schedulePassExpiry(
   passId: number,
   periodEndTime: Date,
 ): Promise<void> {
+  const jobId = `pass-${passId}`;
+  const existing = await passExpiryQueue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (state === "completed" || state === "failed") {
+      await existing.remove();
+    }
+  }
   const delay = Math.max(0, periodEndTime.getTime() - Date.now());
-  await passExpiryQueue.add(
-    "expire",
-    { passId },
-    { jobId: `pass-${passId}`, delay },
-  );
+  await passExpiryQueue.add("expire", { passId }, { jobId, delay });
 }
 
 export async function processPassExpiry(job: Job): Promise<void> {

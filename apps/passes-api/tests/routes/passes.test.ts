@@ -57,6 +57,9 @@ vi.mock("@hallpass/auth", () => ({
 import app from "../../src/app";
 import { prisma } from "@hallpass/db";
 import * as slotsModule from "../../src/lib/slots.js";
+import { emitPassEvent } from "../../src/lib/socket.js";
+
+const mockEmitPassEvent = emitPassEvent as unknown as ReturnType<typeof vi.fn>;
 
 const mockPrisma = prisma as unknown as {
   user: { findFirst: ReturnType<typeof vi.fn> };
@@ -177,6 +180,7 @@ const fakePass = {
   id: 100,
   schoolId: 1,
   studentId: 10,
+  requesterId: 10,
   destinationId: 1,
   periodId: 2,
   approverId: null,
@@ -187,6 +191,7 @@ const fakePass = {
   approverNote: null,
   requestedAt: new Date("2025-09-15T08:30:00Z"),
   approvedAt: null,
+  activatedAt: null,
   returnedAt: null,
   cancelledAt: null,
   deniedAt: null,
@@ -315,6 +320,184 @@ describe("POST /api/passes", () => {
     const res = await request(app).post(BASE).send({});
 
     expect(res.status).toBe(400);
+  });
+
+  it("ignores studentId from a STUDENT caller — pass is created for self, PENDING", async () => {
+    authenticateAs(fakeStudent);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
+    mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
+    mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
+    mockPrisma.pass.create.mockResolvedValue(fakePass);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 99 });
+
+    expect(res.status).toBe(201);
+    expect(mockPrisma.pass.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: fakeStudent.id,
+          requesterId: fakeStudent.id,
+          status: "PENDING",
+        }),
+      }),
+    );
+    expect(mockSlots.claimSlot).not.toHaveBeenCalled();
+  });
+});
+
+// ─── POST /passes — teacher-created ───────────────────────────────────────────
+
+describe("POST /api/passes — teacher-created", () => {
+  // requireAuth resolves the caller; the route then looks up the target student
+  function authenticateTeacherWithTarget(target: FakeUser | null) {
+    authenticateAs(fakeTeacher);
+    mockPrisma.user.findFirst
+      .mockResolvedValueOnce(fakeTeacher)
+      .mockResolvedValueOnce(target);
+  }
+
+  function mockActivePeriodAndDestination() {
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
+    mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
+    mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
+  }
+
+  const teacherCreatedPass = {
+    ...fakePass,
+    id: 101,
+    studentId: 11,
+    requesterId: 20,
+    approverId: 20,
+    status: "ACTIVE",
+    approvedAt: new Date("2025-09-15T08:30:00Z"),
+    activatedAt: new Date("2025-09-15T08:30:00Z"),
+  };
+
+  it("TEACHER creates a pass for a student — auto-approved to ACTIVE", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockActivePeriodAndDestination();
+    mockSlots.claimSlot.mockResolvedValue(true);
+    mockPrisma.pass.create.mockResolvedValue(teacherCreatedPass);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("ACTIVE");
+    expect(res.body.studentId).toBe(11);
+    expect(res.body.requesterId).toBe(20);
+    expect(res.body.approverId).toBe(20);
+    expect(mockPrisma.pass.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 11,
+          requesterId: 20,
+          approverId: 20,
+          status: "ACTIVE",
+          approvedAt: expect.any(Date),
+          activatedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(teacherCreatedPass, "pass:approved");
+  });
+
+  it("TEACHER creates when the destination is full — pass lands WAITING", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockActivePeriodAndDestination();
+    mockSlots.claimSlot.mockResolvedValue(false);
+    const waitingPass = { ...teacherCreatedPass, status: "WAITING", activatedAt: null };
+    mockPrisma.pass.create.mockResolvedValue(waitingPass);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("WAITING");
+    const createData = mockPrisma.pass.create.mock.calls[0][0].data;
+    expect(createData.status).toBe("WAITING");
+    expect(createData.activatedAt).toBeUndefined();
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(waitingPass, "pass:waiting");
+  });
+
+  it("returns 400 when TEACHER omits studentId", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("studentId is required");
+  });
+
+  it("returns 422 when the target student is not found", async () => {
+    authenticateTeacherWithTarget(null);
+    mockActivePeriodAndDestination();
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 99 });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Student not found");
+    // Target lookup must be scoped to STUDENTs of the caller's school
+    expect(mockPrisma.user.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 99, schoolId: 1, role: "STUDENT", deletedAt: null }),
+      }),
+    );
+  });
+
+  it("charges the quota to the target student, not the teacher", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
+    mockPrisma.passPolicy.findFirst.mockResolvedValue({
+      id: 1,
+      schoolId: 1,
+      maxActivePasses: null,
+      interval: "DAY",
+      maxPerInterval: 3,
+    });
+    mockPrisma.pass.count.mockResolvedValue(3);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Pass limit reached");
+    expect(mockPrisma.pass.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ studentId: 11 }),
+      }),
+    );
+  });
+
+  it("returns 409 and releases the claimed slot when the target already has an active pass", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockActivePeriodAndDestination();
+    mockSlots.claimSlot.mockResolvedValue(true);
+    mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe("Active pass already exists");
+    expect(mockSlots.releaseSlot).toHaveBeenCalledWith(1, 10);
+  });
+
+  it("does not release a slot on conflict when none was claimed (WAITING path)", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockActivePeriodAndDestination();
+    mockSlots.claimSlot.mockResolvedValue(false);
+    mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(409);
+    expect(mockSlots.releaseSlot).not.toHaveBeenCalled();
   });
 });
 

@@ -35,3 +35,32 @@ Related to the review issue deliberately deferred during the passes-api review l
 `new Date(dateStr + "T00:00:00Z")` appears in `apps/passes-api/src/routes/passes.ts` and `apps/passes-api/src/lib/queue.ts`.
 
 **Fix:** extract a helper in `src/lib/time.ts` (e.g. `calendarDate(dateStr)`).
+
+---
+
+Follow-ups from the second review of the branch (2026-07-01). The larger findings from that review (stale `PassResponse`/`CreatePassBody` contract types, BullMQ jobId dedup blocking reconcile recovery, Socket.io shutdown hang) were fixed directly and are not listed here.
+
+### 6. Socket auth duplicates `requireAuth`
+`apps/passes-api/src/lib/socket.ts` (the `io.use` middleware) re-implements the session→DB-user resolution from `apps/passes-api/src/middleware/auth.ts` — same better-auth `getSession`, same id validation, same `deletedAt: null` user lookup.
+
+**Fix:** extract a shared `resolveSessionUser(headers)` used by both, so the 401 semantics can't drift.
+
+### 7. Redis connection construction repeated
+`new Redis(env.REDIS_URL, { maxRetriesPerRequest: null })` is hand-built three times: `apps/passes-api/src/lib/queue.ts` (queue + worker connections) and `apps/passes-api/src/lib/socket.ts` (adapter pub client).
+
+**Fix:** add a factory in `src/lib/redis.ts` (e.g. `createBlockingRedis()`) that centralizes the connection options.
+
+### 8. `/internal` auth breaks on repeated Authorization header
+`apps/passes-api/src/routes/internal.ts` — `req.headers["authorization"]` is typed `string | string[]`; a repeated header arrives as an array, which makes `createHash().update()` throw, turning what should be a 401 into a 500.
+
+**Fix:** reject non-string values (or `String(...)` them) before hashing.
+
+### 9. `void Promise.resolve(...)` wrapper
+`apps/passes-api/src/routes/passes.ts` — the expiry-scheduling fire-and-forget wraps an already-async call: `void Promise.resolve(schedulePassExpiry(...)).catch(...)`.
+
+**Fix:** `void schedulePassExpiry(...).catch(...)` is equivalent and simpler.
+
+### 10. `env.ts` PORT schema divergence
+passes-api validates `PORT` as `z.coerce.number().optional().default(3003)` while schools-api and user-api use `z.string().optional()`.
+
+**Fix:** align all three on the coerce-number form when the shared middleware package (item 4) is extracted.

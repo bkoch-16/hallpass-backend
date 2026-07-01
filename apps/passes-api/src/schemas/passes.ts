@@ -2,6 +2,8 @@ import { z } from "zod";
 import { PassStatus } from "@hallpass/db";
 
 export const createPassBody = z.object({
+  // Ignored for STUDENT callers; required for TEACHER+ (enforced in the route)
+  studentId: z.number().int().positive().optional(),
   destinationId: z.number().int().positive(),
   note: z.string().optional(),
 });

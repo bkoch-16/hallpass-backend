@@ -5,6 +5,7 @@ import { passStatusMock } from "../utils/passStatusMock.js";
 
 const {
   mockQueueAdd,
+  mockQueueGetJob,
   mockWorkerOn,
   mockPassFindUnique,
   mockPassUpdateMany,
@@ -18,6 +19,7 @@ const {
   mockReleaseSlot,
 } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn().mockResolvedValue(undefined),
+  mockQueueGetJob: vi.fn().mockResolvedValue(undefined),
   mockWorkerOn: vi.fn(),
   mockPassFindUnique: vi.fn(),
   mockPassUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -37,6 +39,7 @@ vi.mock("bullmq", () => ({
   Queue: class MockQueue {
     constructor(_name: string, _opts?: unknown) {}
     add = mockQueueAdd;
+    getJob = mockQueueGetJob;
   },
   Worker: class MockWorker {
     constructor(_name: string, _processor: unknown, _opts?: unknown) {}
@@ -141,6 +144,49 @@ describe("schedulePassExpiry", () => {
       { passId: 42 },
       expect.objectContaining({ jobId: "pass-42" }),
     );
+  });
+
+  it("evicts a completed job with the same id before re-adding", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    mockQueueGetJob.mockResolvedValueOnce({
+      getState: vi.fn().mockResolvedValue("completed"),
+      remove,
+    });
+
+    await schedulePassExpiry(7, new Date(Date.now() + 1000));
+
+    expect(remove).toHaveBeenCalled();
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      "expire",
+      { passId: 7 },
+      expect.objectContaining({ jobId: "pass-7" }),
+    );
+  });
+
+  it("evicts a failed job with the same id before re-adding", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    mockQueueGetJob.mockResolvedValueOnce({
+      getState: vi.fn().mockResolvedValue("failed"),
+      remove,
+    });
+
+    await schedulePassExpiry(8, new Date(Date.now() + 1000));
+
+    expect(remove).toHaveBeenCalled();
+    expect(mockQueueAdd).toHaveBeenCalled();
+  });
+
+  it("leaves a live delayed job untouched (add stays a dedup no-op)", async () => {
+    const remove = vi.fn();
+    mockQueueGetJob.mockResolvedValueOnce({
+      getState: vi.fn().mockResolvedValue("delayed"),
+      remove,
+    });
+
+    await schedulePassExpiry(9, new Date(Date.now() + 1000));
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(mockQueueAdd).toHaveBeenCalled();
   });
 });
 
