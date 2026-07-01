@@ -4,14 +4,14 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { logger, httpLogger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
-import { env } from "./env";
-import districtRouter from "./routes/district";
-import schoolRouter from "./routes/school";
-import scheduleTypeRouter from "./routes/scheduleType";
-import periodRouter from "./routes/period";
-import calendarRouter from "./routes/calendar";
-import destinationRouter from "./routes/destination";
-import policyRouter from "./routes/policy";
+import { env } from "./env.js";
+import districtRouter from "./routes/district.js";
+import schoolRouter from "./routes/school.js";
+import scheduleTypeRouter from "./routes/scheduleType.js";
+import periodRouter from "./routes/period.js";
+import calendarRouter from "./routes/calendar.js";
+import destinationRouter from "./routes/destination.js";
+import policyRouter from "./routes/policy.js";
 
 const app = express();
 

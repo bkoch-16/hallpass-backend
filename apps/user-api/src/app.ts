@@ -5,9 +5,9 @@ import rateLimit from "express-rate-limit";
 import { toNodeHandler } from "@hallpass/auth";
 import { logger, httpLogger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
-import { auth } from "./auth";
-import { env } from "./env";
-import userRouter from "./routes/user";
+import { auth } from "./auth.js";
+import { env } from "./env.js";
+import userRouter from "./routes/user.js";
 
 const app = express();
 

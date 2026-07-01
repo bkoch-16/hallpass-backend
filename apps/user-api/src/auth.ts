@@ -1,5 +1,5 @@
 import { createAuth } from "@hallpass/auth";
-import { env } from "./env";
+import { env } from "./env.js";
 
 export const auth = createAuth({
   baseURL: env.BETTER_AUTH_URL,

@@ -356,8 +356,9 @@ describe("GET /api/passes (integration)", () => {
     const res = await request(app).get("/api/passes");
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].studentId).toBe(student1.id);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].studentId).toBe(student1.id);
+    expect(res.body.nextCursor).toBeNull();
   });
 
   it("200 teacher sees all passes in school", async () => {
@@ -375,7 +376,35 @@ describe("GET /api/passes (integration)", () => {
     const res = await request(app).get("/api/passes");
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
+  });
+
+  it("200 paginates with cursor and limit", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    for (let i = 0; i < 3; i++) {
+      const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+      await seedPass(school.id, student.id, destination.id, { periodId: period.id });
+    }
+    authenticateAs(teacher);
+
+    const page1 = await request(app).get("/api/passes?limit=2");
+
+    expect(page1.status).toBe(200);
+    expect(page1.body.data).toHaveLength(2);
+    expect(page1.body.nextCursor).toBe(String(page1.body.data[1].id));
+
+    const page2 = await request(app).get(
+      `/api/passes?limit=2&cursor=${page1.body.nextCursor}`,
+    );
+
+    expect(page2.status).toBe(200);
+    expect(page2.body.data).toHaveLength(1);
+    expect(page2.body.nextCursor).toBeNull();
+    expect(page2.body.data[0].id).toBeGreaterThan(page1.body.data[1].id);
   });
 
   it("401 unauthenticated", async () => {

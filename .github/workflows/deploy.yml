@@ -178,8 +178,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha,scope=passes-api-dev
-          cache-to: type=gha,mode=max,scope=passes-api-dev
+          cache-from: type=gha,scope=passes-api
+          cache-to: type=gha,mode=max,scope=passes-api
 
       - name: Deploy passes-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
@@ -316,8 +316,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha,scope=passes-api-prod
-          cache-to: type=gha,mode=max,scope=passes-api-prod
+          cache-from: type=gha,scope=passes-api
+          cache-to: type=gha,mode=max,scope=passes-api
 
       - name: Deploy passes-api to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3

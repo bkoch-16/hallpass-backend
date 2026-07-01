@@ -147,5 +147,6 @@ export async function promoteFromQueue(
   const promoted = await prisma.pass.findUniqueOrThrow({
     where: { id: waiting.id },
   });
-  emitPassEvent(promoted, "pass:promoted");
+  // Same event as a direct approval — SCHEMA_PLAN defines no separate promotion event
+  emitPassEvent(promoted, "pass:approved");
 }

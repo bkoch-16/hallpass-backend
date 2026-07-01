@@ -5,7 +5,7 @@ import {
   calendarEntrySchema,
   calendarBulkSchema,
   updateCalendarSchema,
-} from "../../src/schemas/calendar";
+} from "../../src/schemas/calendar.js";
 
 describe("calendarIdSchema", () => {
   it("accepts valid schoolId and id", () => {

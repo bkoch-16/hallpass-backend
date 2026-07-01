@@ -18,4 +18,6 @@ export const passIdParams = z.object({
 
 export const listPassesQuery = z.object({
   status: z.nativeEnum(PassStatus).optional(),
+  cursor: z.string().regex(/^[1-9]\d*$/, "cursor must be a positive integer").optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 });

@@ -11,7 +11,7 @@ vi.mock("@hallpass/db", () => ({
   },
 }));
 
-import { requireRole, requireSelfOrRole, roleRank } from "../../src/middleware/roleGuard";
+import { requireRole, requireSelfOrRole, roleRank } from "../../src/middleware/roleGuard.js";
 import { Role } from "@hallpass/db";
 
 function mockRes() {

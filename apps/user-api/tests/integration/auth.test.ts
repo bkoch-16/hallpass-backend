@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import request from "supertest";
-import app from "../../src/app";
+import app from "../../src/app.js";
 import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {

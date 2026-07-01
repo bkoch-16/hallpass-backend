@@ -164,7 +164,8 @@ async function checkIsLastPeriod(
     where: {
       scheduleTypeId: calendar.scheduleTypeId,
       schoolId: pass.schoolId,
-      startTime: { gt: pass.period.endTime },
+      // gte, not gt: back-to-back schedules start the next period exactly at this endTime
+      startTime: { gte: pass.period.endTime },
       deletedAt: null,
     },
   });

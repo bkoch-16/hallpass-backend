@@ -333,6 +333,45 @@ describe("processPassExpiry — ACTIVE pass", () => {
     });
     expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
     expect(mockReleaseAndPromote).toHaveBeenCalledWith(5, 10);
+    // gte so a back-to-back period starting exactly at endTime counts as "later"
+    expect(mockPeriodFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ startTime: { gte: "10:00" } }),
+      }),
+    );
+  });
+
+  it("marks ACTIVE pass EXPIRED when the next period starts exactly at endTime (back-to-back)", async () => {
+    const pass = {
+      id: 22,
+      status: "ACTIVE",
+      schoolId: 1,
+      destinationId: 5,
+      periodId: 3,
+      period: { endTime: "09:50", scheduleTypeId: 5 },
+      destination: { maxOccupancy: 10 },
+    };
+    const updatedPass = { ...pass, status: "EXPIRED", expiredAt: new Date() };
+
+    mockPassFindUnique.mockResolvedValue(pass);
+    mockPassUpdateMany.mockResolvedValue({ count: 1 });
+    mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
+
+    mockPeriodFindUnique.mockResolvedValue({ id: 3, endTime: "09:50", scheduleTypeId: 5 });
+    mockCalendarFindFirst.mockResolvedValue({ id: 1, schoolId: 1, scheduleTypeId: 5 });
+    // Next period starts exactly when this one ends — must still count as a later period
+    mockPeriodFindMany.mockResolvedValue([
+      { id: 4, endTime: "10:40", startTime: "09:50", scheduleTypeId: 5 },
+    ]);
+
+    await processPassExpiry(makeJob(22));
+
+    expect(mockPassUpdateMany).toHaveBeenCalledWith({
+      where: { id: 22, status: "ACTIVE" },
+      data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
+    });
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
+    expect(mockReleaseAndPromote).toHaveBeenCalledWith(5, 10);
   });
 
   it("treats ACTIVE pass as last period when periodId is null → COMPLETED", async () => {

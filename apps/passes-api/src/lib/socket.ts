@@ -2,7 +2,11 @@ import { Server, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
+import { prisma } from "@hallpass/db";
+import { fromNodeHeaders } from "@hallpass/auth";
+import { UserRole } from "@hallpass/types";
 import { auth } from "../auth.js";
+import { roleRank } from "../middleware/roleGuard.js";
 import { corsOrigins } from "./cors.js";
 import { env } from "../env.js";
 import { logger } from "@hallpass/logger";
@@ -30,17 +34,28 @@ export function initSocket(
 
   io.use(async (socket, next) => {
     try {
-      // Convert socket handshake headers to Node-compatible format for better-auth
       const session = await auth.api.getSession({
-        headers: new Headers(
-          socket.handshake.headers as Record<string, string>,
-        ),
+        headers: fromNodeHeaders(socket.handshake.headers),
       });
       if (!session?.user) {
         next(new Error("Unauthorized"));
         return;
       }
-      socket.data.user = session.user;
+      // The session user carries only better-auth's base fields — load the DB
+      // user for role/schoolId (mirrors middleware/auth.ts)
+      const userId = Number(session.user.id);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        next(new Error("Unauthorized"));
+        return;
+      }
+      const user = await prisma.user.findFirst({
+        where: { id: userId, deletedAt: null },
+      });
+      if (!user) {
+        next(new Error("Unauthorized"));
+        return;
+      }
+      socket.data.user = user;
       next();
     } catch {
       next(new Error("Unauthorized"));
@@ -49,17 +64,26 @@ export function initSocket(
 
   io.on("connection", (socket: Socket) => {
     const user = socket.data.user;
-    if (user?.schoolId) socket.join(`school:${user.schoolId}`);
-    if (user?.id) socket.join(`user:${user.id}`);
+    socket.join(`user:${user.id}`);
+    // school room is the staff live pass board — students receive only their
+    // own pass events via user:{id} (docs/SCHEMA_PLAN.md, Socket.io rooms)
+    if (user.schoolId && roleRank(user.role) >= roleRank(UserRole.TEACHER)) {
+      socket.join(`school:${user.schoolId}`);
+    }
   });
 
   return { io, pubClient, subClient };
 }
 
 export function emitPassEvent(
-  pass: { schoolId: number; [key: string]: unknown },
+  pass: { schoolId: number; studentId: number; [key: string]: unknown },
   event: string,
 ): void {
   if (!io) return; // not initialized (e.g., in tests)
   io.to(`school:${pass.schoolId}`).emit(event, pass);
+  // pass:requested is staff-only — the requesting student already has the
+  // pass from the REST response
+  if (event !== "pass:requested") {
+    io.to(`user:${pass.studentId}`).emit(event, pass);
+  }
 }

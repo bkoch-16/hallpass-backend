@@ -5,7 +5,7 @@ import {
   listSchoolsSchema,
   createSchoolSchema,
   updateSchoolSchema,
-} from "../../src/schemas/school";
+} from "../../src/schemas/school.js";
 
 describe("schoolIdSchema", () => {
   it("accepts a positive integer string", () => {

@@ -190,6 +190,10 @@ model PassPolicy {
 // schema, `prisma migrate dev` will generate a `DROP INDEX "one_active_pass_per_student"` in
 // any new migration — delete that DROP from the generated SQL before committing; never apply it.
 // passes-api relies on this index (P2002 → 409 "Active pass already exists" on create).
+//
+// No deletedAt by design: a pass's lifecycle ends in a terminal status
+// (COMPLETED/CANCELLED/DENIED/EXPIRED) with its timestamp — passes are history,
+// never soft-deleted (see docs/SCHEMA_PLAN.md, Pass model).
 model Pass {
   id            Int        @id @default(autoincrement())
   schoolId      Int

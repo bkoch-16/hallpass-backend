@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
-import { requireSchoolAccess } from "../../src/middleware/schoolScope";
+import { requireSchoolAccess } from "../../src/middleware/schoolScope.js";
 
 function mockRes() {
   const res = {} as Response;

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
-import { UserRole } from "@hallpass/types";
+import { UserRole, type CursorPage } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
@@ -50,7 +50,11 @@ router.post(
       where: { id: schoolId, deletedAt: null },
       select: { timezone: true },
     });
-    const timezone = school?.timezone ?? "UTC";
+    if (!school) {
+      res.status(422).json({ message: "School not found" });
+      return;
+    }
+    const timezone = school.timezone;
 
     // 2. Get today's date in school timezone
     const today = getTodayInTimezone(timezone);
@@ -77,6 +81,8 @@ router.post(
         deletedAt: null,
       },
       include: { scheduleType: true },
+      // Buffer windows of adjacent periods overlap — order so the earliest match wins deterministically
+      orderBy: { startTime: "asc" },
     });
 
     const activePeriod = periods.find((p) => {
@@ -153,7 +159,7 @@ router.post(
       }
       throw err;
     }
-    emitPassEvent(pass, "pass:created");
+    emitPassEvent(pass, "pass:requested");
 
     void Promise.resolve(
       schedulePassExpiry(
@@ -178,7 +184,12 @@ router.get(
   validateQuery(listPassesQuery),
   async (req: Request, res: Response) => {
     const user = req.user!;
-    const { status } = req.query as { status?: string };
+    const { status, cursor, limit } = req.query as unknown as {
+      status?: string;
+      cursor?: string;
+      limit: number;
+    };
+    const take = limit;
     const isStudent = user.role === UserRole.STUDENT;
     const where: Record<string, unknown> = {
       schoolId: user.schoolId!,
@@ -186,8 +197,18 @@ router.get(
       ...(isStudent ? { studentId: user.id } : {}),
     };
 
-    const passes = await prisma.pass.findMany({ where });
-    res.json(passes);
+    const passes = await prisma.pass.findMany({
+      where,
+      take: take + 1,
+      ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+      orderBy: { id: "asc" },
+    });
+
+    const hasMore = passes.length > take;
+    const data = hasMore ? passes.slice(0, take) : passes;
+    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+
+    res.json({ data, nextCursor } satisfies CursorPage<(typeof passes)[number]>);
   },
 );
 
@@ -293,7 +314,7 @@ router.post(
     if (updated.status === PassStatus.ACTIVE) {
       emitPassEvent(updated, "pass:approved");
     } else if (updated.status === PassStatus.WAITING) {
-      emitPassEvent(updated, "pass:queued");
+      emitPassEvent(updated, "pass:waiting");
     }
 
     res.json(updated);
@@ -400,7 +421,13 @@ router.post(
 
     emitPassEvent(updated, "pass:returned");
 
-    await releaseAndPromote(pass.destinationId, pass.destination.maxOccupancy);
+    // The return already succeeded — a slot bookkeeping failure must not turn
+    // the response into a 500; reconcile-expiry recovers the counter
+    try {
+      await releaseAndPromote(pass.destinationId, pass.destination.maxOccupancy);
+    } catch (err) {
+      logger.error(err, "Failed to release/promote after return — will be recovered by reconcile");
+    }
 
     res.json(updated);
   },

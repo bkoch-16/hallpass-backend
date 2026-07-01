@@ -4,7 +4,7 @@ import {
   listDistrictsSchema,
   createDistrictSchema,
   updateDistrictSchema,
-} from "../../src/schemas/district";
+} from "../../src/schemas/district.js";
 
 describe("districtIdSchema", () => {
   it("accepts a positive integer string", () => {

@@ -25,16 +25,7 @@ app.use(
 app.use(httpLogger);
 app.use(express.json());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many requests" },
-});
-
-app.use(limiter);
-
+// Registered before the rate limiter so LB/uptime probes are never 429'd
 app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -44,6 +35,16 @@ app.get("/health", async (_req, res) => {
     res.status(503).json({ status: "error", service: "passes-api" });
   }
 });
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { message: "Too many requests" },
+});
+
+app.use(limiter);
 
 app.use("/api/passes", passesRouter);
 app.use("/internal", internalRouter);
