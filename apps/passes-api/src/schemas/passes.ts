@@ -12,7 +12,9 @@ export const approvePassBody = z.object({
   approverNote: z.string().optional(),
 });
 
-export const denyPassBody = approvePassBody;
+export const denyPassBody = z.object({
+  denierNote: z.string().optional(),
+});
 
 export const passIdParams = z.object({
   id: z.coerce.number().int().positive(),

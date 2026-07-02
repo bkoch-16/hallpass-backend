@@ -6,13 +6,15 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 
-const { mockGetSession, mockClaimSlot, mockReleaseSlot, mockPromoteFromQueue, mockReconcileSlots, mockReleaseAndPromote } =
+const { mockGetSession, mockClaimPassSlots, mockReleasePassSlots, mockPromoteFromQueue, mockReconcileSlots, mockReconcileSchoolSlots, mockGetMaxActivePasses, mockReleaseAndPromote } =
   vi.hoisted(() => ({
     mockGetSession: vi.fn(),
-    mockClaimSlot: vi.fn().mockResolvedValue(true),
-    mockReleaseSlot: vi.fn().mockResolvedValue(undefined),
+    mockClaimPassSlots: vi.fn().mockResolvedValue("claimed"),
+    mockReleasePassSlots: vi.fn().mockResolvedValue(undefined),
     mockPromoteFromQueue: vi.fn().mockResolvedValue(undefined),
     mockReconcileSlots: vi.fn().mockResolvedValue(undefined),
+    mockReconcileSchoolSlots: vi.fn().mockResolvedValue(undefined),
+    mockGetMaxActivePasses: vi.fn().mockResolvedValue(null),
     mockReleaseAndPromote: vi.fn().mockResolvedValue(undefined),
   }));
 
@@ -25,10 +27,12 @@ vi.mock("@hallpass/auth", () => ({
 }));
 
 vi.mock("../../src/lib/slots.js", () => ({
-  claimSlot: mockClaimSlot,
-  releaseSlot: mockReleaseSlot,
+  claimPassSlots: mockClaimPassSlots,
+  releasePassSlots: mockReleasePassSlots,
   promoteFromQueue: mockPromoteFromQueue,
   reconcileSlots: mockReconcileSlots,
+  reconcileSchoolSlots: mockReconcileSchoolSlots,
+  getMaxActivePasses: mockGetMaxActivePasses,
   releaseAndPromote: mockReleaseAndPromote,
 }));
 
@@ -213,7 +217,8 @@ async function cleanDb() {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mockClaimSlot.mockResolvedValue(true);
+  mockClaimPassSlots.mockResolvedValue("claimed");
+  mockGetMaxActivePasses.mockResolvedValue(null);
   await cleanDb();
 });
 
@@ -417,7 +422,12 @@ describe("POST /api/passes (integration)", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.message).toBe("Active pass already exists");
-    expect(mockReleaseSlot).toHaveBeenCalledWith(destination.id, destination.maxOccupancy);
+    expect(mockReleasePassSlots).toHaveBeenCalledWith(
+      school.id,
+      null,
+      destination.id,
+      destination.maxOccupancy,
+    );
   });
 });
 
@@ -562,7 +572,7 @@ describe("GET /api/passes/:id (integration)", () => {
 
 describe("POST /api/passes/:id/approve (integration)", () => {
   it("200 teacher approves PENDING pass → ACTIVE when slot is available", async () => {
-    mockClaimSlot.mockResolvedValueOnce(true);
+    mockClaimPassSlots.mockResolvedValueOnce("claimed");
     const school = await seedSchool();
     const destination = await seedDestination(school.id);
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
@@ -578,7 +588,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
   });
 
   it("200 teacher approves PENDING pass → WAITING when no slot available", async () => {
-    mockClaimSlot.mockResolvedValueOnce(false);
+    mockClaimPassSlots.mockResolvedValueOnce("destination_full");
     const school = await seedSchool();
     const destination = await seedDestination(school.id);
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });

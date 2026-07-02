@@ -48,6 +48,7 @@ const PASS_SELECT = {
   status: true,
   note: true,
   approverNote: true,
+  denierNote: true,
   requestedAt: true,
   approvedAt: true,
   activatedAt: true,
@@ -233,12 +234,13 @@ router.post(
       }
       emitPassEvent(pass, "pass:requested");
     } else {
-      const slotClaimed = await claimPassSlots(
-        schoolId,
-        policy?.maxActivePasses ?? null,
-        destination.id,
-        destination.maxOccupancy,
-      );
+      const slotClaimed =
+        (await claimPassSlots(
+          schoolId,
+          policy?.maxActivePasses ?? null,
+          destination.id,
+          destination.maxOccupancy,
+        )) === "claimed";
       const now = new Date();
       try {
         pass = await prisma.pass.create({
@@ -391,12 +393,13 @@ router.post(
 
     const maxOccupancy = pass.destination.maxOccupancy;
     const maxActivePasses = await getMaxActivePasses(user.schoolId!);
-    const slotClaimed = await claimPassSlots(
-      user.schoolId!,
-      maxActivePasses,
-      pass.destinationId,
-      maxOccupancy,
-    );
+    const slotClaimed =
+      (await claimPassSlots(
+        user.schoolId!,
+        maxActivePasses,
+        pass.destinationId,
+        maxOccupancy,
+      )) === "claimed";
     const newStatus = slotClaimed ? PassStatus.ACTIVE : PassStatus.WAITING;
 
     let count;
@@ -482,8 +485,8 @@ router.post(
         status: PassStatus.DENIED,
         denierId: user.id,
         deniedAt: new Date(),
-        ...(req.body.approverNote !== undefined
-          ? { approverNote: req.body.approverNote }
+        ...(req.body.denierNote !== undefined
+          ? { denierNote: req.body.denierNote }
           : {}),
       },
     });

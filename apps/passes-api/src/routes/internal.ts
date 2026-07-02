@@ -2,7 +2,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { Router, Request, Response, NextFunction } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { schedulePassExpiry } from "../lib/queue.js";
-import { reconcileSlots, reconcileSchoolSlots, getMaxActivePasses, promoteFromQueue } from "../lib/slots.js";
+import { reconcileSlots, reconcileSchoolSlots, promoteFromQueue } from "../lib/slots.js";
 import { periodEndDate } from "../lib/time.js";
 import { env } from "../env.js";
 
@@ -24,42 +24,54 @@ function requireInternalSecret(
   next();
 }
 
-router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
-  const activePasses = await prisma.pass.findMany({
-    where: {
-      status: {
-        in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE],
-      },
-    },
-    include: {
-      period: { select: { endTime: true, scheduleType: { select: { endBuffer: true } } } },
-      school: { select: { timezone: true } },
-    },
-  });
+const RECONCILE_BATCH_SIZE = 500;
 
+router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
   let scheduled = 0;
   const errors: { passId: number; error: string }[] = [];
 
-  for (const pass of activePasses) {
-    try {
-      // A pass whose period was deleted (periodId null) has no derivable end time —
-      // arm an immediate expiry; processPassExpiry treats a missing period as
-      // last-period and resolves the pass safely.
-      const endTime = pass.period
-        ? periodEndDate(
-            pass.period.endTime,
-            pass.period.scheduleType?.endBuffer ?? 0,
-            pass.school.timezone,
-          )
-        : new Date();
-      await schedulePassExpiry(pass.id, endTime);
-      scheduled++;
-    } catch (err) {
-      errors.push({
-        passId: pass.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
+  // Batched scan — never load every in-flight pass into memory at once.
+  let passCursor: number | undefined;
+  while (true) {
+    const batch = await prisma.pass.findMany({
+      where: {
+        status: {
+          in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE],
+        },
+      },
+      include: {
+        period: { select: { endTime: true, scheduleType: { select: { endBuffer: true } } } },
+        school: { select: { timezone: true } },
+      },
+      orderBy: { id: "asc" },
+      take: RECONCILE_BATCH_SIZE,
+      ...(passCursor !== undefined ? { cursor: { id: passCursor }, skip: 1 } : {}),
+    });
+
+    for (const pass of batch) {
+      try {
+        // A pass whose period was deleted (periodId null) has no derivable end time —
+        // arm an immediate expiry; processPassExpiry treats a missing period as
+        // last-period and resolves the pass safely.
+        const endTime = pass.period
+          ? periodEndDate(
+              pass.period.endTime,
+              pass.period.scheduleType?.endBuffer ?? 0,
+              pass.school.timezone,
+            )
+          : new Date();
+        await schedulePassExpiry(pass.id, endTime);
+        scheduled++;
+      } catch (err) {
+        errors.push({
+          passId: pass.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
+
+    if (batch.length < RECONCILE_BATCH_SIZE) break;
+    passCursor = batch[batch.length - 1]!.id;
   }
 
   // Reconcile Redis slot counters for every destination with a configured cap —
@@ -89,6 +101,9 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     where: { maxActivePasses: { not: null } },
     select: { schoolId: true, maxActivePasses: true },
   });
+  const capBySchool = new Map(
+    cappedPolicies.map((p) => [p.schoolId, p.maxActivePasses]),
+  );
   for (const policy of cappedPolicies) {
     try {
       await reconcileSchoolSlots(policy.schoolId, policy.maxActivePasses);
@@ -113,7 +128,9 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
   });
   for (const { schoolId } of waitingSchools) {
     try {
-      await promoteFromQueue(schoolId, await getMaxActivePasses(schoolId));
+      // Schools absent from capBySchool have no cap (no policy row, or a
+      // null maxActivePasses) — both mean unlimited, matching getMaxActivePasses.
+      await promoteFromQueue(schoolId, capBySchool.get(schoolId) ?? null);
     } catch (err) {
       reconcileErrors.push({
         schoolId,

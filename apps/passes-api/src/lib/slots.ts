@@ -1,8 +1,10 @@
-import { prisma, PassStatus } from "@hallpass/db";
+import { prisma, PassStatus, type Prisma } from "@hallpass/db";
 import { redis } from "./redis.js";
 import { emitPassEvent } from "./socket.js";
 
 const SLOT_TTL_SECONDS = 86400;
+
+const PROMOTE_BATCH_SIZE = 100;
 
 function slotKey(destinationId: number): string {
   return `slots:destination:${destinationId}`;
@@ -12,91 +14,62 @@ function schoolSlotKey(schoolId: number): string {
   return `slots:school:${schoolId}`;
 }
 
-// Atomically initialise if missing, decrement, and restore if over-claimed — all in one round trip.
-// Returns the remaining count (>= 0) on success, or -1 when no slot was available (counter already restored).
-const LUA_CLAIM_SLOT = `
-local key = KEYS[1]
-local max = tonumber(ARGV[1])
-if redis.call('EXISTS', key) == 0 then
-  redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
+// Shared Lua helpers: claim/release one counter key, where max == -1 means
+// "unlimited — skip this key entirely".
+//
+// claim: atomically initialise if missing, decrement, and restore if
+// over-claimed. Returns 1 when claimed (or unlimited), 0 when full.
+//
+// release: atomically increment then cap at max.
+const LUA_SLOT_HELPERS = `
+local function claim(key, max)
+  if max == -1 then return 1 end
+  if redis.call('EXISTS', key) == 0 then
+    redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
+  end
+  local remaining = redis.call('DECR', key)
+  if remaining < 0 then
+    redis.call('INCR', key)
+    return 0
+  end
+  redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
+  return 1
 end
-local remaining = redis.call('DECR', key)
-if remaining < 0 then
-  redis.call('INCR', key)
+local function release(key, max)
+  if max == -1 then return end
+  local val = redis.call('INCR', key)
+  if val > max then
+    redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
+    return
+  end
+  redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
+end
+`;
+
+// Claim the destination slot (KEYS[1]/ARGV[1]) and the school-wide slot
+// (KEYS[2]/ARGV[2]) in one round trip. On school failure the destination
+// claim is rolled back atomically. Returns 1 = both claimed,
+// 0 = destination full, -1 = school cap exhausted.
+const LUA_CLAIM_PASS_SLOTS = `${LUA_SLOT_HELPERS}
+local destMax = tonumber(ARGV[1])
+local schoolMax = tonumber(ARGV[2])
+if claim(KEYS[1], destMax) == 0 then return 0 end
+if claim(KEYS[2], schoolMax) == 0 then
+  release(KEYS[1], destMax)
   return -1
 end
-redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
-return remaining
+return 1
 `;
 
-// Atomically increment then cap at max in a single round trip.
-const LUA_RELEASE_SLOT = `
-local key = KEYS[1]
-local max = tonumber(ARGV[1])
-local val = redis.call('INCR', key)
-if val > max then
-  redis.call('SET', key, max, 'EX', ${SLOT_TTL_SECONDS})
-  return max
-end
-redis.call('EXPIRE', key, ${SLOT_TTL_SECONDS})
-return val
+// Release the destination slot (KEYS[1]/ARGV[1]) and the school-wide slot
+// (KEYS[2]/ARGV[2]) in one round trip.
+const LUA_RELEASE_PASS_SLOTS = `${LUA_SLOT_HELPERS}
+release(KEYS[1], tonumber(ARGV[1]))
+release(KEYS[2], tonumber(ARGV[2]))
+return 1
 `;
 
-/**
- * Atomically claim one slot for a counter key.
- * - If max is null → unlimited, return true immediately.
- * - If max is 0 → never allow, return false immediately (avoids a Redis
- *   TTL-expiry race where the restore INCR could create a key at 1).
- * - Uses a Lua script to init-if-missing then DECR in one round trip.
- * - Returns true if a slot was claimed, false if none available.
- */
-async function claimSlotByKey(key: string, max: number | null): Promise<boolean> {
-  if (max === null) return true;
-  if (max === 0) return false;
-  const remaining = (await redis.eval(LUA_CLAIM_SLOT, 1, key, max)) as number;
-  return remaining >= 0;
-}
-
-/**
- * Atomically release one slot via INCR, capped at max.
- * No-op when max is null.
- */
-async function releaseSlotByKey(key: string, max: number | null): Promise<void> {
-  if (max === null) return;
-  await redis.eval(LUA_RELEASE_SLOT, 1, key, max);
-}
-
-/** Atomically claim one destination slot. */
-export async function claimSlot(
-  destinationId: number,
-  maxOccupancy: number | null,
-): Promise<boolean> {
-  return claimSlotByKey(slotKey(destinationId), maxOccupancy);
-}
-
-/** Atomically release one destination slot. */
-export async function releaseSlot(
-  destinationId: number,
-  maxOccupancy: number | null,
-): Promise<void> {
-  return releaseSlotByKey(slotKey(destinationId), maxOccupancy);
-}
-
-/** Atomically claim one school-wide active-pass slot. */
-export async function claimSchoolSlot(
-  schoolId: number,
-  maxActivePasses: number | null,
-): Promise<boolean> {
-  return claimSlotByKey(schoolSlotKey(schoolId), maxActivePasses);
-}
-
-/** Atomically release one school-wide active-pass slot. */
-export async function releaseSchoolSlot(
-  schoolId: number,
-  maxActivePasses: number | null,
-): Promise<void> {
-  return releaseSlotByKey(schoolSlotKey(schoolId), maxActivePasses);
-}
+export type ClaimResult = "claimed" | "destination_full" | "school_full";
 
 /** Look up the school's maxActivePasses policy (null = unlimited). */
 export async function getMaxActivePasses(schoolId: number): Promise<number | null> {
@@ -108,35 +81,51 @@ export async function getMaxActivePasses(schoolId: number): Promise<number | nul
 }
 
 /**
- * Claim one destination slot AND one school-wide slot.
- * Returns true only when both were claimed; on partial claim the
- * destination slot is released before returning false.
+ * Claim one destination slot AND one school-wide slot in a single atomic
+ * Lua round trip; on partial claim the destination slot is rolled back
+ * inside the script before returning.
+ * - A null max → unlimited for that counter (skipped in the script).
+ * - A zero max → never allow, fail before touching Redis (avoids a Redis
+ *   TTL-expiry race where the restore INCR could create a key at 1).
  */
 export async function claimPassSlots(
   schoolId: number,
   maxActivePasses: number | null,
   destinationId: number,
   maxOccupancy: number | null,
-): Promise<boolean> {
-  const destClaimed = await claimSlot(destinationId, maxOccupancy);
-  if (!destClaimed) return false;
-  const schoolClaimed = await claimSchoolSlot(schoolId, maxActivePasses);
-  if (!schoolClaimed) {
-    await releaseSlot(destinationId, maxOccupancy);
-    return false;
-  }
-  return true;
+): Promise<ClaimResult> {
+  if (maxOccupancy === 0) return "destination_full";
+  if (maxActivePasses === 0) return "school_full";
+  if (maxOccupancy === null && maxActivePasses === null) return "claimed";
+  const result = (await redis.eval(
+    LUA_CLAIM_PASS_SLOTS,
+    2,
+    slotKey(destinationId),
+    schoolSlotKey(schoolId),
+    maxOccupancy ?? -1,
+    maxActivePasses ?? -1,
+  )) as number;
+  if (result === 0) return "destination_full";
+  if (result === -1) return "school_full";
+  return "claimed";
 }
 
-/** Release one destination slot AND one school-wide slot. */
+/** Release one destination slot AND one school-wide slot in a single round trip. */
 export async function releasePassSlots(
   schoolId: number,
   maxActivePasses: number | null,
   destinationId: number,
   maxOccupancy: number | null,
 ): Promise<void> {
-  await releaseSlot(destinationId, maxOccupancy);
-  await releaseSchoolSlot(schoolId, maxActivePasses);
+  if (maxOccupancy === null && maxActivePasses === null) return;
+  await redis.eval(
+    LUA_RELEASE_PASS_SLOTS,
+    2,
+    slotKey(destinationId),
+    schoolSlotKey(schoolId),
+    maxOccupancy ?? -1,
+    maxActivePasses ?? -1,
+  );
 }
 
 /**
@@ -154,49 +143,38 @@ export async function releaseAndPromote(
 }
 
 /**
- * Reconcile the Redis counter against actual DB state.
- * SET counter = maxOccupancy - (# ACTIVE passes for this destination).
- * No-op when maxOccupancy is null.
+ * Reconcile a Redis counter against actual DB state.
+ * SET counter = max - (# ACTIVE passes matching `where`).
+ * No-op when max is null.
  */
+async function reconcileKey(
+  key: string,
+  max: number | null,
+  where: Prisma.PassWhereInput,
+): Promise<void> {
+  if (max === null) return;
+
+  const activeCount = await prisma.pass.count({
+    where: { ...where, status: PassStatus.ACTIVE },
+  });
+
+  await redis.set(key, Math.max(0, max - activeCount), "EX", SLOT_TTL_SECONDS);
+}
+
+/** Reconcile a destination counter: maxOccupancy - (# ACTIVE passes there). */
 export async function reconcileSlots(
   destinationId: number,
   maxOccupancy: number | null,
 ): Promise<void> {
-  if (maxOccupancy === null) return;
-
-  const activeCount = await prisma.pass.count({
-    where: { destinationId, status: PassStatus.ACTIVE },
-  });
-
-  await redis.set(
-    slotKey(destinationId),
-    Math.max(0, maxOccupancy - activeCount),
-    "EX",
-    SLOT_TTL_SECONDS,
-  );
+  return reconcileKey(slotKey(destinationId), maxOccupancy, { destinationId });
 }
 
-/**
- * Reconcile the school-wide Redis counter against actual DB state.
- * SET counter = maxActivePasses - (# ACTIVE passes for this school).
- * No-op when maxActivePasses is null.
- */
+/** Reconcile a school-wide counter: maxActivePasses - (# ACTIVE passes in school). */
 export async function reconcileSchoolSlots(
   schoolId: number,
   maxActivePasses: number | null,
 ): Promise<void> {
-  if (maxActivePasses === null) return;
-
-  const activeCount = await prisma.pass.count({
-    where: { schoolId, status: PassStatus.ACTIVE },
-  });
-
-  await redis.set(
-    schoolSlotKey(schoolId),
-    Math.max(0, maxActivePasses - activeCount),
-    "EX",
-    SLOT_TTL_SECONDS,
-  );
+  return reconcileKey(schoolSlotKey(schoolId), maxActivePasses, { schoolId });
 }
 
 /**
@@ -205,53 +183,62 @@ export async function reconcileSchoolSlots(
  * SCHEMA_PLAN "Queue promotion on slot freed"). Claims BOTH the destination
  * and school counters; if the school cap is exhausted, promotion stops entirely.
  * Uses updateMany with a status guard to be safe under concurrent promotions.
+ * WAITING passes are fetched in batches so a deep queue is never fully loaded.
  */
 export async function promoteFromQueue(
   schoolId: number,
   maxActivePasses: number | null,
 ): Promise<void> {
-  const waiting = await prisma.pass.findMany({
-    where: { schoolId, status: PassStatus.WAITING },
-    orderBy: { requestedAt: "asc" },
-    include: { destination: { select: { maxOccupancy: true } } },
-  });
-  if (waiting.length === 0) return;
-
   const triedDestinations = new Set<number>();
-  for (const candidate of waiting) {
-    // Only the oldest WAITING pass per destination is promotable (FIFO per destination)
-    if (triedDestinations.has(candidate.destinationId)) continue;
-    triedDestinations.add(candidate.destinationId);
+  let cursor: number | undefined;
 
-    const maxOccupancy = candidate.destination.maxOccupancy;
-    const destClaimed = await claimSlot(candidate.destinationId, maxOccupancy);
-    if (!destClaimed) continue; // destination full — try the next destination
-
-    const schoolClaimed = await claimSchoolSlot(schoolId, maxActivePasses);
-    if (!schoolClaimed) {
-      // School-wide cap exhausted — nothing in this school can be promoted
-      await releaseSlot(candidate.destinationId, maxOccupancy);
-      return;
-    }
-
-    const { count } = await prisma.pass.updateMany({
-      where: { id: candidate.id, status: PassStatus.WAITING },
-      data: { status: PassStatus.ACTIVE, activatedAt: new Date() },
+  while (true) {
+    const waiting = await prisma.pass.findMany({
+      where: { schoolId, status: PassStatus.WAITING },
+      orderBy: [{ requestedAt: "asc" }, { id: "asc" }],
+      include: { destination: { select: { maxOccupancy: true } } },
+      take: PROMOTE_BATCH_SIZE,
+      ...(cursor !== undefined ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
+    if (waiting.length === 0) return;
 
-    if (count === 0) {
-      // Another worker already promoted this pass — give back both slots.
-      // The raced pass is no longer WAITING, so un-mark its destination:
-      // the next-oldest WAITING pass for that destination is now the FIFO
-      // head and must stay eligible for this loop.
-      await releasePassSlots(schoolId, maxActivePasses, candidate.destinationId, maxOccupancy);
-      triedDestinations.delete(candidate.destinationId);
-      continue;
+    for (const candidate of waiting) {
+      // Only the oldest WAITING pass per destination is promotable (FIFO per destination)
+      if (triedDestinations.has(candidate.destinationId)) continue;
+      triedDestinations.add(candidate.destinationId);
+
+      const maxOccupancy = candidate.destination.maxOccupancy;
+      const claim = await claimPassSlots(
+        schoolId,
+        maxActivePasses,
+        candidate.destinationId,
+        maxOccupancy,
+      );
+      if (claim === "destination_full") continue; // try the next destination
+      if (claim === "school_full") return; // nothing in this school can be promoted
+
+      const { count } = await prisma.pass.updateMany({
+        where: { id: candidate.id, status: PassStatus.WAITING },
+        data: { status: PassStatus.ACTIVE, activatedAt: new Date() },
+      });
+
+      if (count === 0) {
+        // Another worker already promoted this pass — give back both slots.
+        // The raced pass is no longer WAITING, so un-mark its destination:
+        // the next-oldest WAITING pass for that destination is now the FIFO
+        // head and must stay eligible for this loop.
+        await releasePassSlots(schoolId, maxActivePasses, candidate.destinationId, maxOccupancy);
+        triedDestinations.delete(candidate.destinationId);
+        continue;
+      }
+
+      const promoted = await prisma.pass.findUniqueOrThrow({ where: { id: candidate.id } });
+      // Same event as a direct approval — SCHEMA_PLAN defines no separate promotion event
+      emitPassEvent(promoted, "pass:approved");
+      return; // exactly one promotion per freed slot
     }
 
-    const promoted = await prisma.pass.findUniqueOrThrow({ where: { id: candidate.id } });
-    // Same event as a direct approval — SCHEMA_PLAN defines no separate promotion event
-    emitPassEvent(promoted, "pass:approved");
-    return; // exactly one promotion per freed slot
+    if (waiting.length < PROMOTE_BATCH_SIZE) return;
+    cursor = waiting[waiting.length - 1]!.id;
   }
 }

@@ -2,10 +2,8 @@ import { Server, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
-import { prisma } from "@hallpass/db";
-import { fromNodeHeaders } from "@hallpass/auth";
 import { UserRole } from "@hallpass/types";
-import { auth } from "../auth.js";
+import { resolveSessionUser } from "./sessionUser.js";
 import { roleRank } from "../middleware/roleGuard.js";
 import { corsOrigins } from "./cors.js";
 import { env } from "../env.js";
@@ -34,23 +32,7 @@ export function initSocket(
 
   io.use(async (socket, next) => {
     try {
-      const session = await auth.api.getSession({
-        headers: fromNodeHeaders(socket.handshake.headers),
-      });
-      if (!session?.user) {
-        next(new Error("Unauthorized"));
-        return;
-      }
-      // The session user carries only better-auth's base fields — load the DB
-      // user for role/schoolId (mirrors middleware/auth.ts)
-      const userId = Number(session.user.id);
-      if (!Number.isInteger(userId) || userId <= 0) {
-        next(new Error("Unauthorized"));
-        return;
-      }
-      const user = await prisma.user.findFirst({
-        where: { id: userId, deletedAt: null },
-      });
+      const user = await resolveSessionUser(socket.handshake.headers);
       if (!user) {
         next(new Error("Unauthorized"));
         return;

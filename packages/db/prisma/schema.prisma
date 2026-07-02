@@ -208,6 +208,7 @@ model Pass {
   status        PassStatus @default(PENDING)
   note          String?
   approverNote  String?
+  denierNote    String?
   requestedAt   DateTime   @default(now())
   approvedAt    DateTime?
   activatedAt   DateTime?

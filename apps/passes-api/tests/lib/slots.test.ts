@@ -61,10 +61,8 @@ vi.mock("../../src/lib/socket.js", () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import {
-  claimSlot,
-  releaseSlot,
-  claimSchoolSlot,
   claimPassSlots,
+  releasePassSlots,
   reconcileSlots,
   reconcileSchoolSlots,
   promoteFromQueue,
@@ -76,65 +74,83 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("claimSlot", () => {
-  it("returns true when Lua script yields a value >= 0 (slots available)", async () => {
-    mockRedis.eval.mockResolvedValue(5);
+describe("claimPassSlots", () => {
+  it("returns 'claimed' in a single eval when both slots are claimed", async () => {
+    mockRedis.eval.mockResolvedValue(1);
 
-    const result = await claimSlot(1, 10);
+    const result = await claimPassSlots(7, 5, 1, 10);
 
-    expect(result).toBe(true);
-    expect(mockRedis.eval).toHaveBeenCalledWith(expect.any(String), 1, "slots:destination:1", 10);
-  });
-
-  it("returns true when Lua script yields 0 (last slot claimed)", async () => {
-    mockRedis.eval.mockResolvedValue(0);
-
-    const result = await claimSlot(2, 5);
-
-    expect(result).toBe(true);
-  });
-
-  it("returns true (unlimited) when maxOccupancy is null", async () => {
-    const result = await claimSlot(1, null);
-
-    expect(result).toBe(true);
-    expect(mockRedis.eval).not.toHaveBeenCalled();
-  });
-
-  it("returns false when Lua script returns -1 (no slots, counter already restored by Lua)", async () => {
-    mockRedis.eval.mockResolvedValue(-1);
-
-    const result = await claimSlot(1, 5);
-
-    expect(result).toBe(false);
-    expect(mockRedis.incr).not.toHaveBeenCalled();
-  });
-});
-
-describe("releaseSlot", () => {
-  it("calls eval with the correct key and maxOccupancy", async () => {
-    mockRedis.eval.mockResolvedValue(5);
-
-    await releaseSlot(1, 10);
-
+    expect(result).toBe("claimed");
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
     expect(mockRedis.eval).toHaveBeenCalledWith(
       expect.any(String),
-      1,
+      2,
       "slots:destination:1",
+      "slots:school:7",
       10,
+      5,
     );
   });
 
-  it("is a no-op when maxOccupancy is null", async () => {
-    await releaseSlot(1, null);
+  it("returns 'destination_full' when the script reports the destination exhausted", async () => {
+    mockRedis.eval.mockResolvedValue(0);
 
+    const result = await claimPassSlots(7, 5, 1, 10);
+
+    expect(result).toBe("destination_full");
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 'school_full' when the script reports the school cap exhausted (destination rolled back in-script)", async () => {
+    mockRedis.eval.mockResolvedValue(-1);
+
+    const result = await claimPassSlots(7, 5, 1, 10);
+
+    expect(result).toBe("school_full");
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes -1 (unlimited) for a null max and still makes one round trip", async () => {
+    mockRedis.eval.mockResolvedValue(1);
+
+    const result = await claimPassSlots(7, null, 1, 10);
+
+    expect(result).toBe("claimed");
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
+      "slots:destination:1",
+      "slots:school:7",
+      10,
+      -1,
+    );
+  });
+
+  it("returns 'claimed' without touching Redis when both maxes are null", async () => {
+    const result = await claimPassSlots(7, null, 1, null);
+
+    expect(result).toBe("claimed");
     expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 
-  it("Lua script includes EXPIRE call on normal INCR path (val <= max)", async () => {
-    mockRedis.eval.mockResolvedValue(5); // val = 5, within max
+  it("returns 'destination_full' without touching Redis when maxOccupancy is 0", async () => {
+    const result = await claimPassSlots(7, 5, 1, 0);
 
-    await releaseSlot(1, 10);
+    expect(result).toBe("destination_full");
+    expect(mockRedis.eval).not.toHaveBeenCalled();
+  });
+
+  it("returns 'school_full' without touching Redis when maxActivePasses is 0", async () => {
+    const result = await claimPassSlots(7, 0, 1, 10);
+
+    expect(result).toBe("school_full");
+    expect(mockRedis.eval).not.toHaveBeenCalled();
+  });
+
+  it("Lua script includes EXPIRE with the slot TTL", async () => {
+    mockRedis.eval.mockResolvedValue(1);
+
+    await claimPassSlots(7, 5, 1, 10);
 
     const luaScript = mockRedis.eval.mock.calls[0][0] as string;
     expect(luaScript).toContain("EXPIRE");
@@ -142,66 +158,42 @@ describe("releaseSlot", () => {
   });
 });
 
-describe("claimSchoolSlot", () => {
-  it("uses the slots:school:{id} key", async () => {
-    mockRedis.eval.mockResolvedValue(2);
+describe("releasePassSlots", () => {
+  it("releases both slots in a single eval", async () => {
+    mockRedis.eval.mockResolvedValue(1);
 
-    const result = await claimSchoolSlot(7, 5);
+    await releasePassSlots(7, 5, 1, 10);
 
-    expect(result).toBe(true);
-    expect(mockRedis.eval).toHaveBeenCalledWith(expect.any(String), 1, "slots:school:7", 5);
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
+      "slots:destination:1",
+      "slots:school:7",
+      10,
+      5,
+    );
   });
 
-  it("returns true (unlimited) when maxActivePasses is null", async () => {
-    const result = await claimSchoolSlot(7, null);
+  it("is a no-op when both maxes are null", async () => {
+    await releasePassSlots(7, null, 1, null);
 
-    expect(result).toBe(true);
     expect(mockRedis.eval).not.toHaveBeenCalled();
   });
-});
 
-describe("claimPassSlots", () => {
-  it("returns true when both destination and school slots are claimed", async () => {
-    mockRedis.eval
-      .mockResolvedValueOnce(0) // destination claim ok
-      .mockResolvedValueOnce(2); // school claim ok
+  it("passes -1 (unlimited) for a null max so the script skips that key", async () => {
+    mockRedis.eval.mockResolvedValue(1);
 
-    const result = await claimPassSlots(7, 5, 1, 10);
+    await releasePassSlots(7, null, 1, 10);
 
-    expect(result).toBe(true);
-    expect(mockRedis.eval).toHaveBeenCalledTimes(2);
-  });
-
-  it("releases the destination slot and returns false when the school counter is exhausted", async () => {
-    mockRedis.eval
-      .mockResolvedValueOnce(0) // destination claim ok
-      .mockResolvedValueOnce(-1) // school claim fails
-      .mockResolvedValueOnce(1); // destination release
-
-    const result = await claimPassSlots(7, 5, 1, 10);
-
-    expect(result).toBe(false);
-    expect(mockRedis.eval).toHaveBeenCalledTimes(3);
-    expect(mockRedis.eval.mock.calls[2][2]).toBe("slots:destination:1");
-  });
-
-  it("returns false without touching the school counter when the destination is full", async () => {
-    mockRedis.eval.mockResolvedValueOnce(-1); // destination claim fails
-
-    const result = await claimPassSlots(7, 5, 1, 10);
-
-    expect(result).toBe(false);
-    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
-  });
-
-  it("never touches the school key when maxActivePasses is null", async () => {
-    mockRedis.eval.mockResolvedValueOnce(0); // destination claim ok
-
-    const result = await claimPassSlots(7, null, 1, 10);
-
-    expect(result).toBe(true);
-    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
-    expect(mockRedis.eval.mock.calls[0][2]).toBe("slots:destination:1");
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
+      "slots:destination:1",
+      "slots:school:7",
+      10,
+      -1,
+    );
   });
 });
 
@@ -265,7 +257,7 @@ describe("promoteFromQueue", () => {
     };
     const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
-    mockRedis.eval.mockResolvedValue(3); // slot available
+    mockRedis.eval.mockResolvedValue(1); // both slots claimed
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
 
@@ -275,6 +267,13 @@ describe("promoteFromQueue", () => {
       where: { id: 50, status: "WAITING" },
       data: expect.objectContaining({ status: "ACTIVE" }),
     });
+    // WAITING passes are fetched in bounded batches, oldest first
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 100,
+        orderBy: [{ requestedAt: "asc" }, { id: "asc" }],
+      }),
+    );
   });
 
   it("does not promote if no WAITING pass exists", async () => {
@@ -295,8 +294,7 @@ describe("promoteFromQueue", () => {
       destination: { maxOccupancy: 5 },
     };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
-    mockRedis.eval.mockResolvedValue(-1); // negative → no slot
-    mockRedis.incr.mockResolvedValue(0); // restore call
+    mockRedis.eval.mockResolvedValue(0); // destination full
 
     await promoteFromQueue(1, null);
 
@@ -313,17 +311,17 @@ describe("promoteFromQueue", () => {
       destination: { maxOccupancy: 10 },
     };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
-    mockRedis.eval.mockResolvedValue(3); // slots always available / releases succeed
+    mockRedis.eval.mockResolvedValue(1); // claims and releases succeed
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 }); // race lost
 
     await promoteFromQueue(1, 5);
 
     expect(mockPrisma.pass.updateMany).toHaveBeenCalledTimes(1);
     expect(mockPrisma.pass.findUniqueOrThrow).not.toHaveBeenCalled();
-    // 2 claims (destination + school) then 2 releases (destination + school)
-    expect(mockRedis.eval).toHaveBeenCalledTimes(4);
-    expect(mockRedis.eval.mock.calls[2][2]).toBe("slots:destination:1");
-    expect(mockRedis.eval.mock.calls[3][2]).toBe("slots:school:1");
+    // one combined claim, then one combined release of both slots
+    expect(mockRedis.eval).toHaveBeenCalledTimes(2);
+    expect(mockRedis.eval.mock.calls[1][2]).toBe("slots:destination:1");
+    expect(mockRedis.eval.mock.calls[1][3]).toBe("slots:school:1");
   });
 
   it("retries the next-oldest WAITING pass for the same destination after a lost race", async () => {
@@ -337,7 +335,7 @@ describe("promoteFromQueue", () => {
     };
     const newer = { ...older, id: 61, requestedAt: new Date("2026-01-01T10:05:00Z") };
     mockPrisma.pass.findMany.mockResolvedValue([older, newer]);
-    mockRedis.eval.mockResolvedValue(3); // claims and releases always succeed
+    mockRedis.eval.mockResolvedValue(1); // claims and releases always succeed
     mockPrisma.pass.updateMany
       .mockResolvedValueOnce({ count: 0 }) // race lost on id 60
       .mockResolvedValueOnce({ count: 1 }); // id 61 promoted
@@ -364,7 +362,7 @@ describe("promoteFromQueue", () => {
     };
     const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
-    // claimSlot returns true immediately for null maxOccupancy (no eval call)
+    // claimPassSlots returns "claimed" immediately when both maxes are null (no eval call)
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
 
@@ -386,16 +384,13 @@ describe("promoteFromQueue", () => {
       destination: { maxOccupancy: 10 },
     };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
-    mockRedis.eval
-      .mockResolvedValueOnce(0) // destination claim ok
-      .mockResolvedValueOnce(-1) // school claim fails
-      .mockResolvedValueOnce(1); // destination release
+    // school cap exhausted — the script rolls the destination claim back itself
+    mockRedis.eval.mockResolvedValue(-1);
 
     await promoteFromQueue(1, 5);
 
     expect(mockPrisma.pass.updateMany).not.toHaveBeenCalled();
-    expect(mockRedis.eval).toHaveBeenCalledTimes(3);
-    expect(mockRedis.eval.mock.calls[2][2]).toBe("slots:destination:1");
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
   });
 
   it("skips a full destination and promotes the next destination's oldest candidate", async () => {
@@ -418,9 +413,8 @@ describe("promoteFromQueue", () => {
     const promotedPass = { ...otherDestPass, status: "ACTIVE", activatedAt: new Date() };
     mockPrisma.pass.findMany.mockResolvedValue([fullDestPass, otherDestPass]);
     mockRedis.eval
-      .mockResolvedValueOnce(-1) // destination 1 full
-      .mockResolvedValueOnce(0) // destination 2 claim ok
-      .mockResolvedValueOnce(0); // school claim ok
+      .mockResolvedValueOnce(0) // destination 1 full
+      .mockResolvedValueOnce(1); // destination 2 + school claimed
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
 

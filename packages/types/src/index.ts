@@ -121,6 +121,7 @@ export interface PassResponse {
   status: PassStatus;
   note: string | null;
   approverNote: string | null;
+  denierNote: string | null;
   requestedAt: Date;
   approvedAt: Date | null;
   activatedAt: Date | null;
