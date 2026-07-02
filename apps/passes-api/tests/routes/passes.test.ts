@@ -29,11 +29,10 @@ vi.mock("@hallpass/db", () => ({
 }));
 
 vi.mock("../../src/lib/slots.js", () => ({
-  claimSlot: vi.fn().mockResolvedValue(true),
-  releaseSlot: vi.fn().mockResolvedValue(undefined),
+  claimPassSlots: vi.fn().mockResolvedValue(true),
+  releasePassSlots: vi.fn().mockResolvedValue(undefined),
   releaseAndPromote: vi.fn().mockResolvedValue(undefined),
-  promoteFromQueue: vi.fn().mockResolvedValue(undefined),
-  reconcileSlots: vi.fn().mockResolvedValue(undefined),
+  getMaxActivePasses: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../src/lib/socket.js", () => ({
@@ -80,10 +79,10 @@ const mockPrisma = prisma as unknown as {
 };
 
 const mockSlots = slotsModule as unknown as {
-  claimSlot: ReturnType<typeof vi.fn>;
-  releaseSlot: ReturnType<typeof vi.fn>;
+  claimPassSlots: ReturnType<typeof vi.fn>;
+  releasePassSlots: ReturnType<typeof vi.fn>;
   releaseAndPromote: ReturnType<typeof vi.fn>;
-  promoteFromQueue: ReturnType<typeof vi.fn>;
+  getMaxActivePasses: ReturnType<typeof vi.fn>;
 };
 
 interface FakeUser {
@@ -343,7 +342,7 @@ describe("POST /api/passes", () => {
         }),
       }),
     );
-    expect(mockSlots.claimSlot).not.toHaveBeenCalled();
+    expect(mockSlots.claimPassSlots).not.toHaveBeenCalled();
   });
 });
 
@@ -380,7 +379,7 @@ describe("POST /api/passes — teacher-created", () => {
   it("TEACHER creates a pass for a student — auto-approved to ACTIVE", async () => {
     authenticateTeacherWithTarget(fakeOtherStudent);
     mockActivePeriodAndDestination();
-    mockSlots.claimSlot.mockResolvedValue(true);
+    mockSlots.claimPassSlots.mockResolvedValue(true);
     mockPrisma.pass.create.mockResolvedValue(teacherCreatedPass);
 
     const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
@@ -408,7 +407,7 @@ describe("POST /api/passes — teacher-created", () => {
   it("TEACHER creates when the destination is full — pass lands WAITING", async () => {
     authenticateTeacherWithTarget(fakeOtherStudent);
     mockActivePeriodAndDestination();
-    mockSlots.claimSlot.mockResolvedValue(false);
+    mockSlots.claimPassSlots.mockResolvedValue(false);
     const waitingPass = { ...teacherCreatedPass, status: "WAITING", activatedAt: null };
     mockPrisma.pass.create.mockResolvedValue(waitingPass);
 
@@ -478,26 +477,45 @@ describe("POST /api/passes — teacher-created", () => {
   it("returns 409 and releases the claimed slot when the target already has an active pass", async () => {
     authenticateTeacherWithTarget(fakeOtherStudent);
     mockActivePeriodAndDestination();
-    mockSlots.claimSlot.mockResolvedValue(true);
+    mockSlots.claimPassSlots.mockResolvedValue(true);
     mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
 
     const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toBe("Active pass already exists");
-    expect(mockSlots.releaseSlot).toHaveBeenCalledWith(1, 10);
+    expect(mockSlots.releasePassSlots).toHaveBeenCalledWith(1, null, 1, 10);
   });
 
   it("does not release a slot on conflict when none was claimed (WAITING path)", async () => {
     authenticateTeacherWithTarget(fakeOtherStudent);
     mockActivePeriodAndDestination();
-    mockSlots.claimSlot.mockResolvedValue(false);
+    mockSlots.claimPassSlots.mockResolvedValue(false);
     mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
 
     const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(409);
-    expect(mockSlots.releaseSlot).not.toHaveBeenCalled();
+    expect(mockSlots.releasePassSlots).not.toHaveBeenCalled();
+  });
+
+  it("passes the policy's maxActivePasses into the slot claim", async () => {
+    authenticateTeacherWithTarget(fakeOtherStudent);
+    mockActivePeriodAndDestination();
+    mockPrisma.passPolicy.findFirst.mockResolvedValue({
+      id: 1,
+      schoolId: 1,
+      interval: null,
+      maxPerInterval: null,
+      maxActivePasses: 5,
+    });
+    mockSlots.claimPassSlots.mockResolvedValue(true);
+    mockPrisma.pass.create.mockResolvedValue(teacherCreatedPass);
+
+    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+
+    expect(res.status).toBe(201);
+    expect(mockSlots.claimPassSlots).toHaveBeenCalledWith(1, 5, 1, 10);
   });
 });
 
@@ -684,7 +702,7 @@ describe("POST /api/passes/:id/approve", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockSlots.claimSlot.mockResolvedValue(true);
+    mockSlots.claimPassSlots.mockResolvedValue(true);
     const approvedPass = {
       ...fakePass,
       status: "ACTIVE",
@@ -705,7 +723,7 @@ describe("POST /api/passes/:id/approve", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockSlots.claimSlot.mockResolvedValue(false);
+    mockSlots.claimPassSlots.mockResolvedValue(false);
     const waitingPass = {
       ...fakePass,
       status: "WAITING",
@@ -725,7 +743,7 @@ describe("POST /api/passes/:id/approve", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
     mockPrisma.destination.findUnique.mockResolvedValue({ id: 1, maxOccupancy: 10 });
-    mockSlots.claimSlot.mockResolvedValue(true);
+    mockSlots.claimPassSlots.mockResolvedValue(true);
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({ ...fakePass, status: "ACTIVE", approverId: 30, approvedAt: new Date() });
 
@@ -738,13 +756,44 @@ describe("POST /api/passes/:id/approve", () => {
   it("returns 409 and releases the slot when the pass was transitioned concurrently", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
-    mockSlots.claimSlot.mockResolvedValue(true);
+    mockSlots.getMaxActivePasses.mockResolvedValue(null);
+    mockSlots.claimPassSlots.mockResolvedValue(true);
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(409);
-    expect(mockSlots.releaseSlot).toHaveBeenCalledWith(
+    expect(mockSlots.releasePassSlots).toHaveBeenCalledWith(
+      1,
+      null,
+      fakePass.destinationId,
+      fakePass.destination.maxOccupancy,
+    );
+  });
+
+  it("returns WAITING when the school-wide active-pass cap is reached even though the destination has room", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
+    mockSlots.getMaxActivePasses.mockResolvedValue(5);
+    // Destination has room, but claimPassSlots reports failure (school cap exhausted)
+    mockSlots.claimPassSlots.mockResolvedValue(false);
+    const waitingPass = {
+      ...fakePass,
+      status: "WAITING",
+      approverId: 20,
+      approvedAt: new Date(),
+    };
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(waitingPass);
+
+    const res = await request(app).post(`${BASE}/100/approve`).send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("WAITING");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(waitingPass, "pass:waiting");
+    expect(mockSlots.claimPassSlots).toHaveBeenCalledWith(
+      1,
+      5,
       fakePass.destinationId,
       fakePass.destination.maxOccupancy,
     );
@@ -753,13 +802,13 @@ describe("POST /api/passes/:id/approve", () => {
   it("returns 409 without releasing a slot when no slot was claimed (WAITING path)", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
-    mockSlots.claimSlot.mockResolvedValue(false);
+    mockSlots.claimPassSlots.mockResolvedValue(false);
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(409);
-    expect(mockSlots.releaseSlot).not.toHaveBeenCalled();
+    expect(mockSlots.releasePassSlots).not.toHaveBeenCalled();
   });
 
   it("returns 400 when pass is not PENDING", async () => {

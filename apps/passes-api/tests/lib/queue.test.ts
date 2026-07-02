@@ -16,7 +16,8 @@ const {
   mockDestinationFindUnique,
   mockEmitPassEvent,
   mockReleaseAndPromote,
-  mockReleaseSlot,
+  mockReleasePassSlots,
+  mockGetMaxActivePasses,
 } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn().mockResolvedValue(undefined),
   mockQueueGetJob: vi.fn().mockResolvedValue(undefined),
@@ -30,7 +31,8 @@ const {
   mockDestinationFindUnique: vi.fn(),
   mockEmitPassEvent: vi.fn(),
   mockReleaseAndPromote: vi.fn().mockResolvedValue(undefined),
-  mockReleaseSlot: vi.fn().mockResolvedValue(undefined),
+  mockReleasePassSlots: vi.fn().mockResolvedValue(undefined),
+  mockGetMaxActivePasses: vi.fn().mockResolvedValue(null),
 }));
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
@@ -82,7 +84,8 @@ vi.mock("@hallpass/db", () => ({
 
 vi.mock("../../src/lib/slots.js", () => ({
   releaseAndPromote: mockReleaseAndPromote,
-  releaseSlot: mockReleaseSlot,
+  releasePassSlots: mockReleasePassSlots,
+  getMaxActivePasses: mockGetMaxActivePasses,
 }));
 
 vi.mock("../../src/lib/socket.js", () => ({
@@ -344,7 +347,7 @@ describe("processPassExpiry — ACTIVE pass", () => {
       data: expect.objectContaining({ status: "COMPLETED", returnedAt: expect.any(Date) }),
     });
     expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:returned");
-    expect(mockReleaseSlot).toHaveBeenCalledWith(5, 10);
+    expect(mockReleasePassSlots).toHaveBeenCalledWith(1, null, 5, 10);
     expect(mockReleaseAndPromote).not.toHaveBeenCalled();
   });
 
@@ -378,7 +381,7 @@ describe("processPassExpiry — ACTIVE pass", () => {
       data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
     });
     expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
-    expect(mockReleaseAndPromote).toHaveBeenCalledWith(5, 10);
+    expect(mockReleaseAndPromote).toHaveBeenCalledWith(1, 5, 10);
     // gte so a back-to-back period starting exactly at endTime counts as "later"
     expect(mockPeriodFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -417,7 +420,7 @@ describe("processPassExpiry — ACTIVE pass", () => {
       data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
     });
     expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
-    expect(mockReleaseAndPromote).toHaveBeenCalledWith(5, 10);
+    expect(mockReleaseAndPromote).toHaveBeenCalledWith(1, 5, 10);
   });
 
   it("treats ACTIVE pass as last period when periodId is null → COMPLETED", async () => {

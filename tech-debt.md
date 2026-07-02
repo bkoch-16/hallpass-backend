@@ -13,7 +13,7 @@ Related to the review issue deliberately deferred during the passes-api review l
 **Fix:** normalize `24:xx` → `00:xx` in `getCurrentTimeInTimezone`; clamp (don't wrap) buffered window starts; in reconcile, expire passes whose calendar date is before today instead of rescheduling them.
 
 ### 2. Redis slot-key TTL can briefly over-admit
-`apps/passes-api/src/lib/slots.ts:5` — if a `slots:destination:<id>` key expires while passes are ACTIVE, the next claim re-initializes it to `maxOccupancy`, temporarily over-admitting until `/internal/reconcile-expiry` runs. Documented tradeoff; acceptable while reconcile runs frequently.
+`apps/passes-api/src/lib/slots.ts:5` — if a `slots:destination:<id>` or `slots:school:<id>` key expires while passes are ACTIVE, the next claim re-initializes it to `maxOccupancy`, temporarily over-admitting until `/internal/reconcile-expiry` runs. Documented tradeoff; acceptable while reconcile runs frequently.
 
 **Fix (if it bites):** reconcile the counter from DB state inside the claim path when the key is missing, instead of initializing to max.
 

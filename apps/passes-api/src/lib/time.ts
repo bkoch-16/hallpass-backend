@@ -61,9 +61,11 @@ export function getIntervalStart(interval: string, timezone: string): Date {
   if (interval === "WEEK") {
     // dayOfWeek from local date components (0=Sunday)
     const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    // SCHEMA_PLAN: WEEK = current calendar week, Monday 00:00 -> Sunday 23:59
+    const daysSinceMonday = (dayOfWeek + 6) % 7;
     // Compute the week-start local DATE via calendar arithmetic, then resolve its
     // midnight in the target timezone (fixed-86.4M-ms subtraction breaks across DST).
-    const weekStartStr = new Date(Date.UTC(year, month - 1, day - dayOfWeek))
+    const weekStartStr = new Date(Date.UTC(year, month - 1, day - daysSinceMonday))
       .toISOString()
       .slice(0, 10);
     return localMidnightAsUTC(weekStartStr, timezone);

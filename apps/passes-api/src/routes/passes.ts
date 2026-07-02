@@ -17,7 +17,12 @@ import {
   passIdParams,
   listPassesQuery,
 } from "../schemas/passes.js";
-import { claimSlot, releaseSlot, releaseAndPromote } from "../lib/slots.js";
+import {
+  claimPassSlots,
+  releasePassSlots,
+  releaseAndPromote,
+  getMaxActivePasses,
+} from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
 import { schedulePassExpiry } from "../lib/queue.js";
 import {
@@ -266,7 +271,12 @@ router.post(
       }
       emitPassEvent(pass, "pass:requested");
     } else {
-      const slotClaimed = await claimSlot(destination.id, destination.maxOccupancy);
+      const slotClaimed = await claimPassSlots(
+        schoolId,
+        policy?.maxActivePasses ?? null,
+        destination.id,
+        destination.maxOccupancy,
+      );
       const now = new Date();
       try {
         pass = await prisma.pass.create({
@@ -287,7 +297,12 @@ router.post(
       } catch (err: unknown) {
         if (slotClaimed) {
           try {
-            await releaseSlot(destination.id, destination.maxOccupancy);
+            await releasePassSlots(
+              schoolId,
+              policy?.maxActivePasses ?? null,
+              destination.id,
+              destination.maxOccupancy,
+            );
           } catch (releaseErr) {
             logger.error(releaseErr, "Failed to release slot after teacher-create error");
           }
@@ -413,7 +428,13 @@ router.post(
     }
 
     const maxOccupancy = pass.destination.maxOccupancy;
-    const slotClaimed = await claimSlot(pass.destinationId, maxOccupancy);
+    const maxActivePasses = await getMaxActivePasses(user.schoolId!);
+    const slotClaimed = await claimPassSlots(
+      user.schoolId!,
+      maxActivePasses,
+      pass.destinationId,
+      maxOccupancy,
+    );
     const newStatus = slotClaimed ? PassStatus.ACTIVE : PassStatus.WAITING;
 
     let count;
@@ -433,7 +454,7 @@ router.post(
     } catch (err) {
       if (slotClaimed) {
         try {
-          await releaseSlot(pass.destinationId, maxOccupancy);
+          await releasePassSlots(user.schoolId!, maxActivePasses, pass.destinationId, maxOccupancy);
         } catch (releaseErr) {
           logger.error(releaseErr, "Failed to release slot after approve DB error");
         }
@@ -445,7 +466,7 @@ router.post(
       // Another request transitioned this pass first — give back the slot we claimed
       if (slotClaimed) {
         try {
-          await releaseSlot(pass.destinationId, maxOccupancy);
+          await releasePassSlots(user.schoolId!, maxActivePasses, pass.destinationId, maxOccupancy);
         } catch (releaseErr) {
           logger.error(releaseErr, "Failed to release slot after lost approve race");
         }
@@ -569,7 +590,7 @@ router.post(
     // The return already succeeded — a slot bookkeeping failure must not turn
     // the response into a 500; reconcile-expiry recovers the counter
     try {
-      await releaseAndPromote(pass.destinationId, pass.destination.maxOccupancy);
+      await releaseAndPromote(pass.schoolId, pass.destinationId, pass.destination.maxOccupancy);
     } catch (err) {
       logger.error(err, "Failed to release/promote after return — will be recovered by reconcile");
     }

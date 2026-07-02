@@ -2,7 +2,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { Router, Request, Response, NextFunction } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { schedulePassExpiry } from "../lib/queue.js";
-import { reconcileSlots } from "../lib/slots.js";
+import { reconcileSlots, reconcileSchoolSlots, getMaxActivePasses } from "../lib/slots.js";
 import { periodEndDate } from "../lib/time.js";
 import { env } from "../env.js";
 
@@ -69,7 +69,7 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     destMaxOccupancy.set(pass.destinationId, pass.destination.maxOccupancy);
   }
   let reconciled = 0;
-  const reconcileErrors: { destinationId: number; error: string }[] = [];
+  const reconcileErrors: { destinationId?: number; schoolId?: number; error: string }[] = [];
   for (const [destinationId, maxOccupancy] of destMaxOccupancy) {
     try {
       await reconcileSlots(destinationId, maxOccupancy);
@@ -77,6 +77,23 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     } catch (err) {
       reconcileErrors.push({
         destinationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Reconcile school-wide counters for every school that has non-terminal passes.
+  const schoolIds = new Set<number>();
+  for (const pass of activePasses) {
+    schoolIds.add(pass.schoolId);
+  }
+  for (const schoolId of schoolIds) {
+    try {
+      await reconcileSchoolSlots(schoolId, await getMaxActivePasses(schoolId));
+      reconciled++;
+    } catch (err) {
+      reconcileErrors.push({
+        schoolId,
         error: err instanceof Error ? err.message : String(err),
       });
     }

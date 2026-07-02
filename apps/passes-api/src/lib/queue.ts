@@ -3,7 +3,7 @@ import Redis from "ioredis";
 import { logger } from "@hallpass/logger";
 import { env } from "../env.js";
 import { prisma, PassStatus } from "@hallpass/db";
-import { releaseAndPromote, releaseSlot } from "./slots.js";
+import { releaseAndPromote, releasePassSlots, getMaxActivePasses } from "./slots.js";
 import { getTodayInTimezone } from "./time.js";
 import { emitPassEvent } from "./socket.js";
 
@@ -92,7 +92,13 @@ export async function processPassExpiry(job: Job): Promise<void> {
       emitPassEvent(updated, "pass:returned");
       // Do not promote on the last period — there are no more periods today for a WAITING
       // student to be active in, and their own expiry job won't fire again.
-      await releaseSlot(pass.destinationId, maxOccupancy);
+      // Release both counters but do not promote (no more periods today)
+      await releasePassSlots(
+        pass.schoolId,
+        await getMaxActivePasses(pass.schoolId),
+        pass.destinationId,
+        maxOccupancy,
+      );
     } else {
       const { count } = await prisma.pass.updateMany({
         where: { id: passId, status: PassStatus.ACTIVE },
@@ -101,7 +107,7 @@ export async function processPassExpiry(job: Job): Promise<void> {
       if (count === 0) return;
       const updated = await prisma.pass.findUniqueOrThrow({ where: { id: passId } });
       emitPassEvent(updated, "pass:expired");
-      await releaseAndPromote(pass.destinationId, maxOccupancy);
+      await releaseAndPromote(pass.schoolId, pass.destinationId, maxOccupancy);
     }
   }
 }
