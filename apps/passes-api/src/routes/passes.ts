@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma, PassStatus } from "@hallpass/db";
+import { prisma, PassStatus, type Prisma } from "@hallpass/db";
 import { UserRole, type CursorPage, type PassResponse } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
@@ -57,50 +57,12 @@ const PASS_SELECT = {
   expiredAt: true,
 } as const;
 
-type PassRow = {
-  id: number;
-  schoolId: number;
-  studentId: number;
-  requesterId: number;
-  destinationId: number;
-  periodId: number | null;
-  approverId: number | null;
-  denierId: number | null;
-  cancellerId: number | null;
-  status: PassStatus;
-  note: string | null;
-  approverNote: string | null;
-  requestedAt: Date;
-  approvedAt: Date | null;
-  activatedAt: Date | null;
-  returnedAt: Date | null;
-  cancelledAt: Date | null;
-  deniedAt: Date | null;
-  expiredAt: Date | null;
-};
+type PassRow = Prisma.PassGetPayload<{ select: typeof PASS_SELECT }>;
 
-function toPassResponse(p: PassRow): PassResponse {
-  return {
-    id: p.id,
-    schoolId: p.schoolId,
-    studentId: p.studentId,
-    requesterId: p.requesterId,
-    destinationId: p.destinationId,
-    periodId: p.periodId,
-    approverId: p.approverId,
-    denierId: p.denierId,
-    cancellerId: p.cancellerId,
-    status: p.status,
-    note: p.note,
-    approverNote: p.approverNote,
-    requestedAt: p.requestedAt,
-    approvedAt: p.approvedAt,
-    activatedAt: p.activatedAt,
-    returnedAt: p.returnedAt,
-    cancelledAt: p.cancelledAt,
-    deniedAt: p.deniedAt,
-    expiredAt: p.expiredAt,
-  };
+// PassRow is derived from PASS_SELECT, so this passthrough is where the
+// compiler verifies the select list matches the PassResponse wire contract.
+function toPassResponse(pass: PassRow): PassResponse {
+  return pass;
 }
 
 function isUniqueViolation(err: unknown): boolean {

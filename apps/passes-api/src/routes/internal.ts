@@ -2,7 +2,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { Router, Request, Response, NextFunction } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { schedulePassExpiry } from "../lib/queue.js";
-import { reconcileSlots, reconcileSchoolSlots, getMaxActivePasses } from "../lib/slots.js";
+import { reconcileSlots, reconcileSchoolSlots, getMaxActivePasses, promoteFromQueue } from "../lib/slots.js";
 import { periodEndDate } from "../lib/time.js";
 import { env } from "../env.js";
 
@@ -34,7 +34,6 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     include: {
       period: { select: { endTime: true, scheduleType: { select: { endBuffer: true } } } },
       school: { select: { timezone: true } },
-      destination: { select: { maxOccupancy: true } },
     },
   });
 
@@ -63,34 +62,58 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     }
   }
 
-  // Reconcile Redis slot counters for every destination that has non-terminal passes.
-  const destMaxOccupancy = new Map<number, number | null>();
-  for (const pass of activePasses) {
-    destMaxOccupancy.set(pass.destinationId, pass.destination.maxOccupancy);
-  }
+  // Reconcile Redis slot counters for every destination with a configured cap —
+  // derived from the source of truth (Destination.maxOccupancy), not from in-flight
+  // passes, so a destination whose LAST pass reached a terminal state with a lost
+  // slot release is still reconciled.
+  const cappedDestinations = await prisma.destination.findMany({
+    where: { maxOccupancy: { not: null } },
+    select: { id: true, maxOccupancy: true },
+  });
   let reconciled = 0;
   const reconcileErrors: { destinationId?: number; schoolId?: number; error: string }[] = [];
-  for (const [destinationId, maxOccupancy] of destMaxOccupancy) {
+  for (const dest of cappedDestinations) {
     try {
-      await reconcileSlots(destinationId, maxOccupancy);
+      await reconcileSlots(dest.id, dest.maxOccupancy);
       reconciled++;
     } catch (err) {
       reconcileErrors.push({
-        destinationId,
+        destinationId: dest.id,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  // Reconcile school-wide counters for every school that has non-terminal passes.
-  const schoolIds = new Set<number>();
-  for (const pass of activePasses) {
-    schoolIds.add(pass.schoolId);
-  }
-  for (const schoolId of schoolIds) {
+  // Reconcile school-wide counters for every school with a configured active-pass cap.
+  const cappedPolicies = await prisma.passPolicy.findMany({
+    where: { maxActivePasses: { not: null } },
+    select: { schoolId: true, maxActivePasses: true },
+  });
+  for (const policy of cappedPolicies) {
     try {
-      await reconcileSchoolSlots(schoolId, await getMaxActivePasses(schoolId));
+      await reconcileSchoolSlots(policy.schoolId, policy.maxActivePasses);
       reconciled++;
+    } catch (err) {
+      reconcileErrors.push({
+        schoolId: policy.schoolId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Heal lost promotions: a failed releaseAndPromote leaves an eligible WAITING
+  // pass stranded even after the counters above are corrected. Promote once per
+  // school that has WAITING passes, against the just-reconciled counters. Scope
+  // comes from WAITING passes (not PassPolicy) so schools with an unlimited or
+  // missing policy are healed too.
+  const waitingSchools = await prisma.pass.findMany({
+    where: { status: PassStatus.WAITING },
+    distinct: ["schoolId"],
+    select: { schoolId: true },
+  });
+  for (const { schoolId } of waitingSchools) {
+    try {
+      await promoteFromQueue(schoolId, await getMaxActivePasses(schoolId));
     } catch (err) {
       reconcileErrors.push({
         schoolId,
