@@ -23,21 +23,32 @@ export function getCurrentTimeInTimezone(timezone: string): string {
   }
 }
 
-// Returns the UTC instant corresponding to local midnight of a "YYYY-MM-DD" date string.
-export function localMidnightAsUTC(dateStr: string, timezone: string): Date {
-  // Noon UTC is always on the correct local calendar date for any timezone (UTC-12 to UTC+14),
-  // unlike midnight UTC which lands on the previous local date for UTC- timezones.
-  const approxUtc = new Date(`${dateStr}T12:00:00Z`);
+function tzOffsetMs(date: Date, timezone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
-  }).formatToParts(approxUtc);
-  const rawH = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
-  const localM = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-  const localH = rawH === 24 ? 0 : rawH;
-  return new Date(approxUtc.getTime() - (localH * 60 + localM) * 60_000);
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return asUTC - date.getTime();
+}
+
+// Returns the UTC instant corresponding to local midnight of a "YYYY-MM-DD" date string.
+export function localMidnightAsUTC(dateStr: string, timezone: string): Date {
+  const targetMidnightUtcMs = new Date(`${dateStr}T00:00:00Z`).getTime();
+  // First guess: offset sampled at noon UTC on the target date. tzOffsetMs uses the full
+  // local date-time (including day), so this is exact even for zones beyond UTC+12 where
+  // noon UTC already falls on the next local day.
+  const guess = targetMidnightUtcMs - tzOffsetMs(new Date(`${dateStr}T12:00:00Z`), timezone);
+  // Iterate once: on DST-transition days the offset at local midnight can differ from the
+  // offset at the sample instant; re-sampling at the candidate removes the residual error.
+  return new Date(targetMidnightUtcMs - tzOffsetMs(new Date(guess), timezone));
 }
 
 export function getIntervalStart(interval: string, timezone: string): Date {
@@ -48,10 +59,14 @@ export function getIntervalStart(interval: string, timezone: string): Date {
     return localMidnightAsUTC(todayStr, timezone);
   }
   if (interval === "WEEK") {
-    const todayMidnight = localMidnightAsUTC(todayStr, timezone);
     // dayOfWeek from local date components (0=Sunday)
     const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    return new Date(todayMidnight.getTime() - dayOfWeek * 86_400_000);
+    // Compute the week-start local DATE via calendar arithmetic, then resolve its
+    // midnight in the target timezone (fixed-86.4M-ms subtraction breaks across DST).
+    const weekStartStr = new Date(Date.UTC(year, month - 1, day - dayOfWeek))
+      .toISOString()
+      .slice(0, 10);
+    return localMidnightAsUTC(weekStartStr, timezone);
   }
   // MONTH
   const monthStr = `${year}-${String(month).padStart(2, "0")}-01`;

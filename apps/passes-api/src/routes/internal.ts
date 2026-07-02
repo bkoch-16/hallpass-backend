@@ -30,7 +30,6 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
       status: {
         in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE],
       },
-      periodId: { not: null },
     },
     include: {
       period: { select: { endTime: true, scheduleType: { select: { endBuffer: true } } } },
@@ -43,14 +42,17 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
   const errors: { passId: number; error: string }[] = [];
 
   for (const pass of activePasses) {
-    if (!pass.period) continue;
     try {
-      const timezone = pass.school.timezone;
-      const endTime = periodEndDate(
-        pass.period.endTime,
-        pass.period.scheduleType?.endBuffer ?? 0,
-        timezone,
-      );
+      // A pass whose period was deleted (periodId null) has no derivable end time —
+      // arm an immediate expiry; processPassExpiry treats a missing period as
+      // last-period and resolves the pass safely.
+      const endTime = pass.period
+        ? periodEndDate(
+            pass.period.endTime,
+            pass.period.scheduleType?.endBuffer ?? 0,
+            pass.school.timezone,
+          )
+        : new Date();
       await schedulePassExpiry(pass.id, endTime);
       scheduled++;
     } catch (err) {
