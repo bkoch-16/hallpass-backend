@@ -29,6 +29,17 @@ app.use(
 app.use(httpLogger);
 app.use(express.json());
 
+// Registered before the rate limiter so LB/uptime probes are never 429'd
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "user-api" });
+  } catch (err) {
+    logger.error(err, "Health check failed");
+    res.status(503).json({ status: "error", service: "user-api" });
+  }
+});
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 100,
@@ -49,16 +60,6 @@ app.use(limiter);
 app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));
 
 app.use("/api/users", userRouter);
-
-app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", service: "user-api" });
-  } catch (err) {
-    logger.error(err, "Health check failed");
-    res.status(503).json({ status: "error", service: "user-api" });
-  }
-});
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });

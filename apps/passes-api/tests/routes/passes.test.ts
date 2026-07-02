@@ -56,6 +56,7 @@ vi.mock("@hallpass/auth", () => ({
 import app from "../../src/app";
 import { prisma } from "@hallpass/db";
 import * as slotsModule from "../../src/lib/slots.js";
+import * as queueModule from "../../src/lib/queue.js";
 import { emitPassEvent } from "../../src/lib/socket.js";
 
 const mockEmitPassEvent = emitPassEvent as unknown as ReturnType<typeof vi.fn>;
@@ -83,6 +84,10 @@ const mockSlots = slotsModule as unknown as {
   releasePassSlots: ReturnType<typeof vi.fn>;
   releaseAndPromote: ReturnType<typeof vi.fn>;
   getMaxActivePasses: ReturnType<typeof vi.fn>;
+};
+
+const mockQueue = queueModule as unknown as {
+  schedulePassExpiry: ReturnType<typeof vi.fn>;
 };
 
 interface FakeUser {
@@ -203,6 +208,9 @@ const BASE = "/api/passes";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // resetAllMocks wipes the module-level mockResolvedValue; the route calls
+  // .catch() on schedulePassExpiry's return value, so it must stay a promise
+  mockQueue.schedulePassExpiry.mockResolvedValue(undefined);
 });
 
 // ─── POST /passes ──────────────────────────────────────────────────────────────

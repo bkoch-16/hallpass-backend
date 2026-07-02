@@ -13,7 +13,8 @@ function requireInternalSecret(
   res: Response,
   next: NextFunction,
 ): void {
-  const provided = req.headers["authorization"] ?? "";
+  const rawAuth = req.headers["authorization"];
+  const provided = typeof rawAuth === "string" ? rawAuth : "";
   const expected = `Bearer ${env.INTERNAL_SECRET}`;
   const hash = (s: string) => createHash("sha256").update(s).digest();
   const valid = timingSafeEqual(hash(provided), hash(expected));

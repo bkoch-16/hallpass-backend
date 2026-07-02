@@ -33,6 +33,17 @@ app.use(
 app.use(httpLogger);
 app.use(express.json());
 
+// Registered before the rate limiter so LB/uptime probes are never 429'd
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "schools-api" });
+  } catch (err) {
+    logger.error(err, "Health check failed");
+    res.status(503).json({ status: "error", service: "schools-api" });
+  }
+});
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 100,
@@ -54,16 +65,6 @@ schoolRouter.use("/:schoolId/policy", policyRouter);
 
 app.use("/api/districts", districtRouter);
 app.use("/api/schools", schoolRouter);
-
-app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", service: "schools-api" });
-  } catch (err) {
-    logger.error(err, "Health check failed");
-    res.status(503).json({ status: "error", service: "schools-api" });
-  }
-});
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });

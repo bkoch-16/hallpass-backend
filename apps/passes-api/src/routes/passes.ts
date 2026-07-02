@@ -280,14 +280,12 @@ router.post(
       emitPassEvent(pass, slotClaimed ? "pass:approved" : "pass:waiting");
     }
 
-    void Promise.resolve(
-      schedulePassExpiry(
-        pass.id,
-        periodEndDate(
-          activePeriod.endTime,
-          activePeriod.scheduleType?.endBuffer ?? 0,
-          timezone,
-        ),
+    void schedulePassExpiry(
+      pass.id,
+      periodEndDate(
+        activePeriod.endTime,
+        activePeriod.scheduleType?.endBuffer ?? 0,
+        timezone,
       ),
     ).catch((err) => logger.warn(err, "Failed to schedule pass expiry — will be recovered by reconcile"));
 
