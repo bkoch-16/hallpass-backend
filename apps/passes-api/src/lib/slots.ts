@@ -240,9 +240,12 @@ export async function promoteFromQueue(
     });
 
     if (count === 0) {
-      // Another worker already promoted this pass — give back both slots and
-      // let the loop try the next candidate (replaces the old _isRetry recursion)
+      // Another worker already promoted this pass — give back both slots.
+      // The raced pass is no longer WAITING, so un-mark its destination:
+      // the next-oldest WAITING pass for that destination is now the FIFO
+      // head and must stay eligible for this loop.
       await releasePassSlots(schoolId, maxActivePasses, candidate.destinationId, maxOccupancy);
+      triedDestinations.delete(candidate.destinationId);
       continue;
     }
 

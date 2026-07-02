@@ -326,6 +326,33 @@ describe("promoteFromQueue", () => {
     expect(mockRedis.eval.mock.calls[3][2]).toBe("slots:school:1");
   });
 
+  it("retries the next-oldest WAITING pass for the same destination after a lost race", async () => {
+    const older = {
+      id: 60,
+      schoolId: 1,
+      destinationId: 1,
+      status: "WAITING",
+      requestedAt: new Date("2026-01-01T10:00:00Z"),
+      destination: { maxOccupancy: 10 },
+    };
+    const newer = { ...older, id: 61, requestedAt: new Date("2026-01-01T10:05:00Z") };
+    mockPrisma.pass.findMany.mockResolvedValue([older, newer]);
+    mockRedis.eval.mockResolvedValue(3); // claims and releases always succeed
+    mockPrisma.pass.updateMany
+      .mockResolvedValueOnce({ count: 0 }) // race lost on id 60
+      .mockResolvedValueOnce({ count: 1 }); // id 61 promoted
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({ ...newer, status: "ACTIVE" });
+
+    await promoteFromQueue(1, 5);
+
+    expect(mockPrisma.pass.updateMany).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.pass.updateMany.mock.calls[1][0].where).toEqual({
+      id: 61,
+      status: "WAITING",
+    });
+    expect(mockPrisma.pass.findUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 61 } });
+  });
+
   it("promotes regardless of maxOccupancy=null (unlimited)", async () => {
     const waitingPass = {
       id: 51,
