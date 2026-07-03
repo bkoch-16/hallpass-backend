@@ -42,3 +42,10 @@ Follow-ups from the second review of the branch (2026-07-01). The larger finding
 passes-api validates `PORT` as `z.coerce.number().optional().default(3003)` while schools-api and user-api use `z.string().optional()`.
 
 **Fix:** align all three on the coerce-number form when the shared middleware package (item 3) is extracted.
+
+## Tooling
+
+### 7. Babysitter stop hook fires twice per session stop
+The babysitter plugin's stop hook is registered twice (once via the plugin's absolute path, once via `${CLAUDE_PLUGIN_ROOT}` — see `hooks/babysitter-stop-hook.sh`), so every session stop runs it twice. The racing invocations write duplicate `STOP_HOOK_INVOKED` journal entries with the same sequence number under `.a5c/runs/<runId>/journal/`, corrupting the journal ("Journal sequence gap detected") until the duplicate file is deleted by hand. This happened on every stop during the 2026-07-02 CR convergence run (`01KWJM3X7DPJ1S8RR9GWK4GWTJ`).
+
+**Fix:** dedupe the hook registration so it appears once in settings (or make the hook/SDK journal append idempotent per sequence).
