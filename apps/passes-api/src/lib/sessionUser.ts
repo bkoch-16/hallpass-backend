@@ -6,15 +6,21 @@ import { auth } from "../auth.js";
 /**
  * Resolve the better-auth session from request headers to the DB user
  * (the session user carries only better-auth's base fields — the DB row
- * has role/schoolId). Returns null when there is no valid session or the
- * user is missing/soft-deleted; getSession errors propagate to the caller.
+ * has role/schoolId). Returns null when there is no valid session (including
+ * getSession failures) or the user is missing/soft-deleted; database errors
+ * propagate to the caller.
  */
 export async function resolveSessionUser(
   headers: IncomingHttpHeaders,
 ): Promise<User | null> {
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(headers),
-  });
+  let session;
+  try {
+    session = await auth.api.getSession({
+      headers: fromNodeHeaders(headers),
+    });
+  } catch {
+    return null;
+  }
   if (!session?.user) return null;
 
   const userId = Number(session.user.id);

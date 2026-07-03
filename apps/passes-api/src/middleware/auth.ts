@@ -6,13 +6,7 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ) {
-  let user;
-  try {
-    user = await resolveSessionUser(req.headers);
-  } catch {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  const user = await resolveSessionUser(req.headers);
 
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });

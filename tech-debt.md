@@ -31,19 +31,14 @@ Related to the review issue deliberately deferred during the passes-api review l
 
 ---
 
-Follow-ups from the second review of the branch (2026-07-01). The larger findings from that review (stale `PassResponse`/`CreatePassBody` contract types, BullMQ jobId dedup blocking reconcile recovery, Socket.io shutdown hang) were fixed directly and are not listed here.
+Follow-ups from the second review of the branch (2026-07-01). The larger findings from that review (stale `PassResponse`/`CreatePassBody` contract types, BullMQ jobId dedup blocking reconcile recovery, Socket.io shutdown hang, socket auth duplicating `requireAuth` — both now share `apps/passes-api/src/lib/sessionUser.ts`) were fixed directly and are not listed here.
 
-### 5. Socket auth duplicates `requireAuth`
-`apps/passes-api/src/lib/socket.ts` (the `io.use` middleware) re-implements the session→DB-user resolution from `apps/passes-api/src/middleware/auth.ts` — same better-auth `getSession`, same id validation, same `deletedAt: null` user lookup.
-
-**Fix:** extract a shared `resolveSessionUser(headers)` used by both, so the 401 semantics can't drift.
-
-### 6. Redis connection construction repeated
+### 5. Redis connection construction repeated
 `new Redis(env.REDIS_URL, { maxRetriesPerRequest: null })` is hand-built three times: `apps/passes-api/src/lib/queue.ts` (queue + worker connections) and `apps/passes-api/src/lib/socket.ts` (adapter pub client).
 
 **Fix:** add a factory in `src/lib/redis.ts` (e.g. `createBlockingRedis()`) that centralizes the connection options.
 
-### 7. `env.ts` PORT schema divergence
+### 6. `env.ts` PORT schema divergence
 passes-api validates `PORT` as `z.coerce.number().optional().default(3003)` while schools-api and user-api use `z.string().optional()`.
 
 **Fix:** align all three on the coerce-number form when the shared middleware package (item 3) is extracted.
