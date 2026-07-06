@@ -45,7 +45,7 @@ passes-api validates `PORT` as `z.coerce.number().optional().default(3003)` whil
 
 ## Tooling
 
-### 7. Babysitter stop hook fires twice per session stop
-The babysitter plugin's stop hook is registered twice (once via the plugin's absolute path, once via `${CLAUDE_PLUGIN_ROOT}` — see `hooks/babysitter-stop-hook.sh`), so every session stop runs it twice. The racing invocations write duplicate `STOP_HOOK_INVOKED` journal entries with the same sequence number under `.a5c/runs/<runId>/journal/`, corrupting the journal ("Journal sequence gap detected") until the duplicate file is deleted by hand. This happened on every stop during the 2026-07-02 CR convergence run (`01KWJM3X7DPJ1S8RR9GWK4GWTJ`).
+### 7. Babysitter stop hook fires twice per session stop — RESOLVED 2026-07-06
+The babysitter plugin's stop hook was registered twice (once via a manually added absolute-path entry in `~/.claude/settings.json`, once via the plugin's own `hooks.json` using `${CLAUDE_PLUGIN_ROOT}`), so every session stop ran it twice. The racing invocations wrote duplicate `STOP_HOOK_INVOKED` journal entries with the same sequence number under `.a5c/runs/<runId>/journal/`, corrupting the journal ("Journal sequence gap detected") until the duplicate file was deleted by hand. This happened on every stop during the 2026-07-02 CR convergence run (`01KWJM3X7DPJ1S8RR9GWK4GWTJ`) and again on run `01KWW5G9AXTF3S6ECSQHP1MR2W`.
 
-**Fix:** dedupe the hook registration so it appears once in settings (or make the hook/SDK journal append idempotent per sequence).
+**Resolution:** removed the manual duplicate Stop and SessionStart entries from `~/.claude/settings.json`; the plugin's `hooks.json` registration is the single source. A duplicate-journal-entry incident after 2026-07-06 would mean a regression (e.g. the manual entries were re-added or the SDK journal append is still not idempotent per sequence).
