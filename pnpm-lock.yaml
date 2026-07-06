@@ -63,6 +63,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -133,6 +136,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -191,6 +197,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -302,6 +311,19 @@ importers:
         version: 5.9.3
 
   packages/middleware:
+    dependencies:
+      '@hallpass/db':
+        specifier: workspace:*
+        version: link:../db
+      '@hallpass/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@hallpass/types':
+        specifier: workspace:*
+        version: link:../types
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/express':
         specifier: ^5.0.6
@@ -312,6 +334,9 @@ importers:
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       supertest:
         specifier: ^7.2.2
         version: 7.2.2

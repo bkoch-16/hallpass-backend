@@ -4,7 +4,7 @@ import { UserRole } from "@hallpass/types";
 import type { SchoolResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "../middleware/roleGuard.js";
-import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createSchoolSchema, listSchoolsSchema, schoolIdSchema, updateSchoolSchema } from "../schemas/school.js";
 
 const router = Router({ mergeParams: true });

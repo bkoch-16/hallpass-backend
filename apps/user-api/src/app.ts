@@ -4,7 +4,11 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { toNodeHandler } from "@hallpass/auth";
 import { logger, httpLogger } from "@hallpass/logger";
-import { prisma } from "@hallpass/db";
+import {
+  createHealthRoute,
+  notFound,
+  createErrorHandler,
+} from "@hallpass/express-middleware";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
 import userRouter from "./routes/user.js";
@@ -31,15 +35,7 @@ app.use(httpLogger);
 app.use(express.json());
 
 // Registered before the rate limiter so LB/uptime probes are never 429'd
-app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", service: "user-api" });
-  } catch (err) {
-    logger.error(err, "Health check failed");
-    res.status(503).json({ status: "error", service: "user-api" });
-  }
-});
+app.get("/health", createHealthRoute("user-api"));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -62,20 +58,8 @@ app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));
 
 app.use("/api/users", userRouter);
 
-app.use((_req, res) => {
-  res.status(404).json({ message: "Not found" });
-});
+app.use(notFound);
 
-app.use(
-  (
-    err: Error,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction,
-  ) => {
-    logger.error(err);
-    res.status(500).json({ message: "Internal server error" });
-  },
-);
+app.use(createErrorHandler(logger));
 
 export default app;

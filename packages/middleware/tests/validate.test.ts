@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { validateQuery, validateBody, validateParams } from "../../src/middleware/validate.js";
+import { validateQuery, validateBody, validateParams } from "../src/validate";
 
 function mockRes() {
   const res = {} as Response;
@@ -31,6 +31,7 @@ describe("validateQuery", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect((req as unknown as { query: { limit: number } }).query.limit).toBe(10);
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it("defaults limit when not provided", () => {
@@ -87,6 +88,16 @@ describe("validateBody", () => {
     expect(next).toHaveBeenCalledOnce();
     expect(req.body.name).toBe("Test");
     expect(req.body).not.toHaveProperty("extra");
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("assigns parsed data to req.body", () => {
+    const req = { body: { name: "Alice" } } as unknown as Request;
+
+    validateBody(schema)(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.body).toEqual({ name: "Alice" });
   });
 
   it("returns 400 for missing required field", () => {
@@ -140,6 +151,7 @@ describe("validateParams", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(req.params.id).toBe("42");
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid params", () => {

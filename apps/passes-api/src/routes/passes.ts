@@ -9,7 +9,7 @@ import {
   validateBody,
   validateParams,
   validateQuery,
-} from "../middleware/validate.js";
+} from "@hallpass/express-middleware";
 import {
   createPassBody,
   approvePassBody,

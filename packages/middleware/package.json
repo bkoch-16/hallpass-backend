@@ -9,8 +9,18 @@
     "lint": "eslint src/",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@hallpass/db": "workspace:*",
+    "@hallpass/logger": "workspace:*",
+    "@hallpass/types": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "express": "^5.2.1"
+  },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "express": "^5.2.1",
     "@types/node": "^25.5.0",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.2.2",
