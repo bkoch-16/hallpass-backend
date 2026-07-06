@@ -37,10 +37,6 @@ vi.mock('@hallpass/db', () => ({
   },
 }));
 
-vi.mock('@hallpass/auth', () => ({
-  fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
-}));
-
 vi.mock('../../src/env.js', () => ({
   env: {
     CORS_ORIGIN: 'http://localhost:3000',
