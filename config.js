@@ -758,6 +758,147 @@ const CONFIG = {
       "endpoints": []
     },
     {
+      "name": "Passes-API",
+      "order": 4000,
+      "baseUrls": {
+        "Prod": "https://passes-api-509242588558.us-west1.run.app"
+      },
+      "subgroups": null,
+      "endpoints": [
+        {
+          "name": "Create Pass",
+          "order": 1000,
+          "method": "POST",
+          "url": "{{Base}}/api/passes",
+          "description": "Create a pass. Students create their own (studentId omitted, status PENDING). TEACHER+ must supply studentId; the pass is auto-approved to ACTIVE, or WAITING when the destination or school cap is full. 201 created, 409 student already has a non-terminal pass, 422 validation/no period.",
+          "headers": [],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": "{\n  \"destinationId\": 1,\n  \"studentId\": 1,\n  \"note\": \"restroom\"\n}"
+        },
+        {
+          "name": "List Passes",
+          "order": 2000,
+          "method": "GET",
+          "url": "{{Base}}/api/passes",
+          "description": "Cursor-paginated list of passes. Students see only their own; TEACHER+ see all passes in their school. Optional query params — status (PENDING/ACTIVE/WAITING/COMPLETED/CANCELLED/DENIED/EXPIRED), cursor (pagination cursor from previous response), limit (default 50, max 100).",
+          "headers": [],
+          "pathVariables": [],
+          "queryParams": [
+            {
+              "key": "status",
+              "value": "ACTIVE"
+            },
+            {
+              "key": "cursor",
+              "value": ""
+            },
+            {
+              "key": "limit",
+              "value": "50"
+            }
+          ],
+          "body": null
+        },
+        {
+          "name": "Get Pass",
+          "order": 3000,
+          "method": "GET",
+          "url": "{{Base}}/api/passes/:id",
+          "description": "Get a single pass by ID. Students can only fetch their own passes; TEACHER+ any pass in their school. 404 when not found or not visible.",
+          "headers": [],
+          "pathVariables": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ],
+          "queryParams": [],
+          "body": null
+        },
+        {
+          "name": "Approve Pass",
+          "order": 4000,
+          "method": "POST",
+          "url": "{{Base}}/api/passes/:id/approve",
+          "description": "Approve a PENDING pass. Requires TEACHER role or higher. Transitions to ACTIVE, or WAITING when the destination or school cap is full. 400 not PENDING, 409 lost race.",
+          "headers": [],
+          "pathVariables": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ],
+          "queryParams": [],
+          "body": "{\n  \"approverNote\": \"\"\n}"
+        },
+        {
+          "name": "Deny Pass",
+          "order": 5000,
+          "method": "POST",
+          "url": "{{Base}}/api/passes/:id/deny",
+          "description": "Deny a PENDING pass. Requires TEACHER role or higher. 400 not PENDING, 409 lost race.",
+          "headers": [],
+          "pathVariables": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ],
+          "queryParams": [],
+          "body": "{\n  \"denierNote\": \"\"\n}"
+        },
+        {
+          "name": "Return Pass",
+          "order": 6000,
+          "method": "POST",
+          "url": "{{Base}}/api/passes/:id/return",
+          "description": "Return an ACTIVE pass (student comes back). Students can return their own; TEACHER+ any pass in their school. Frees the slot and promotes the oldest WAITING pass. 400 not ACTIVE, 409 lost race.",
+          "headers": [],
+          "pathVariables": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ],
+          "queryParams": [],
+          "body": null
+        },
+        {
+          "name": "Cancel Pass",
+          "order": 7000,
+          "method": "POST",
+          "url": "{{Base}}/api/passes/:id/cancel",
+          "description": "Cancel a PENDING or WAITING pass. Students can cancel their own; TEACHER+ any pass in their school. 400 not PENDING/WAITING, 409 lost race.",
+          "headers": [],
+          "pathVariables": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ],
+          "queryParams": [],
+          "body": null
+        },
+        {
+          "name": "Reconcile Expiry",
+          "order": 8000,
+          "method": "POST",
+          "url": "{{Base}}/internal/reconcile-expiry",
+          "description": "Internal recovery/heartbeat endpoint normally hit by Cloud Scheduler. Re-arms lost expiry jobs, reconciles slot counters, and promotes from the queue. Auth is a bearer INTERNAL_SECRET, not a session — set InternalSecret in the environment. Returns {scheduled, reconciled}; 207 on partial errors.",
+          "headers": [
+            {
+              "key": "Authorization",
+              "value": "Bearer {{InternalSecret}}"
+            }
+          ],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": null
+        }
+      ]
+    },
+    {
       "name": "No group",
       "order": 9999,
       "baseUrls": {
