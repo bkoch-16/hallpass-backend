@@ -1,4 +1,5 @@
 import { prisma, PassStatus, type Prisma } from "@hallpass/db";
+import { env } from "../env.js";
 import { redis } from "./redis.js";
 import { emitPassEvent } from "./socket.js";
 
@@ -7,11 +8,11 @@ const SLOT_TTL_SECONDS = 86400;
 const PROMOTE_BATCH_SIZE = 100;
 
 function slotKey(destinationId: number): string {
-  return `slots:destination:${destinationId}`;
+  return `${env.REDIS_PREFIX}:slots:destination:${destinationId}`;
 }
 
 function schoolSlotKey(schoolId: number): string {
-  return `slots:school:${schoolId}`;
+  return `${env.REDIS_PREFIX}:slots:school:${schoolId}`;
 }
 
 // Shared Lua helpers: claim/release one counter key, where max == -1 means

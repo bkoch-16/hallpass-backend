@@ -28,7 +28,7 @@ export function initSocket(
     logger.error(err, "[socket-adapter] sub error"),
   );
 
-  io.adapter(createAdapter(pubClient, subClient));
+  io.adapter(createAdapter(pubClient, subClient, { key: `${env.REDIS_PREFIX}:socket.io` }));
 
   io.use(async (socket, next) => {
     try {

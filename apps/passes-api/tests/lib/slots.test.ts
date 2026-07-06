@@ -48,7 +48,7 @@ vi.mock("@hallpass/db", () => ({
 // ─── Mock env ─────────────────────────────────────────────────────────────────
 
 vi.mock("../../src/env.js", () => ({
-  env: { REDIS_URL: "redis://localhost:6379" },
+  env: { REDIS_URL: "redis://localhost:6379", REDIS_PREFIX: "test" },
 }));
 
 // ─── Mock socket (slots now imports emitPassEvent) ────────────────────────────
@@ -85,8 +85,8 @@ describe("claimPassSlots", () => {
     expect(mockRedis.eval).toHaveBeenCalledWith(
       expect.any(String),
       2,
-      "slots:destination:1",
-      "slots:school:7",
+      "test:slots:destination:1",
+      "test:slots:school:7",
       10,
       5,
     );
@@ -119,8 +119,8 @@ describe("claimPassSlots", () => {
     expect(mockRedis.eval).toHaveBeenCalledWith(
       expect.any(String),
       2,
-      "slots:destination:1",
-      "slots:school:7",
+      "test:slots:destination:1",
+      "test:slots:school:7",
       10,
       -1,
     );
@@ -168,8 +168,8 @@ describe("releasePassSlots", () => {
     expect(mockRedis.eval).toHaveBeenCalledWith(
       expect.any(String),
       2,
-      "slots:destination:1",
-      "slots:school:7",
+      "test:slots:destination:1",
+      "test:slots:school:7",
       10,
       5,
     );
@@ -189,8 +189,8 @@ describe("releasePassSlots", () => {
     expect(mockRedis.eval).toHaveBeenCalledWith(
       expect.any(String),
       2,
-      "slots:destination:1",
-      "slots:school:7",
+      "test:slots:destination:1",
+      "test:slots:school:7",
       10,
       -1,
     );
@@ -206,7 +206,7 @@ describe("reconcileSlots", () => {
     expect(mockPrisma.pass.count).toHaveBeenCalledWith({
       where: { destinationId: 1, status: "ACTIVE" },
     });
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 7, "EX", 86400);
+    expect(mockRedis.set).toHaveBeenCalledWith("test:slots:destination:1", 7, "EX", 86400);
   });
 
   it("is a no-op when maxOccupancy is null", async () => {
@@ -221,7 +221,7 @@ describe("reconcileSlots", () => {
 
     await reconcileSlots(1, 3);
 
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:destination:1", 0, "EX", 86400);
+    expect(mockRedis.set).toHaveBeenCalledWith("test:slots:destination:1", 0, "EX", 86400);
   });
 });
 
@@ -234,7 +234,7 @@ describe("reconcileSchoolSlots", () => {
     expect(mockPrisma.pass.count).toHaveBeenCalledWith({
       where: { schoolId: 7, status: "ACTIVE" },
     });
-    expect(mockRedis.set).toHaveBeenCalledWith("slots:school:7", 7, "EX", 86400);
+    expect(mockRedis.set).toHaveBeenCalledWith("test:slots:school:7", 7, "EX", 86400);
   });
 
   it("is a no-op when maxActivePasses is null", async () => {
@@ -320,8 +320,8 @@ describe("promoteFromQueue", () => {
     expect(mockPrisma.pass.findUniqueOrThrow).not.toHaveBeenCalled();
     // one combined claim, then one combined release of both slots
     expect(mockRedis.eval).toHaveBeenCalledTimes(2);
-    expect(mockRedis.eval.mock.calls[1][2]).toBe("slots:destination:1");
-    expect(mockRedis.eval.mock.calls[1][3]).toBe("slots:school:1");
+    expect(mockRedis.eval.mock.calls[1][2]).toBe("test:slots:destination:1");
+    expect(mockRedis.eval.mock.calls[1][3]).toBe("test:slots:school:1");
   });
 
   it("retries the next-oldest WAITING pass for the same destination after a lost race", async () => {

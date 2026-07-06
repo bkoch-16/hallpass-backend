@@ -48,6 +48,7 @@ vi.mock('../../src/env.js', () => ({
     BETTER_AUTH_SECRET: 'test-secret',
     DATABASE_URL: 'mysql://test',
     REDIS_URL: 'redis://localhost:6379',
+    REDIS_PREFIX: 'test',
   },
 }));
 
