@@ -187,6 +187,7 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 | `BETTER_AUTH_URL`    | Base URL of the auth service                             |
 | `BETTER_AUTH_SECRET` | Shared secret for better-auth session verification       |
 | `REDIS_URL`          | Upstash Redis URL (used by Socket.io adapter and BullMQ) |
+| `REDIS_PREFIX`       | Per-environment Redis key namespace (`dev` / `prod`; defaults to `local`). Dev and prod share one Upstash DB (free tier), so this MUST differ per environment or workers cross-consume BullMQ jobs |
 | `CORS_ORIGIN`        | Allowed CORS origin(s)                                   |
 | `INTERNAL_SECRET`    | Shared secret for the /internal/* routes (Cloud Scheduler) |
 | `PORT`               | HTTP listen port (defaults to `3003`)                    |
@@ -197,6 +198,38 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 - Env vars and secrets are managed directly on the Cloud Run service via GCP Secret Manager — nothing is passed through the workflow.
 
 Secrets are managed directly on the Cloud Run service (not in the workflow).
+
+## One-time Cloud Run service setup (runbook)
+
+A brand-new service created by the deploy workflow starts with **zero env config and no public invoker access** — the workflow intentionally passes only the image. The first deploy of any new service therefore always fails ("container failed to listen on PORT=8080" — actually a ZodError from `env.ts` on missing vars, or the entrypoint's `prisma migrate deploy` failing without `DATABASE_URL`). This is expected; run the setup below once, and the failed revision recovers on the next `services update`.
+
+Recipe (per environment; dev secrets carry a `_DEV` suffix, prod secrets are unsuffixed):
+1. Create any missing secrets and grant `roles/secretmanager.secretAccessor` to the compute SA (`509242588558-compute@developer.gserviceaccount.com`).
+2. `gcloud run services update <service> --region us-west1 --set-secrets=... --set-env-vars=CORS_ORIGIN=...` (passes-api also needs `REDIS_PREFIX` and `--session-affinity` for socket.io).
+3. `gcloud run services add-iam-policy-binding <service> --region us-west1 --member=allUsers --role=roles/run.invoker`
+4. passes-api only: create the reconcile scheduler job (mandatory heartbeat — scale-to-zero means its interval is the worst-case pass-expiry lag).
+
+### passes-api prod (Phase B — run after the first `main` deploy creates the service)
+
+Phase A (done 2026-07-06): prod `REDIS_URL` + `INTERNAL_SECRET` secrets created with compute-SA access; prod DB migrations applied.
+
+```bash
+gcloud run services update passes-api --region us-west1 \
+  --set-secrets=DATABASE_URL=DATABASE_URL:latest,BETTER_AUTH_SECRET=BETTER_AUTH_SECRET:latest,BETTER_AUTH_URL=BETTER_AUTH_URL:latest,REDIS_URL=REDIS_URL:latest,INTERNAL_SECRET=INTERNAL_SECRET:latest \
+  --set-env-vars=CORS_ORIGIN=https://bkoch-16.github.io,REDIS_PREFIX=prod \
+  --session-affinity
+
+gcloud run services add-iam-policy-binding passes-api --region us-west1 \
+  --member=allUsers --role=roles/run.invoker
+
+gcloud scheduler jobs create http passes-reconcile-expiry \
+  --location us-west1 --schedule="*/10 * * * *" \
+  --uri=https://passes-api-509242588558.us-west1.run.app/internal/reconcile-expiry \
+  --http-method=POST \
+  --headers=Authorization="Bearer $(gcloud secrets versions access latest --secret=INTERNAL_SECRET)"
+```
+
+Verify: `/health` returns 200; `gcloud scheduler jobs run passes-reconcile-expiry --location us-west1` succeeds and logs `{scheduled, reconciled}`; Upstash data browser shows `prod:*` keys alongside `dev:*` with no unprefixed strays.
 
 ## Conventions
 
