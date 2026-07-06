@@ -1,0 +1,68 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { logger, httpLogger } from "@hallpass/logger";
+import { prisma } from "@hallpass/db";
+import { env } from "./env.js";
+import { corsOrigins } from "./lib/cors.js";
+import passesRouter from "./routes/passes.js";
+import internalRouter from "./routes/internal.js";
+
+const app = express();
+
+app.set("trust proxy", 1);
+
+app.use(helmet());
+
+app.use(
+  cors({
+    origin: corsOrigins,
+    credentials: env.CORS_ORIGIN !== "*",
+  }),
+);
+
+app.use(httpLogger);
+app.use(express.json());
+
+// Registered before the rate limiter so LB/uptime probes are never 429'd
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "passes-api" });
+  } catch (err) {
+    logger.error(err, "Health check failed");
+    res.status(503).json({ status: "error", service: "passes-api" });
+  }
+});
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { message: "Too many requests" },
+});
+
+app.use(limiter);
+
+app.use("/api/passes", passesRouter);
+app.use("/internal", internalRouter);
+
+app.use((_req, res) => {
+  res.status(404).json({ message: "Not found" });
+});
+
+app.use(
+  (
+    err: Error,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    logger.error(err, "Unhandled route error");
+    res.status(500).json({ message: "Internal server error" });
+  },
+);
+
+export default app;

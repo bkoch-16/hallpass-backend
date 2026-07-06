@@ -1,0 +1,9 @@
+export const passStatusMock = {
+  PENDING: "PENDING",
+  WAITING: "WAITING",
+  ACTIVE: "ACTIVE",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+  DENIED: "DENIED",
+  EXPIRED: "EXPIRED",
+} as const;

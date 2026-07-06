@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { upsertPolicySchema } from "../../src/schemas/policy";
+import { upsertPolicySchema } from "../../src/schemas/policy.js";
 
 describe("upsertPolicySchema", () => {
   it("accepts all fields null (clear policy)", () => {

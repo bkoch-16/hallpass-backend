@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { validateQuery, validateBody, validateParams } from "../../src/middleware/validate";
+import { validateQuery, validateBody, validateParams } from "../../src/middleware/validate.js";
 
 function mockRes() {
   const res = {} as Response;

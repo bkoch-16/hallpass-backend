@@ -3,7 +3,7 @@ import {
   periodIdSchema,
   createPeriodSchema,
   updatePeriodSchema,
-} from "../../src/schemas/period";
+} from "../../src/schemas/period.js";
 
 describe("periodIdSchema", () => {
   it("accepts valid schoolId, scheduleTypeId, and id", () => {

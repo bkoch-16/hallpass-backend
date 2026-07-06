@@ -3,7 +3,7 @@ import {
   scheduleTypeIdSchema,
   createScheduleTypeSchema,
   updateScheduleTypeSchema,
-} from "../../src/schemas/scheduleType";
+} from "../../src/schemas/scheduleType.js";
 
 describe("scheduleTypeIdSchema", () => {
   it("accepts valid schoolId and id", () => {

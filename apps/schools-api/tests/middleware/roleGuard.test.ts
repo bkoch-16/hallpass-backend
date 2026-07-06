@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
-import { requireRole, roleRank } from "../../src/middleware/roleGuard";
+import { requireRole, roleRank } from "../../src/middleware/roleGuard.js";
 import type { UserRole } from "@hallpass/types";
 
 function mockRes() {

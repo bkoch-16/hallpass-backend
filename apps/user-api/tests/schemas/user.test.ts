@@ -5,7 +5,7 @@ import {
   listUsersSchema,
   bulkCreateSchema,
   userIdSchema,
-} from "../../src/schemas/user";
+} from "../../src/schemas/user.js";
 
 describe("createUserSchema", () => {
   it("accepts valid email and name", () => {

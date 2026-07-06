@@ -21,7 +21,7 @@ vi.mock("@hallpass/auth", () => ({
   fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
 }));
 
-import app from "../../src/app";
+import app from "../../src/app.js";
 import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {
