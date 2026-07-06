@@ -4,7 +4,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
 import { UserRole } from "@hallpass/types";
 import { resolveSessionUser } from "./sessionUser.js";
-import { roleRank } from "../middleware/roleGuard.js";
+import { roleRank } from "@hallpass/express-middleware";
 import { corsOrigins } from "./cors.js";
 import { env } from "../env.js";
 import { logger } from "@hallpass/logger";

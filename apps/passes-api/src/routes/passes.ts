@@ -4,7 +4,7 @@ import { UserRole, type CursorPage, type PassResponse } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
-import { requireMinRole, roleRank } from "../middleware/roleGuard.js";
+import { requireMinRole, roleRank } from "@hallpass/express-middleware";
 import {
   validateBody,
   validateParams,

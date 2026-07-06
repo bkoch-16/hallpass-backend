@@ -3,7 +3,7 @@ import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { PassPolicyResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/roleGuard.js";
+import { requireRole } from "@hallpass/express-middleware";
 import { validateBody } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { upsertPolicySchema } from "../schemas/policy.js";

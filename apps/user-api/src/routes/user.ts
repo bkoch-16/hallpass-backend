@@ -3,7 +3,7 @@ import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { UserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole, requireSelfOrRole, roleRank } from "../middleware/roleGuard.js";
+import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import {
   bulkCreateSchema,

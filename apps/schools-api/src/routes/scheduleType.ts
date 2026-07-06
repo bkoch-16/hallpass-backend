@@ -3,7 +3,7 @@ import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { ScheduleTypeResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/roleGuard.js";
+import { requireRole } from "@hallpass/express-middleware";
 import { validateBody, validateParams } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { createScheduleTypeSchema, scheduleTypeIdSchema, updateScheduleTypeSchema } from "../schemas/scheduleType.js";
