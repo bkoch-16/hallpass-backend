@@ -187,7 +187,7 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 | `BETTER_AUTH_URL`    | Base URL of the auth service                             |
 | `BETTER_AUTH_SECRET` | Shared secret for better-auth session verification       |
 | `REDIS_URL`          | Upstash Redis URL (used by Socket.io adapter and BullMQ) |
-| `REDIS_PREFIX`       | Per-environment Redis key namespace (`dev` / `prod`; defaults to `local`). Dev and prod share one Upstash DB (free tier), so this MUST differ per environment or workers cross-consume BullMQ jobs |
+| `REDIS_PREFIX`       | Per-environment Redis key namespace (`dev` / `prod`; use `local` for local dev). Required — no default; boot fails with a ZodError if unset. Dev and prod share one Upstash DB (free tier), so this MUST differ per environment or workers cross-consume BullMQ jobs |
 | `CORS_ORIGIN`        | Allowed CORS origin(s)                                   |
 | `INTERNAL_SECRET`    | Shared secret for the /internal/* routes (Cloud Scheduler) |
 | `PORT`               | HTTP listen port (defaults to `3003`)                    |
@@ -230,6 +230,13 @@ gcloud scheduler jobs create http passes-reconcile-expiry \
 ```
 
 Verify: `/health` returns 200; `gcloud scheduler jobs run passes-reconcile-expiry --location us-west1` succeeds and logs `{scheduled, reconciled}`; Upstash data browser shows `prod:*` keys alongside `dev:*` with no unprefixed strays.
+
+One-time legacy key cleanup (after the prefixed deploy is verified): the pre-prefix deploy left unprefixed keys in the shared DB — `bull:pass-expiry:*` (BullMQ bookkeeping: completed/failed sets and meta have no TTL and persist forever on a noeviction free-tier DB), `slots:*` counters (24h TTL, self-expire), and the default `socket.io` adapter channel state. Delete them from the Upstash data browser, or via redis-cli:
+
+    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'bull:*' | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
+    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'slots:*' | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
+
+Safe to run: any expiry jobs that were pending under the old unprefixed queue are re-armed by the `passes-reconcile-expiry` scheduler job under the new prefix.
 
 ## Conventions
 
