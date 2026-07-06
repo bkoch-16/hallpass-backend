@@ -11,6 +11,7 @@ const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }
 
 export const passExpiryQueue = new Queue("pass-expiry", {
   connection: bullmqConnection,
+  prefix: env.REDIS_PREFIX,
   defaultJobOptions: {
     removeOnComplete: 100,
     removeOnFail: 50,
@@ -120,6 +121,7 @@ export function startExpiryWorker(): Worker {
   workerConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
   const worker = new Worker("pass-expiry", processPassExpiry, {
     connection: workerConnection,
+    prefix: env.REDIS_PREFIX,
   });
 
   worker.on("error", (err) => logger.error(err, "[queue] worker error"));

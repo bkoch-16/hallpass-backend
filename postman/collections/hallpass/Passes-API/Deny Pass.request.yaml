@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{Base}}/api/passes/:id/deny"
+method: POST
+description: Deny a PENDING pass. Requires TEACHER role or higher. 400 not PENDING, 409 lost race.
+pathVariables:
+  - key: id
+    value: "1"
+body:
+  type: json
+  content: |-
+    {
+      "denierNote": ""
+    }
+order: 5000

@@ -57,7 +57,7 @@ vi.mock("ioredis", () => ({
 }));
 
 vi.mock("../../src/env.js", () => ({
-  env: { REDIS_URL: "redis://localhost:6379" },
+  env: { REDIS_URL: "redis://localhost:6379", REDIS_PREFIX: "test" },
 }));
 
 vi.mock("@hallpass/db", () => ({
