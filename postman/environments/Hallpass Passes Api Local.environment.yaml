@@ -1,0 +1,8 @@
+name: Hallpass Passes Api Local
+values:
+  - key: Base
+    value: 'http://localhost:3003'
+    enabled: true
+  - key: InternalSecret
+    value: ''
+    enabled: true

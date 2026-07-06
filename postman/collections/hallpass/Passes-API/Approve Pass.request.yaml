@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{Base}}/api/passes/:id/approve"
+method: POST
+description: Approve a PENDING pass. Requires TEACHER role or higher. Transitions to ACTIVE, or WAITING when the destination or school cap is full. 400 not PENDING, 409 lost race.
+pathVariables:
+  - key: id
+    value: "1"
+body:
+  type: json
+  content: |-
+    {
+      "approverNote": ""
+    }
+order: 4000

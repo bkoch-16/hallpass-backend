@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{Base}}/api/passes"
+method: GET
+description: Cursor-paginated list of passes. Students see only their own; TEACHER+ see all passes in their school. Optional query params — status (PENDING/ACTIVE/WAITING/COMPLETED/CANCELLED/DENIED/EXPIRED), cursor (pagination cursor from previous response), limit (default 50, max 100).
+queryParams:
+  - key: status
+    value: ACTIVE
+  - key: cursor
+    value: ""
+  - key: limit
+    value: "50"
+order: 2000

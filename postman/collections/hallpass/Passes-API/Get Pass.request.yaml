@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{Base}}/api/passes/:id"
+method: GET
+description: Get a single pass by ID. Students can only fetch their own passes; TEACHER+ any pass in their school. 404 when not found or not visible.
+pathVariables:
+  - key: id
+    value: "1"
+order: 3000
