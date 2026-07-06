@@ -1,34 +1,34 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-15T03:58:22.819Z",
+  "generatedAt": "2026-07-06T18:02:26.826Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "4da8920e8122fe0c09d10eb841dfc9fe0189531e",
-      "summary": "Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication/authorization. School-specific models include ScheduleType, Period (with time-based ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (controlling active pass limits and interval-based quotas using DAY/WEEK/MONTH enum). Soft deletes are supported via optional `deletedAt` fields on most entities; timestamps follow `createdAt`/`updatedAt` conventions. Key relationships: Districts have many Schools, Schools have many Users, ScheduleTypes, Periods, Destinations, and one optional PassPolicy. Sessions and Accounts cascade delete with their parent User. Developers modifying this file must run Prisma migrations afterward and should note the indexed fields (schoolId, scheduleTypeId) and unique constraints (User.email, SchoolCalendar schoolId+date, PassPolicy.schoolId)."
+      "blobSha": "f769e2c62cab3f8a4557be0df17a985e11c6bb87",
+      "summary": "Defines the full PostgreSQL data model for the HallPass system using Prisma ORM, covering districts, schools, users (with Role enum), sessions, accounts, schedule types, periods, school calendars, destinations, pass policies, and passes (with PassStatus enum lifecycle). Key relationships include school-scoped users, multi-relation user-to-pass links (student, requester, approver, denier, canceller), and a one-to-one PassPolicy per school. The Pass model has a critical WARNING comment: a partial unique index (one_active_pass_per_student) exists only in a migration and not in the schema, so developers must manually remove any auto-generated DROP INDEX statements in new migrations. Passes intentionally lack a deletedAt field—they use terminal statuses instead of soft deletion. Indexes are defined on frequently queried foreign keys and status fields for pass lookups."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "e66d97d499f2a356762e40fa7e935a5348a061d0",
-      "summary": "Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` using Better Auth's `toNodeHandler`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth` config and `env` validation. Includes a global 404 handler and error handler that logs errors and returns generic 500 responses. Developers modifying this file should note `trust proxy` is enabled (important for rate limiting behind reverse proxies) and that the CORS origin supports both wildcard and comma-separated whitelist configurations."
+      "blobSha": "58f0659c1be2ef9fc7ef90679f404745db6916c0",
+      "summary": "Express application setup for the user-api microservice, configuring security middleware (helmet, CORS, rate limiting), health check endpoint with Prisma DB connectivity test, and route mounting. Auth routes are delegated to better-auth via toNodeHandler with a stricter rate limit (10 req/15min), while general routes get 100 req/15min. The /api/users routes are handled by the userRouter, and fallback handlers return 404/500 JSON responses. Trust proxy is set to 1 for Cloud Run deployment behind a load balancer."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "aa8d1ba49d0d3724366df100a1a69a43b264bde9",
-      "summary": "Initializes and exports the authentication instance for the user-api application by calling `createAuth` from the shared `@hallpass/auth` package. Configures auth using environment variables for the base URL, secret, and CORS trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object consumed by other parts of the user-api. Developers modifying this file should ensure the `env` module provides the required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` variables."
+      "blobSha": "fc7e7e69760813cb79eaec3de9272df6785942b4",
+      "summary": "Thin wrapper that creates and exports the better-auth instance using createAuth from @hallpass/auth, configured with the base URL, secret, and trusted origins parsed from environment variables. Trusted origins are set to undefined (permissive) when CORS_ORIGIN is '*', otherwise split from a comma-separated string."
     },
     "apps/user-api/src/env.ts": {
-      "blobSha": "ebe966a2952e73aa014da8b6c62be6b6bac52c31",
-      "summary": "Validates and exports required environment variables at application startup using Zod schema parsing. Requires `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` as mandatory strings, with `PORT` being optional. The module eagerly parses `process.env` on import, meaning the application will crash immediately if any required variable is missing. This is imported across the app for type-safe env access. CI pipelines must provide dummy values for these variables even when the database isn't used, as noted in the deploy workflow."
+      "blobSha": "9a610c94b66614e0794d50093952d0b87ad03139",
+      "summary": "Environment variable validation module using Zod schema. Requires DATABASE_URL, BETTER_AUTH_URL, BETTER_AUTH_SECRET, and CORS_ORIGIN as non-empty strings, with PORT as optional. The validated env object is exported and used throughout the user-api app; the module will throw at import time if required variables are missing."
     },
     "apps/user-api/src/express.d.ts": {
       "blobSha": "fd96e327839810f2ca796682f6cb59b610c368a2",
       "summary": "Augments the global Express `Request` interface to include an optional `user` property, representing the authenticated user attached by the auth middleware. The user type mirrors key fields from the Prisma User model, with the `role` field typed as `UserRole` from `@hallpass/types`. This declaration enables type-safe access to `req.user` throughout all route handlers and middleware without explicit casting."
     },
     "apps/user-api/src/index.ts": {
-      "blobSha": "dfae02b9016fcce80d96d22d1c0802178fd96f43",
-      "summary": "Entry point for the user-api service. Loads environment variables via dotenv/config, imports the validated env config, and starts the Express app on the configured PORT (defaulting to 3001). Registers global handlers for unhandledRejection and uncaughtException that log the error and force process exit, ensuring the process manager can restart the service on fatal errors."
+      "blobSha": "69bdac0f8a51bbb76d6fe8ff75dd956e2e68b150",
+      "summary": "Entry point for the user-api service that loads dotenv, validates environment variables (via env.ts import), and starts the Express server on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure clean restarts in containerized environments."
     },
     "apps/user-api/src/middleware/auth.ts": {
-      "blobSha": "7c7975e5cfbb4f592647244523b1c20fafb36ce0",
-      "summary": "Express middleware that authenticates incoming requests by extracting the session via `better-auth`'s `getSession` API using converted Node headers. It validates the session exists, ensures the user ID is a valid positive integer, fetches the non-soft-deleted user from the database via Prisma, and attaches it to `req.user`. Returns 401 Unauthorized at any validation failure. Depends on `@hallpass/auth` for session resolution and `@hallpass/db` for user lookup."
+      "blobSha": "37abb2abeaedb1657c47206db1bede729528562c",
+      "summary": "Authentication middleware (requireAuth) that validates the session using better-auth's getSession API with converted Node headers. It verifies the session exists, the user ID is a valid positive integer, and the user record exists in the database (not soft-deleted). On success, it attaches the full user object to req.user; on any failure, it returns 401 Unauthorized."
     },
     "apps/user-api/src/middleware/roleGuard.ts": {
       "blobSha": "e84ca36386ca8b8c34f983c77a9c76cd5f462d1c",
@@ -39,8 +39,8 @@
       "summary": "Express middleware factory functions for validating request query parameters, body, and route params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each accepting a `ZodSchema` and returning middleware that returns a 400 response with flattened Zod errors on validation failure. On success, the parsed (and potentially transformed/defaulted) data replaces the original `req.query`, `req.body`, or `req.params`. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it is normally read-only, while body and params are assigned directly."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "05475d4507a84f4c38c287b5aeefeff07f075583",
-      "summary": "Implements the full CRUD REST API for users as an Express Router. Endpoints include GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (single create), POST /bulk (batch create up to 100), PATCH /:id, and DELETE /:id (soft-delete). Enforces multi-tenant school scoping—non-SUPER_ADMIN users can only access/modify users within their own school. Uses `roleRank` to prevent privilege escalation on create/update/delete. Handles Prisma error codes P2002 (unique conflict) and P2003 (FK violation). Returns typed responses conforming to `UserResponse`, `CursorPage`, and `BulkUserResult` from `@hallpass/types`."
+      "blobSha": "45f18365499901db2f2fd44bb88f00f2d3dd2048",
+      "summary": "Comprehensive CRUD router for user management with cursor-based pagination, bulk creation, and role-based access control. Exports an Express Router mounted at /api/users with endpoints: GET /me, GET / (list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk, PATCH /:id, DELETE /:id (soft-delete). Access is controlled via requireAuth, requireRole, and requireSelfOrRole middleware, with role hierarchy enforcement via roleRank preventing privilege escalation. All queries are school-scoped unless the caller is SUPER_ADMIN, and responses conform to UserResponse/CursorPage/BulkUserResult types from @hallpass/types."
     },
     "apps/user-api/src/schemas/user.ts": {
       "blobSha": "c15bdad7bdc31ab7b2088f0b1365bd8eb1f87e2e",
@@ -59,8 +59,8 @@
       "summary": "Docker Compose configuration defining three services for local development: a PostgreSQL 16 (Alpine) database, and two API microservices (user-api on port 3001, schools-api on port 3002). Both APIs depend on Postgres with a health check ensuring the database is ready before they start. Environment variables include DATABASE_URL (pointing to the containerized Postgres), BETTER_AUTH_SECRET/URL for authentication, and CORS_ORIGIN for frontend access. Each API service builds from its own Dockerfile in the apps/ directory using the repo root as build context. A named volume `postgres_data` persists database data across container restarts. Developers need to set BETTER_AUTH_SECRET (and optionally BETTER_AUTH_URL/CORS_ORIGIN) via environment or .env file."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "3672d99579c73552cdc11cc93ef516d5e3b0a075",
-      "summary": "CI/CD pipeline for the HallPass monorepo that validates code (lint, build, test) on all pushes/PRs, then deploys two microservices (user-api and schools-api) to Google Cloud Run. The `validate` job runs in all cases with dummy environment variables (since tests mock the DB), generates the Prisma client, and runs lint/build/test via pnpm. Deployment jobs are split across dev and prod environments: `develop` branch pushes deploy to dev services, `main` branch pushes deploy to prod, with manual `workflow_dispatch` overrides available. Docker images are built using Buildx with GitHub Actions cache, pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. When modifying, note the repeated job structure across the four deploy jobs — changes to the deploy pattern must be replicated in all four, and new microservices require adding analogous job blocks."
+      "blobSha": "f212d6380c7104f11d47cdf7dba0c20aaf85e3a7",
+      "summary": "CI/CD pipeline triggered on pushes to main/develop, PRs, and manual dispatch with environment selection. The 'validate' job runs lint, build, and test with dummy environment variables and Prisma client generation on Node 22 with pnpm. Deploy jobs use a matrix strategy across three services (user-api, schools-api, passes-api), building Docker images with Buildx/GHA caching and pushing to Google Artifact Registry. Dev deploys trigger from the develop branch, prod deploys from main only. Environment variables and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow."
     },
     ".github/workflows/index-codebase.yml": {
       "blobSha": "821b594ddd6a7fe908bbeb77e608826f11bae017",
@@ -75,8 +75,8 @@
       "summary": "Automation workflow that keeps the `develop` branch in sync with `main` by creating a merge PR after each push to `main`. First checks if `develop` already contains all `main` commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a no-ff merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires both `contents: write` and `pull-requests: write` permissions."
     },
     "package.json": {
-      "blobSha": "20a23dfbcbee475f8ecce29162ff22d5000b5b2b",
-      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (using tsx to run a TypeScript script) and `demo:serve` for a demo UI. Uses Husky for git hooks and Prettier for formatting. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml for tooling/scripting. The only runtime dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma, indicating the monorepo uses Prisma for database access."
+      "blobSha": "2518dc5ca7a4df347f9e78846a24802d0fdc85e3",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm 10.30.1 and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across workspaces. Scripts include demo generation (via tsx), formatting (Prettier), and git hooks (Husky). The pnpm config pins ioredis to 5.10.0 via overrides and restricts native builds to Prisma engines, esbuild, and prisma. Dev dependencies cover linting (ESLint + typescript-eslint + prettier), build tooling (TypeScript, tsx, turbo), and scripting utilities (fast-glob, micromatch, yaml). The only runtime dependency at root level is @anthropic-ai/sdk."
     },
     ".github/workflows/demo.yml": {
       "blobSha": "c3533ff9d09af77146465207164d6f776a50cda8",

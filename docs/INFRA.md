@@ -4,6 +4,7 @@ Hallpass backend — a Node.js monorepo providing API services for a digital hal
 ## Packages
 - `apps/user-api` — Main Express 5 REST API
 - `apps/schools-api` — Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API
+- `apps/passes-api` — Hall pass lifecycle REST API with real-time WebSocket support and delayed job processing
 - `packages/auth` — Authentication layer (better-auth)
 - `packages/db` — Database access (Prisma + PostgreSQL)
 - `packages/logger` — Shared structured logging (Pino)
@@ -153,14 +154,47 @@ pnpm --filter @hallpass/db exec prisma studio
 
 ## Deployment
 
-| Branch | Environment | Service |
-|---|---|---|
-| `develop` | Dev | `user-api-dev` |
-| `develop` | Dev | `schools-api-dev` |
-| `main` | Prod | `user-api` |
-| `main` | Prod | `schools-api` |
+| Branch    | Environment | Service           |
+|-----------|-------------|-------------------|
+| `develop` | Dev         | `user-api-dev`    |
+| `develop` | Dev         | `schools-api-dev` |
+| `develop` | Dev         | `passes-api-dev`  |
+| `main`    | Prod        | `user-api`        |
+| `main`    | Prod        | `schools-api`     |
+| `main`    | Prod        | `passes-api`      |
 
 GitHub Actions workflow: lint → build → test → Docker build → push to GCP Artifact Registry → deploy to Cloud Run → run migrations.
+
+## passes-api
+
+### Cloud Run Service Names
+- **Prod**: `passes-api`
+- **Dev**: `passes-api-dev`
+
+### Port
+`3003`
+
+### Dependencies
+- **Neon Postgres** (`DATABASE_URL`) — primary data store via Prisma
+- **Upstash Redis** (`REDIS_URL`) — Socket.io adapter (pub/sub across instances) and BullMQ job queue
+- **Socket.io** — WebSocket upgrade handled on the same HTTP server; real-time pass status events
+- **BullMQ** — delayed job processing (e.g., auto-expiring passes); worker starts with the server process
+
+### Required Environment Variables
+| Variable             | Description                                              |
+|----------------------|----------------------------------------------------------|
+| `DATABASE_URL`       | Neon Postgres connection string                          |
+| `BETTER_AUTH_URL`    | Base URL of the auth service                             |
+| `BETTER_AUTH_SECRET` | Shared secret for better-auth session verification       |
+| `REDIS_URL`          | Upstash Redis URL (used by Socket.io adapter and BullMQ) |
+| `CORS_ORIGIN`        | Allowed CORS origin(s)                                   |
+| `INTERNAL_SECRET`    | Shared secret for the /internal/* routes (Cloud Scheduler) |
+| `PORT`               | HTTP listen port (defaults to `3003`)                    |
+
+### Notes
+- Socket.io WebSocket upgrade is handled on the same HTTP server instance — no separate WS server or port needed.
+- BullMQ workers are started in-process when the server boots; Redis must be reachable before the server accepts traffic.
+- Env vars and secrets are managed directly on the Cloud Run service via GCP Secret Manager — nothing is passed through the workflow.
 
 Secrets are managed directly on the Cloud Run service (not in the workflow).
 

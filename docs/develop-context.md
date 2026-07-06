@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-06-15T03:58:22.819Z — 20 files indexed_
+_Generated: 2026-07-06T18:02:26.826Z — 20 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD pipeline for the HallPass monorepo that validates code (lint, build, test) on all pushes/PRs, then deploys two microservices (user-api and schools-api) to Google Cloud Run. The `validate` job runs in all cases with dummy environment variables (since tests mock the DB), generates the Prisma client, and runs lint/build/test via pnpm. Deployment jobs are split across dev and prod environments: `develop` branch pushes deploy to dev services, `main` branch pushes deploy to prod, with manual `workflow_dispatch` overrides available. Docker images are built using Buildx with GitHub Actions cache, pushed to GCP Artifact Registry (`us-west1-docker.pkg.dev`), and tagged with both the commit SHA and `latest`. Environment variables and secrets for Cloud Run services are managed externally via GCP Secret Manager rather than being passed in the workflow. When modifying, note the repeated job structure across the four deploy jobs — changes to the deploy pattern must be replicated in all four, and new microservices require adding analogous job blocks.
+CI/CD pipeline triggered on pushes to main/develop, PRs, and manual dispatch with environment selection. The 'validate' job runs lint, build, and test with dummy environment variables and Prisma client generation on Node 22 with pnpm. Deploy jobs use a matrix strategy across three services (user-api, schools-api, passes-api), building Docker images with Buildx/GHA caching and pushing to Google Artifact Registry. Dev deploys trigger from the develop branch, prod deploys from main only. Environment variables and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow.
 
 ### `.github/workflows/index-codebase.yml`
 
@@ -30,15 +30,15 @@ Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with p
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service. Configures middleware including helmet (security headers), CORS (with configurable origins from env), HTTP logging, JSON body parsing, and rate limiting (100 req/15min general, 10 req/15min for auth routes). Mounts auth routes at `/api/auth/*splat` using Better Auth's `toNodeHandler`, user routes at `/api/users`, and a `/health` endpoint that verifies database connectivity via Prisma. Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/db`, plus local `auth` config and `env` validation. Includes a global 404 handler and error handler that logs errors and returns generic 500 responses. Developers modifying this file should note `trust proxy` is enabled (important for rate limiting behind reverse proxies) and that the CORS origin supports both wildcard and comma-separated whitelist configurations.
+Express application setup for the user-api microservice, configuring security middleware (helmet, CORS, rate limiting), health check endpoint with Prisma DB connectivity test, and route mounting. Auth routes are delegated to better-auth via toNodeHandler with a stricter rate limit (10 req/15min), while general routes get 100 req/15min. The /api/users routes are handled by the userRouter, and fallback handlers return 404/500 JSON responses. Trust proxy is set to 1 for Cloud Run deployment behind a load balancer.
 
 ### `apps/user-api/src/auth.ts`
 
-Initializes and exports the authentication instance for the user-api application by calling `createAuth` from the shared `@hallpass/auth` package. Configures auth using environment variables for the base URL, secret, and CORS trusted origins (supporting wildcard or comma-separated origins). Exports a single `auth` object consumed by other parts of the user-api. Developers modifying this file should ensure the `env` module provides the required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` variables.
+Thin wrapper that creates and exports the better-auth instance using createAuth from @hallpass/auth, configured with the base URL, secret, and trusted origins parsed from environment variables. Trusted origins are set to undefined (permissive) when CORS_ORIGIN is '*', otherwise split from a comma-separated string.
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports required environment variables at application startup using Zod schema parsing. Requires `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CORS_ORIGIN` as mandatory strings, with `PORT` being optional. The module eagerly parses `process.env` on import, meaning the application will crash immediately if any required variable is missing. This is imported across the app for type-safe env access. CI pipelines must provide dummy values for these variables even when the database isn't used, as noted in the deploy workflow.
+Environment variable validation module using Zod schema. Requires DATABASE_URL, BETTER_AUTH_URL, BETTER_AUTH_SECRET, and CORS_ORIGIN as non-empty strings, with PORT as optional. The validated env object is exported and used throughout the user-api app; the module will throw at import time if required variables are missing.
 
 ### `apps/user-api/src/express.d.ts`
 
@@ -46,11 +46,11 @@ Augments the global Express `Request` interface to include an optional `user` pr
 
 ### `apps/user-api/src/index.ts`
 
-Entry point for the user-api service. Loads environment variables via dotenv/config, imports the validated env config, and starts the Express app on the configured PORT (defaulting to 3001). Registers global handlers for unhandledRejection and uncaughtException that log the error and force process exit, ensuring the process manager can restart the service on fatal errors.
+Entry point for the user-api service that loads dotenv, validates environment variables (via env.ts import), and starts the Express server on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure clean restarts in containerized environments.
 
 ### `apps/user-api/src/middleware/auth.ts`
 
-Express middleware that authenticates incoming requests by extracting the session via `better-auth`'s `getSession` API using converted Node headers. It validates the session exists, ensures the user ID is a valid positive integer, fetches the non-soft-deleted user from the database via Prisma, and attaches it to `req.user`. Returns 401 Unauthorized at any validation failure. Depends on `@hallpass/auth` for session resolution and `@hallpass/db` for user lookup.
+Authentication middleware (requireAuth) that validates the session using better-auth's getSession API with converted Node headers. It verifies the session exists, the user ID is a valid positive integer, and the user record exists in the database (not soft-deleted). On success, it attaches the full user object to req.user; on any failure, it returns 401 Unauthorized.
 
 ### `apps/user-api/src/middleware/roleGuard.ts`
 
@@ -62,7 +62,7 @@ Express middleware factory functions for validating request query parameters, bo
 
 ### `apps/user-api/src/routes/user.ts`
 
-Implements the full CRUD REST API for users as an Express Router. Endpoints include GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (single create), POST /bulk (batch create up to 100), PATCH /:id, and DELETE /:id (soft-delete). Enforces multi-tenant school scoping—non-SUPER_ADMIN users can only access/modify users within their own school. Uses `roleRank` to prevent privilege escalation on create/update/delete. Handles Prisma error codes P2002 (unique conflict) and P2003 (FK violation). Returns typed responses conforming to `UserResponse`, `CursorPage`, and `BulkUserResult` from `@hallpass/types`.
+Comprehensive CRUD router for user management with cursor-based pagination, bulk creation, and role-based access control. Exports an Express Router mounted at /api/users with endpoints: GET /me, GET / (list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk, PATCH /:id, DELETE /:id (soft-delete). Access is controlled via requireAuth, requireRole, and requireSelfOrRole middleware, with role hierarchy enforcement via roleRank preventing privilege escalation. All queries are school-scoped unless the caller is SUPER_ADMIN, and responses conform to UserResponse/CursorPage/BulkUserResult types from @hallpass/types.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -74,7 +74,7 @@ Docker Compose configuration defining three services for local development: a Po
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Key scripts include `demo:generate` (using tsx to run a TypeScript script) and `demo:serve` for a demo UI. Uses Husky for git hooks and Prettier for formatting. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml for tooling/scripting. The only runtime dependency is the Anthropic AI SDK. The `pnpm.onlyBuiltDependencies` field restricts native builds to Prisma engines, esbuild, and prisma, indicating the monorepo uses Prisma for database access.
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm 10.30.1 and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across workspaces. Scripts include demo generation (via tsx), formatting (Prettier), and git hooks (Husky). The pnpm config pins ioredis to 5.10.0 via overrides and restricts native builds to Prisma engines, esbuild, and prisma. Dev dependencies cover linting (ESLint + typescript-eslint + prettier), build tooling (TypeScript, tsx, turbo), and scripting utilities (fast-glob, micromatch, yaml). The only runtime dependency at root level is @anthropic-ai/sdk.
 
 ### `packages/auth/src/index.ts`
 
@@ -82,4 +82,4 @@ This file is the central authentication configuration module for the project, re
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core entities include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, and Account for authentication/authorization. School-specific models include ScheduleType, Period (with time-based ordering), SchoolCalendar (date-to-schedule mapping with unique constraint on schoolId+date), Destination (with optional max occupancy), and PassPolicy (controlling active pass limits and interval-based quotas using DAY/WEEK/MONTH enum). Soft deletes are supported via optional `deletedAt` fields on most entities; timestamps follow `createdAt`/`updatedAt` conventions. Key relationships: Districts have many Schools, Schools have many Users, ScheduleTypes, Periods, Destinations, and one optional PassPolicy. Sessions and Accounts cascade delete with their parent User. Developers modifying this file must run Prisma migrations afterward and should note the indexed fields (schoolId, scheduleTypeId) and unique constraints (User.email, SchoolCalendar schoolId+date, PassPolicy.schoolId).
+Defines the full PostgreSQL data model for the HallPass system using Prisma ORM, covering districts, schools, users (with Role enum), sessions, accounts, schedule types, periods, school calendars, destinations, pass policies, and passes (with PassStatus enum lifecycle). Key relationships include school-scoped users, multi-relation user-to-pass links (student, requester, approver, denier, canceller), and a one-to-one PassPolicy per school. The Pass model has a critical WARNING comment: a partial unique index (one_active_pass_per_student) exists only in a migration and not in the schema, so developers must manually remove any auto-generated DROP INDEX statements in new migrations. Passes intentionally lack a deletedAt field—they use terminal statuses instead of soft deletion. Indexes are defined on frequently queried foreign keys and status fields for pass lookups.
