@@ -24,7 +24,7 @@ vi.mock("@hallpass/db", () => ({
   },
 }));
 
-import app from "../src/app";
+import app from "../src/app.js";
 import { prisma } from "@hallpass/db";
 
 const mockPrisma = prisma as unknown as {

@@ -23,7 +23,7 @@ vi.mock("@hallpass/auth", () => ({
 
 // Do NOT mock @hallpass/db — use the real Prisma client.
 
-import app from "../../src/app";
+import app from "../../src/app.js";
 import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {

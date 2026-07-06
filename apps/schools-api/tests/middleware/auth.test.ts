@@ -21,7 +21,7 @@ vi.mock("@hallpass/db", () => ({
   },
 }));
 
-import { requireAuth } from "../../src/middleware/auth";
+import { requireAuth } from "../../src/middleware/auth.js";
 import { prisma } from "@hallpass/db";
 
 const mockPrisma = prisma as unknown as {

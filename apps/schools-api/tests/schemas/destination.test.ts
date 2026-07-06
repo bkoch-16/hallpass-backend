@@ -3,7 +3,7 @@ import {
   destinationIdSchema,
   createDestinationSchema,
   updateDestinationSchema,
-} from "../../src/schemas/destination";
+} from "../../src/schemas/destination.js";
 
 describe("destinationIdSchema", () => {
   it("accepts valid schoolId and id", () => {

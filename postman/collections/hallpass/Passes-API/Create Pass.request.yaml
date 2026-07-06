@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{Base}}/api/passes"
+method: POST
+description: Create a pass. Students create their own (studentId omitted, status PENDING). TEACHER+ must supply studentId; the pass is auto-approved to ACTIVE, or WAITING when the destination or school cap is full. 201 created, 409 student already has a non-terminal pass, 422 validation/no period.
+body:
+  type: json
+  content: |-
+    {
+      "destinationId": 1,
+      "studentId": 1,
+      "note": "restroom"
+    }
+order: 1000

@@ -2,10 +2,10 @@ import { Router, Request, Response } from "express";
 import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { DistrictResponse, CursorPage } from "@hallpass/types";
-import { requireAuth } from "../middleware/auth";
-import { requireRole } from "../middleware/roleGuard";
-import { validateBody, validateParams, validateQuery } from "../middleware/validate";
-import { createDistrictSchema, districtIdSchema, listDistrictsSchema, updateDistrictSchema } from "../schemas/district";
+import { requireAuth } from "../middleware/auth.js";
+import { requireRole } from "../middleware/roleGuard.js";
+import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { createDistrictSchema, districtIdSchema, listDistrictsSchema, updateDistrictSchema } from "../schemas/district.js";
 
 const router = Router();
 

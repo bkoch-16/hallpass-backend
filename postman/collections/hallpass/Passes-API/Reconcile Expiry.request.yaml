@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{Base}}/internal/reconcile-expiry"
+method: POST
+description: Internal recovery/heartbeat endpoint normally hit by Cloud Scheduler. Re-arms lost expiry jobs, reconciles slot counters, and promotes from the queue. Auth is a bearer INTERNAL_SECRET, not a session — set InternalSecret in the environment. Returns {scheduled, reconciled}; 207 on partial errors.
+headers:
+  - key: Authorization
+    value: "Bearer {{InternalSecret}}"
+order: 8000

@@ -19,7 +19,10 @@
       "@prisma/engines",
       "esbuild",
       "prisma"
-    ]
+    ],
+    "overrides": {
+      "ioredis": "5.10.0"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
