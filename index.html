@@ -22,6 +22,13 @@
     <p>This is a portfolio project demonstrating a backend REST API. There is no full frontend, this tool lets you explore the API endpoints directly, inspect responses, and interact with the data layer.</p>
     <p><strong>Getting started:</strong> Go to <strong>Auth &gt; Sign In</strong> and use one of the seed accounts below. The session cookie is then used automatically by all protected endpoints.</p>
     <p class="info-accounts">Seed accounts (password: <code>password</code>): <code>student@hallpass.dev</code> &nbsp; <code>teacher@hallpass.dev</code> &nbsp; <code>admin@hallpass.dev</code> &nbsp; <code>superadmin@hallpass.dev</code></p>
+    <p><strong>Creating a pass:</strong> Passes can only be created during an active school period, so a few things must be in place first:</p>
+    <ul class="info-notes">
+      <li>The school calendar needs an entry for today with a schedule type. As an admin, use <strong>Schools-API &gt; Calendar &gt; Upsert Calendar Entries</strong> with today's date. The current time (school timezone) must fall within one of that schedule type's periods, otherwise the API returns <em>"No active period"</em>.</li>
+      <li>The request body needs a valid <code>destinationId</code> (see <strong>Schools-API &gt; Destinations &gt; List Destinations</strong>) and accepts an optional <code>note</code>.</li>
+      <li>A student creates a pass for themselves and it starts as <code>PENDING</code>, waiting for teacher approval. A teacher or admin creates a pass on behalf of a student (<code>studentId</code> required) and it is <strong>automatically approved</strong>: it goes straight to <code>ACTIVE</code>, or <code>WAITING</code> if the destination is at capacity.</li>
+      <li>A student can only have one in-flight pass at a time, and the school's pass policy may cap how many passes a student gets per day.</li>
+    </ul>
     <ul class="info-notes">
       <li><strong>Prod credentials</strong> are not normally shared publicly, but are provided here to offer a more stable demo environment.</li>
       <li><strong>Cold starts</strong> may cause the first request to take a few seconds. In a real production setting I would set minimum instances to 1 or more to prevent this startup time, but I keep them at 0 in a portfolio to keep infrastructure costs minimal.</li>
