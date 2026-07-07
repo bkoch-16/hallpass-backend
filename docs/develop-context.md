@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-06T18:02:26.826Z — 20 files indexed_
+_Generated: 2026-07-07T16:54:59.162Z — 17 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with p
 
 ### `apps/user-api/src/app.ts`
 
-Express application setup for the user-api microservice, configuring security middleware (helmet, CORS, rate limiting), health check endpoint with Prisma DB connectivity test, and route mounting. Auth routes are delegated to better-auth via toNodeHandler with a stricter rate limit (10 req/15min), while general routes get 100 req/15min. The /api/users routes are handled by the userRouter, and fallback handlers return 404/500 JSON responses. Trust proxy is set to 1 for Cloud Run deployment behind a load balancer.
+Main Express application setup for the user-api service. Configures middleware stack including helmet, CORS (with configurable origins), HTTP logging, JSON parsing, rate limiting, and error handling. Registers a health check route (before rate limiting to avoid 429s), delegates auth routes to `@hallpass/auth` via `toNodeHandler`, and mounts user CRUD routes at `/api/users`. Depends on shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`) and local `auth` and `env` modules. Sets `trust proxy` for running behind a load balancer. Exports the configured Express app as default.
 
 ### `apps/user-api/src/auth.ts`
 
@@ -38,11 +38,7 @@ Thin wrapper that creates and exports the better-auth instance using createAuth 
 
 ### `apps/user-api/src/env.ts`
 
-Environment variable validation module using Zod schema. Requires DATABASE_URL, BETTER_AUTH_URL, BETTER_AUTH_SECRET, and CORS_ORIGIN as non-empty strings, with PORT as optional. The validated env object is exported and used throughout the user-api app; the module will throw at import time if required variables are missing.
-
-### `apps/user-api/src/express.d.ts`
-
-Augments the global Express `Request` interface to include an optional `user` property, representing the authenticated user attached by the auth middleware. The user type mirrors key fields from the Prisma User model, with the `role` field typed as `UserRole` from `@hallpass/types`. This declaration enables type-safe access to `req.user` throughout all route handlers and middleware without explicit casting.
+Validates and exports environment variables for the user-api service using Zod via the `baseEnvSchema` from `@hallpass/express-middleware`. The `env` object is parsed from `process.env` at import time, so missing or invalid variables will cause an immediate startup error. Any new environment variables needed by this service should be added to or extend `baseEnvSchema`.
 
 ### `apps/user-api/src/index.ts`
 
@@ -50,19 +46,11 @@ Entry point for the user-api service that loads dotenv, validates environment va
 
 ### `apps/user-api/src/middleware/auth.ts`
 
-Authentication middleware (requireAuth) that validates the session using better-auth's getSession API with converted Node headers. It verifies the session exists, the user ID is a valid positive integer, and the user record exists in the database (not soft-deleted). On success, it attaches the full user object to req.user; on any failure, it returns 401 Unauthorized.
-
-### `apps/user-api/src/middleware/roleGuard.ts`
-
-Provides role-based authorization middleware for Express routes. Exports `requireRole(...roles)` which checks that `req.user.role` is in the allowed list (403 if not), and `requireSelfOrRole(...roles)` which additionally permits access if `req.params.id` matches the authenticated user's ID. Also exports a `roleRank` helper that maps UserRole values to numeric hierarchy levels (STUDENT=0 through SERVICE=4), used elsewhere for privilege escalation checks. Assumes `requireAuth` has already run to populate `req.user`.
-
-### `apps/user-api/src/middleware/validate.ts`
-
-Express middleware factory functions for validating request query parameters, body, and route params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each accepting a `ZodSchema` and returning middleware that returns a 400 response with flattened Zod errors on validation failure. On success, the parsed (and potentially transformed/defaulted) data replaces the original `req.query`, `req.body`, or `req.params`. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it is normally read-only, while body and params are assigned directly.
+Exports a `requireAuth` Express middleware created via the `createRequireAuth` factory from `@hallpass/express-middleware`, configured with the local `auth` instance. This middleware should be used on routes that need an authenticated user; it populates `req.user` on success. Changing the auth provider or configuration should be done in `../auth.js`, not here.
 
 ### `apps/user-api/src/routes/user.ts`
 
-Comprehensive CRUD router for user management with cursor-based pagination, bulk creation, and role-based access control. Exports an Express Router mounted at /api/users with endpoints: GET /me, GET / (list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk, PATCH /:id, DELETE /:id (soft-delete). Access is controlled via requireAuth, requireRole, and requireSelfOrRole middleware, with role hierarchy enforcement via roleRank preventing privilege escalation. All queries are school-scoped unless the caller is SUPER_ADMIN, and responses conform to UserResponse/CursorPage/BulkUserResult types from @hallpass/types.
+Comprehensive Express router implementing full user CRUD with role-based access control. Provides endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (create), POST /bulk (bulk create), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces multi-tenant school scoping — non-SUPER_ADMIN users are restricted to their own `schoolId`. Uses `roleRank` to prevent privilege escalation (users cannot create/assign roles above their own). Relies on Prisma for database access, Zod schemas for request validation, and shared middleware (`requireAuth`, `requireRole`, `requireSelfOrRole`, `validateBody/Params/Query`). The `USER_SELECT` constant controls which fields are returned; `toUserResponse` maps DB rows to the `UserResponse` type. Handles Prisma error codes P2002 (unique constraint) and P2003 (foreign key) gracefully.
 
 ### `apps/user-api/src/schemas/user.ts`
 
