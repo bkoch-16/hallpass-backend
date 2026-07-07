@@ -33,10 +33,10 @@ Related to the review issue deliberately deferred during the passes-api review l
 
 Follow-ups from the second review of the branch (2026-07-01). The larger findings from that review (stale `PassResponse`/`CreatePassBody` contract types, BullMQ jobId dedup blocking reconcile recovery, Socket.io shutdown hang, socket auth duplicating `requireAuth` — both now share `apps/passes-api/src/lib/sessionUser.ts`) were fixed directly and are not listed here.
 
-### 5. Redis connection construction repeated
+### 5. Redis connection construction repeated — RESOLVED 2026-07-07
 `new Redis(env.REDIS_URL, { maxRetriesPerRequest: null })` is hand-built three times: `apps/passes-api/src/lib/queue.ts` (queue + worker connections) and `apps/passes-api/src/lib/socket.ts` (adapter pub client).
 
-**Fix:** add a factory in `src/lib/redis.ts` (e.g. `createBlockingRedis()`) that centralizes the connection options.
+**Resolution:** added a `createBlockingRedis()` factory to `apps/passes-api/src/lib/redis.ts` centralizing the `maxRetriesPerRequest: null` options and replaced all three hand-built constructions (queue + worker connections in `queue.ts`, adapter pub client in `socket.ts`). Behavior-neutral; factory options covered by `tests/lib/redis.test.ts`.
 
 ### 6. `env.ts` PORT schema divergence — RESOLVED 2026-07-07
 passes-api validates `PORT` as `z.coerce.number().optional().default(3003)` while schools-api and user-api use `z.string().optional()`.
@@ -54,15 +54,15 @@ The babysitter plugin's stop hook was registered twice (once via a manually adde
 
 Follow-ups from the `@hallpass/express-middleware` extraction (`refactor/middleware-package`, 2026-07-07). The extraction itself resolved items 3 and 6 above; these are the items deliberately deferred during that run (details in `.a5c/runs/01KWWQDAM6J53YCZ0XET2AK5B6/artifacts/final-report.md`).
 
-### 8. General rate limiter's per-user keying is latent
+### 8. General rate limiter's per-user keying is latent — RESOLVED 2026-07-07
 `packages/middleware/src/rateLimit.ts` — `createGeneralLimiter()` keys `user:{req.user.id}` with an IP fallback (the C2 fix), but all three apps mount the limiter in `app.ts` before any auth middleware runs, so `req.user` is never set at keying time and general traffic still keys per-IP — identical to pre-refactor behavior. Only the auth limiter's per-email keying is live today.
 
-**Fix:** mount a limiter (or a second authed limiter) after `requireAuth` on protected routers in each app, or accept IP keying and amend the `createGeneralLimiter` JSDoc to say per-user keying only applies when `req.user` is populated upstream.
+**Resolution:** accepted IP keying and amended the `createGeneralLimiter` JSDoc to state that per-user keying only applies when `req.user` is populated upstream of the limiter; with the typical mount order (limiter before auth) general traffic keys per-IP. Documentation-only — no behavior change.
 
-### 9. passes-api rate limiter still uses the in-memory store
+### 9. passes-api rate limiter still uses the in-memory store — RESOLVED 2026-07-07
 The factories accept a `store` option (test-covered), but passes-api runs the default in-memory store — per-instance counters reset on restart and don't aggregate across instances. passes-api already has Redis (ioredis) but no express-rate-limit store adapter.
 
-**Fix:** add `rate-limit-redis` to passes-api (new dependency — needs approval) and pass a store into the factories in `apps/passes-api/src/app.ts`; `REDIS_PREFIX` namespacing applies.
+**Resolution:** added `rate-limit-redis@^4.3.1` to passes-api (v5 requires express-rate-limit >= 8.5.0; the workspace pins ^8.2.1) and wired a `RedisStore` into `createGeneralLimiter` in `apps/passes-api/src/app.ts`, using the shared lazy-connect client's `call` as `sendCommand` and the key prefix `${REDIS_PREFIX}:rl:general:` (colon-joined, matching `slots.ts`/`socket.ts`). Skipped under `NODE_ENV === "test"` so app tests keep the in-memory default without a Redis server; wiring covered by `tests/app.test.ts`. The limiter is fail-open on store errors (`passOnStoreError: true`) so an Upstash outage can't 500 the API.
 
 ### 10. better-auth `trustedOrigins` cors parsing duplicated inline — RESOLVED 2026-07-07
 `apps/user-api/src/auth.ts:7` and `apps/schools-api/src/auth.ts:7` still hand-roll the CORS_ORIGIN split/trim ternary for better-auth `trustedOrigins`, duplicating the package's `parseCorsOrigins` split logic (passes-api's `auth.ts` already delegates to it; its `'*'` branch legitimately differs because better-auth wants `undefined` for wildcard). Behavior-neutral duplication.

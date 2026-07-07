@@ -10,13 +10,19 @@ export interface RateLimiterOptions {
   limit?: number;
   /** External store (e.g. Redis). Defaults to express-rate-limit's in-memory store. */
   store?: Store;
+  /** Let requests through if the store errors (fail-open). Defaults to express-rate-limit's false (fail-closed). */
+  passOnStoreError?: boolean;
 }
 
 /**
  * General API limiter: keys per authenticated user (req.user.id) so users
  * behind a shared IP (e.g. a school NAT) don't exhaust each other's quota,
  * falling back to per-IP keying for unauthenticated requests.
- * Defaults to 100 requests per 15-minute window per key.
+ *
+ * Note: per-user keying only applies when req.user is populated upstream of
+ * the limiter. With the typical mount order (limiter in app.ts before any
+ * auth middleware), req.user is never set at keying time, so general traffic
+ * keys per-IP. Defaults to 100 requests per 15-minute window per key.
  */
 export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
@@ -28,6 +34,9 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
     keyGenerator: (req: Request) =>
       req.user ? `user:${req.user.id}` : ipKeyGenerator(req.ip ?? ""),
     ...(options.store ? { store: options.store } : {}),
+    ...(options.passOnStoreError !== undefined
+      ? { passOnStoreError: options.passOnStoreError }
+      : {}),
   });
 }
 
@@ -53,5 +62,8 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
     ...(options.store ? { store: options.store } : {}),
+    ...(options.passOnStoreError !== undefined
+      ? { passOnStoreError: options.passOnStoreError }
+      : {}),
   });
 }

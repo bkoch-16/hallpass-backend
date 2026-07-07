@@ -1,11 +1,12 @@
 import { Server, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
-import Redis from "ioredis";
+import type Redis from "ioredis";
 import { UserRole } from "@hallpass/types";
 import { resolveSessionUser, roleRank, parseCorsOrigins } from "@hallpass/express-middleware";
 import { auth } from "../auth.js";
 import { env } from "../env.js";
+import { createBlockingRedis } from "./redis.js";
 import { logger } from "@hallpass/logger";
 
 let io: Server | undefined;
@@ -17,7 +18,7 @@ export function initSocket(
     cors: { origin: parseCorsOrigins(env), credentials: env.CORS_ORIGIN !== "*" },
   });
 
-  const pubClient = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  const pubClient = createBlockingRedis();
   const subClient = pubClient.duplicate();
 
   pubClient.on("error", (err) =>

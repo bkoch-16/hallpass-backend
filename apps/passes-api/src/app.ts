@@ -9,7 +9,9 @@ import {
   createGeneralLimiter,
   parseCorsOrigins,
 } from "@hallpass/express-middleware";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
+import { redis } from "./lib/redis.js";
 import passesRouter from "./routes/passes.js";
 import internalRouter from "./routes/internal.js";
 
@@ -33,7 +35,25 @@ app.use(express.json());
 // Registered before the rate limiter so LB/uptime probes are never 429'd
 app.get("/health", createHealthRoute("passes-api"));
 
-const limiter = createGeneralLimiter();
+// Redis-backed store so limits aggregate across instances and survive
+// restarts; keys are namespaced under REDIS_PREFIX (shared Upstash DB).
+// Skipped under test (NODE_ENV === "test", the convention used in
+// @hallpass/logger) so app tests keep express-rate-limit's in-memory default
+// and never need a live Redis server. If more limiters are added, each needs
+// its own RedisStore instance (rate-limit-redis stores can't be shared).
+const limiter = createGeneralLimiter(
+  process.env.NODE_ENV === "test"
+    ? {}
+    : {
+        store: new RedisStore({
+          prefix: `${env.REDIS_PREFIX}:rl:general:`,
+          sendCommand: (command: string, ...args: string[]) =>
+            redis.call(command, ...args) as Promise<RedisReply>,
+        }),
+        // fail-open — an Upstash outage must not take down the API; slots/queue paths have their own Redis dependency semantics
+        passOnStoreError: true,
+      },
+);
 
 app.use(limiter);
 
