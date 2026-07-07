@@ -1,5 +1,60 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { getIntervalStart } from "../../src/lib/time.js";
+import {
+  addMinutesToTime,
+  addMinutesToTimeClamped,
+  calendarDate,
+  getCurrentTimeInTimezone,
+  getIntervalStart,
+} from "../../src/lib/time.js";
+
+describe("addMinutesToTimeClamped", () => {
+  it("clamps a window start that would wrap past midnight to '00:00'", () => {
+    expect(addMinutesToTimeClamped("00:05", -10)).toBe("00:00");
+  });
+
+  it("subtracts normally when no clamping is needed", () => {
+    expect(addMinutesToTimeClamped("08:00", -30)).toBe("07:30");
+  });
+});
+
+describe("addMinutesToTime", () => {
+  it("still wraps at 24 h (buffered window ends rely on this)", () => {
+    expect(addMinutesToTime("00:05", -10)).toBe("23:55");
+  });
+});
+
+describe("calendarDate", () => {
+  it("returns the UTC-midnight Date for a 'YYYY-MM-DD' string", () => {
+    expect(calendarDate("2026-07-07").toISOString()).toBe("2026-07-07T00:00:00.000Z");
+  });
+});
+
+describe("getCurrentTimeInTimezone", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("normalizes a '24:xx' formatter result to '00:xx' (ICU hour12:false midnight quirk)", () => {
+    // format is an accessor property that returns a bound function — spy on the getter
+    const formatSpy = vi
+      .spyOn(Intl.DateTimeFormat.prototype, "format", "get")
+      .mockReturnValue(() => "24:07");
+
+    try {
+      expect(getCurrentTimeInTimezone("UTC")).toBe("00:07");
+    } finally {
+      formatSpy.mockRestore();
+    }
+  });
+
+  it("returns '00:00' at local midnight", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-07T00:00:00Z"));
+
+    expect(getCurrentTimeInTimezone("UTC")).toBe("00:00");
+  });
+});
 
 describe("getIntervalStart WEEK", () => {
   afterEach(() => {

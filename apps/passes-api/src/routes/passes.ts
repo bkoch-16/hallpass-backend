@@ -31,6 +31,8 @@ import {
   getCurrentTimeInTimezone,
   getIntervalStart,
   addMinutesToTime,
+  addMinutesToTimeClamped,
+  calendarDate,
 } from "../lib/time.js";
 
 const router = Router({ mergeParams: true });
@@ -102,7 +104,7 @@ router.post(
 
     // 2. Get today's date in school timezone
     const today = getTodayInTimezone(timezone);
-    const todayDate = new Date(today + "T00:00:00Z");
+    const todayDate = calendarDate(today);
 
     // 3. Query SchoolCalendar for today
     const calendar = await prisma.schoolCalendar.findFirst({
@@ -130,7 +132,9 @@ router.post(
     });
 
     const activePeriod = periods.find((p) => {
-      const windowStart = addMinutesToTime(
+      // Clamped, not wrapped: a period starting just after midnight must yield
+      // a "00:00" window start, not wrap to "23:xx" and never match
+      const windowStart = addMinutesToTimeClamped(
         p.startTime,
         -(p.scheduleType?.startBuffer ?? 0),
       );

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { passStatusMock } from "../utils/passStatusMock.js";
 
@@ -352,6 +352,48 @@ describe("POST /api/passes", () => {
       }),
     );
     expect(mockSlots.claimPassSlots).not.toHaveBeenCalled();
+  });
+});
+
+// ─── POST /passes — midnight window clamp ─────────────────────────────────────
+
+describe("POST /api/passes — midnight window clamp", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Period starting 00:05 with a 10-minute start buffer: the buffered window
+  // start must clamp to "00:00", not wrap to "23:55" (which made the window
+  // never match and rejected the pass with "No active period").
+  const midnightPeriod = {
+    ...fakePeriod,
+    id: 3,
+    startTime: "00:05",
+    endTime: "00:50",
+    scheduleType: { id: 5, schoolId: 1, name: "Regular", startBuffer: 10, endBuffer: 0 },
+  };
+
+  it("allows a pass at 00:02 for a period starting 00:05 with a 10-minute start buffer", async () => {
+    // Only fake Date — supertest needs real timers
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2025-09-15T00:02:00Z"));
+    authenticateAs(fakeStudent);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
+    mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
+    mockPrisma.period.findMany.mockResolvedValue([midnightPeriod]);
+    mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
+    mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
+    mockPrisma.pass.create.mockResolvedValue({ ...fakePass, periodId: 3 });
+
+    const res = await request(app).post(BASE).send({ destinationId: 1 });
+
+    // Old wrapping behavior yielded windowStart "23:55" and a 422 "No active period"
+    expect(res.status).toBe(201);
+    expect(mockPrisma.pass.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ periodId: 3 }),
+      }),
+    );
   });
 });
 
