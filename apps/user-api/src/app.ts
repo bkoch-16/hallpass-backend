@@ -1,13 +1,15 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { toNodeHandler } from "@hallpass/auth";
 import { logger, httpLogger } from "@hallpass/logger";
 import {
   createHealthRoute,
   notFound,
   createErrorHandler,
+  createGeneralLimiter,
+  createAuthLimiter,
+  parseCorsOrigins,
 } from "@hallpass/express-middleware";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
@@ -19,10 +21,7 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 
-const corsOrigins =
-  env.CORS_ORIGIN === "*"
-    ? "*"
-    : env.CORS_ORIGIN.split(",").map((o) => o.trim());
+const corsOrigins = parseCorsOrigins(env);
 app.use(
   cors({
     origin: corsOrigins,
@@ -37,21 +36,9 @@ app.use(express.json());
 // Registered before the rate limiter so LB/uptime probes are never 429'd
 app.get("/health", createHealthRoute("user-api"));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many requests" },
-});
+const limiter = createGeneralLimiter();
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many requests" },
-});
+const authLimiter = createAuthLimiter();
 
 app.use(limiter);
 app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));

@@ -1,6 +1,6 @@
 import { createAuth } from "@hallpass/auth";
+import { parseCorsOrigins } from "@hallpass/express-middleware";
 import { env } from "./env.js";
-import { corsOrigins } from "./lib/cors.js";
 
 export const auth = createAuth({
   baseURL: env.BETTER_AUTH_URL,
@@ -8,5 +8,5 @@ export const auth = createAuth({
   trustedOrigins:
     env.CORS_ORIGIN === "*"
       ? undefined
-      : (corsOrigins as string[]),
+      : (parseCorsOrigins(env) as string[]),
 });
