@@ -8,6 +8,7 @@ COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 COPY packages/logger/package.json packages/logger/
 COPY packages/types/package.json packages/types/
+COPY packages/middleware/package.json packages/middleware/
 COPY apps/schools-api/package.json apps/schools-api/
 
 RUN pnpm install --frozen-lockfile
@@ -26,6 +27,7 @@ RUN pnpm --filter @hallpass/db build && \
     pnpm --filter @hallpass/auth build && \
     pnpm --filter @hallpass/logger build && \
     pnpm --filter @hallpass/types build && \
+    pnpm --filter @hallpass/express-middleware build && \
     pnpm --filter @hallpass/schools-api build
 
 COPY apps/schools-api/docker-entrypoint.sh /docker-entrypoint.sh
