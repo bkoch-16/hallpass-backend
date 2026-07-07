@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-07T16:54:59.162Z — 17 files indexed_
+_Generated: 2026-07-07T17:05:05.355Z — 17 files indexed_
 
 ## File Summaries
 
@@ -26,7 +26,7 @@ Automation workflow that keeps the `develop` branch in sync with `main` by creat
 
 ### `apps/user-api/Dockerfile`
 
-Dockerfile for the `user-api` service, building a Node.js 22 Alpine image with pnpm 10 in a monorepo context. It employs a layer-caching strategy by copying package manifests first, running `pnpm install --frozen-lockfile`, and then copying source code. After installation, it generates the Prisma client (using a dummy `DATABASE_URL` since generation doesn't require a live database) and builds internal packages (`db`, `auth`, `logger`, `types`) in dependency order before building `user-api` itself. The container exposes port 3001 and uses a custom `docker-entrypoint.sh` script as its entrypoint. Developers modifying this file should ensure any new workspace dependencies are added to the manifest-copy stage and the build order, and should be aware that changes to the entrypoint script require it to be kept in sync at `apps/user-api/docker-entrypoint.sh`.
+Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnpm 10 in a monorepo context. It copies package manifests first for Docker layer caching, then installs dependencies with a frozen lockfile before copying source code. A Prisma client is generated using a dummy DATABASE_URL (no actual DB connection needed at build time), followed by sequential builds of internal packages (@hallpass/db, auth, logger, types, express-middleware) and the user-api app itself. The container exposes port 3001 and uses a custom docker-entrypoint.sh script as its entrypoint. Developers modifying this file should ensure the COPY and build order matches the monorepo dependency graph, and that any new internal packages are added to both the manifest copy and build steps.
 
 ### `apps/user-api/src/app.ts`
 
