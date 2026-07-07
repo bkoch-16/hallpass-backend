@@ -4,7 +4,7 @@ import { logger } from "@hallpass/logger";
 import { env } from "../env.js";
 import { prisma, PassStatus } from "@hallpass/db";
 import { releaseAndPromote, releasePassSlots, getMaxActivePasses } from "./slots.js";
-import { getTodayInTimezone } from "./time.js";
+import { calendarDate, getTodayInTimezone } from "./time.js";
 import { emitPassEvent } from "./socket.js";
 
 const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -177,7 +177,7 @@ async function checkIsLastPeriod(
   const calendar = await prisma.schoolCalendar.findFirst({
     where: {
       schoolId: pass.schoolId,
-      date: new Date(`${todayInTz}T00:00:00Z`),
+      date: calendarDate(todayInTz),
     },
   });
   if (!calendar?.scheduleTypeId) return true;

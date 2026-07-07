@@ -3,7 +3,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { schedulePassExpiry } from "../lib/queue.js";
 import { reconcileSlots, reconcileSchoolSlots, promoteFromQueue } from "../lib/slots.js";
-import { periodEndDate } from "../lib/time.js";
+import { getTodayInTimezone, periodEndDate } from "../lib/time.js";
 import { env } from "../env.js";
 
 const router = Router();
@@ -53,14 +53,20 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
       try {
         // A pass whose period was deleted (periodId null) has no derivable end time —
         // arm an immediate expiry; processPassExpiry treats a missing period as
-        // last-period and resolves the pass safely.
-        const endTime = pass.period
-          ? periodEndDate(
-              pass.period.endTime,
-              pass.period.scheduleType?.endBuffer ?? 0,
-              pass.school.timezone,
-            )
-          : new Date();
+        // last-period and resolves the pass safely. Likewise, a stale pass from a
+        // previous school-local calendar day must expire now — periodEndDate is
+        // computed for TODAY, so rescheduling would push it to today's period end.
+        const timezone = pass.school.timezone;
+        const isPriorDay =
+          getTodayInTimezone(timezone, pass.requestedAt) < getTodayInTimezone(timezone);
+        const endTime =
+          pass.period && !isPriorDay
+            ? periodEndDate(
+                pass.period.endTime,
+                pass.period.scheduleType?.endBuffer ?? 0,
+                timezone,
+              )
+            : new Date();
         await schedulePassExpiry(pass.id, endTime);
         scheduled++;
       } catch (err) {

@@ -4,13 +4,13 @@ Follow-ups from the code review of the `create-passes-service` branch (2026-07-0
 
 ## Correctness / edge cases
 
-### 1. Midnight edge-case family (passes-api)
+### 1. Midnight edge-case family (passes-api) — RESOLVED 2026-07-07
 Related to the review issue deliberately deferred during the passes-api review loop.
 - `apps/passes-api/src/lib/time.ts:11` — `getCurrentTimeInTimezone` doesn't normalize a possible `"24:xx"` result from `Intl.DateTimeFormat` with `hour12: false`, while `localMidnightAsUTC` in the same file explicitly handles `rawH === 24`. At local midnight, `"24:00"` breaks the string comparisons in `timeLeq`.
 - `apps/passes-api/src/routes/passes.ts` — a period starting just after midnight with a negative start buffer wraps `windowStart` to `23:xx` (`addMinutesToTime` wraps at 24 h), so the buffered window never matches and the pass is rejected with "No active period".
 - `apps/passes-api/src/routes/internal.ts` — `/internal/reconcile-expiry` computes `periodEndDate` for *today*, so a stale ACTIVE pass from a previous day is rescheduled to expire at today's period end instead of immediately.
 
-**Fix:** normalize `24:xx` → `00:xx` in `getCurrentTimeInTimezone`; clamp (don't wrap) buffered window starts; in reconcile, expire passes whose calendar date is before today instead of rescheduling them.
+**Resolution:** `getCurrentTimeInTimezone` normalizes a leading hour of `24` to `00`; buffered window starts use a new `addMinutesToTimeClamped` helper that clamps at `"00:00"` instead of wrapping (`addMinutesToTime` keeps wrapping for window ends); `/internal/reconcile-expiry` compares the pass's school-local calendar day (from `requestedAt`) against today and arms immediate expiry for prior-day passes instead of rescheduling. All three covered by new tests in `tests/lib/time.test.ts`, `tests/routes/passes.test.ts`, and `tests/routes/internal.test.ts` (new file) on the `fix/passes-api-midnight-edges` branch.
 
 ### 2. Redis slot-key TTL can briefly over-admit
 `apps/passes-api/src/lib/slots.ts:5` — if a `slots:destination:<id>` or `slots:school:<id>` key expires while passes are ACTIVE, the next claim re-initializes it to `maxOccupancy`, temporarily over-admitting until `/internal/reconcile-expiry` runs. Documented tradeoff; acceptable while reconcile runs frequently.
@@ -24,10 +24,10 @@ Related to the review issue deliberately deferred during the passes-api review l
 
 **Resolution:** extracted into `@hallpass/express-middleware` (`packages/middleware`) on the `refactor/middleware-package` branch — validate/health/errorHandler/express types, the full roleGuard superset, `createRequireAuth(auth)`, plus rate-limit factories, `baseEnvSchema`, and `parseCorsOrigins`. All three apps adopt it; leftover sweep confirmed one source of truth per module. Follow-ups from the extraction are items 8–11 below.
 
-### 4. Calendar-date construction duplicated
+### 4. Calendar-date construction duplicated — RESOLVED 2026-07-07
 `new Date(dateStr + "T00:00:00Z")` appears in `apps/passes-api/src/routes/passes.ts` and `apps/passes-api/src/lib/queue.ts`.
 
-**Fix:** extract a helper in `src/lib/time.ts` (e.g. `calendarDate(dateStr)`).
+**Resolution:** added `calendarDate(dateStr)` to `apps/passes-api/src/lib/time.ts` and replaced both inline constructions (`routes/passes.ts`, `lib/queue.ts`). The constructions inside `time.ts` itself (`localMidnightAsUTC`, `periodEndDate`) were left as-is per scope. Done on the `fix/passes-api-midnight-edges` branch.
 
 ---
 
