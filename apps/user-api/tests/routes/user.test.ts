@@ -106,7 +106,7 @@ function authenticateAs(user: FakeUser) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   targetUserLookup = () => Promise.resolve(null);
 });
 
