@@ -74,7 +74,7 @@ The factories accept a `store` option (test-covered), but passes-api runs the de
 
 **Resolution:** deleted the file. Checked the leaked token against the local dev DB's `Session` table — no matching row exists, so there was nothing to invalidate.
 
-### 12. Mock-ordering fragility in user-api route tests
+### 12. Mock-ordering fragility in user-api route tests — RESOLVED 2026-07-07
 `apps/user-api/tests/routes/user.test.ts` — tests layer `mockResolvedValueOnce` chains on the shared `mockPrisma.user.findFirst` on top of the persistent `mockResolvedValue` set by `authenticateAs()`, so any extra `findFirst` call silently shifts the `Once` queue and intermittently flips assertions. Observed flake signatures: `DELETE /api/users/5` 403→404, and the prisma-throw case 500→200, during the 2026-07-07 tech-debt run.
 
-**Fix:** make each test's mock sequence self-contained (e.g. use `mockImplementation` keyed on call args, or reset and rebuild the full mock chain per test) instead of stacking `Once` values over the shared persistent mock.
+**Resolution:** replaced order-dependent `Once` chains with an args-keyed `mockImplementation`: `authenticateAs()` answers requireAuth's lookup (matched by its unique shape — no `select`, `where.id` = session user, no `schoolId` scope), and route-handler target lookups go through a per-test `givenTargetUser()` / `givenTargetUserLookupError()` override that defaults to "not found". Self-targeted existence checks share the requireAuth shape and correctly return the session user. `findFirst` call count/order no longer affects any assertion; suite verified stable across repeated runs.

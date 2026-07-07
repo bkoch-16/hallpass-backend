@@ -72,13 +72,42 @@ const fakeUser: FakeUser = {
   deletedAt: null,
 };
 
+interface FindFirstArgs {
+  where: { id?: number; schoolId?: number | null };
+  select?: Record<string, boolean>;
+}
+
+// Route-handler findFirst behavior (target-user lookups). requireAuth's own
+// lookup is answered by authenticateAs based on the call's arguments, so
+// tests never depend on how many times findFirst runs or in what order.
+// Defaults to "not found".
+let targetUserLookup: () => Promise<unknown>;
+
+function givenTargetUser(user: unknown) {
+  targetUserLookup = () => Promise.resolve(user);
+}
+
+function givenTargetUserLookupError(error: Error) {
+  targetUserLookup = () => Promise.reject(error);
+}
+
 function authenticateAs(user: FakeUser) {
   mockGetSession.mockResolvedValue({ user, session: {} });
-  mockPrisma.user.findFirst.mockResolvedValue(user);
+  mockPrisma.user.findFirst.mockImplementation((args: FindFirstArgs) => {
+    // requireAuth resolves the session user with
+    // findFirst({ where: { id, deletedAt: null } }) — no select, no schoolId
+    // scope. Route-handler lookups always differ (select and/or schoolId)
+    // except self-targeted existence checks, where returning the session
+    // user is correct anyway.
+    const isAuthLookup =
+      !args.select && args.where.id === user.id && !("schoolId" in args.where);
+    return isAuthLookup ? Promise.resolve(user) : targetUserLookup();
+  });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  targetUserLookup = () => Promise.resolve(null);
 });
 
 describe("GET /api/users/:id", () => {
@@ -103,15 +132,13 @@ describe("GET /api/users/:id", () => {
   it("returns user when requesting own profile", async () => {
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(student);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(student) // requireAuth lookup
-      .mockResolvedValueOnce({        // route handler lookup
-        id: student.id,
-        email: student.email,
-        name: student.name,
-        role: student.role,
-        createdAt: student.createdAt,
-      });
+    givenTargetUser({
+      id: student.id,
+      email: student.email,
+      name: student.name,
+      role: student.role,
+      createdAt: student.createdAt,
+    });
 
     const res = await request(app).get(`/api/users/${student.id}`);
 
@@ -131,11 +158,7 @@ describe("GET /api/users/:id", () => {
 
   it("returns 404 when user not found", async () => {
     authenticateAs(fakeUser);
-    // First findFirst call is from requireAuth (returns the teacher)
-    // Second findFirst call is from the route handler (returns null — not found)
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)
-      .mockResolvedValueOnce(null);
+    // target lookup defaults to null — not found
 
     const res = await request(app).get("/api/users/9999");
 
@@ -146,15 +169,13 @@ describe("GET /api/users/:id", () => {
   it("returns 200 when teacher accesses another user's profile", async () => {
     const otherUser = { ...fakeUser, id: 4, email: "other@test.com", name: "Other User" };
     authenticateAs(fakeUser); // teacher with id 1
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)   // requireAuth
-      .mockResolvedValueOnce({           // route handler lookup
-        id: otherUser.id,
-        email: otherUser.email,
-        name: otherUser.name,
-        role: otherUser.role,
-        createdAt: otherUser.createdAt,
-      });
+    givenTargetUser({
+      id: otherUser.id,
+      email: otherUser.email,
+      name: otherUser.name,
+      role: otherUser.role,
+      createdAt: otherUser.createdAt,
+    });
 
     const res = await request(app).get("/api/users/4");
 
@@ -679,7 +700,6 @@ describe("PATCH /api/users/:id", () => {
 
   it("returns 400 when body is empty", async () => {
     authenticateAs(fakeUser);
-    mockPrisma.user.findFirst.mockResolvedValueOnce(fakeUser);
 
     const res = await request(app).patch("/api/users/1").send({});
 
@@ -689,9 +709,6 @@ describe("PATCH /api/users/:id", () => {
   it("updates name successfully", async () => {
     authenticateAs(fakeUser);
     const updated = { ...fakeUser, name: "New Name" };
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)  // requireAuth
-      .mockResolvedValueOnce(fakeUser); // route handler existence check
     mockPrisma.user.update.mockResolvedValue(updated);
 
     const res = await request(app).patch("/api/users/1").send({ name: "New Name" });
@@ -705,9 +722,7 @@ describe("PATCH /api/users/:id", () => {
     const target = { ...fakeUser, id: 6, role: "STUDENT" };
     authenticateAs(admin);
     const updated = { ...target, email: "new@test.com" };
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)   // requireAuth
-      .mockResolvedValueOnce(target); // route handler existence check
+    givenTargetUser(target);
     mockPrisma.user.update.mockResolvedValue(updated);
 
     const res = await request(app).patch("/api/users/6").send({ email: "new@test.com" });
@@ -719,9 +734,7 @@ describe("PATCH /api/users/:id", () => {
   it("returns 403 when promoting to a role above caller", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(fakeUser);
+    givenTargetUser(fakeUser);
 
     const res = await request(app).patch("/api/users/1").send({ role: "SUPER_ADMIN" });
 
@@ -733,9 +746,7 @@ describe("PATCH /api/users/:id", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
     const updated = { ...fakeUser, role: "ADMIN" };
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(fakeUser);
+    givenTargetUser(fakeUser);
     mockPrisma.user.update.mockResolvedValue(updated);
 
     const res = await request(app).patch("/api/users/1").send({ role: "ADMIN" });
@@ -747,9 +758,7 @@ describe("PATCH /api/users/:id", () => {
   it("returns 404 when user does not exist", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)  // requireAuth
-      .mockResolvedValueOnce(null);  // route handler existence check
+    // target lookup defaults to null — not found
 
     const res = await request(app).patch("/api/users/9999").send({ name: "X" });
 
@@ -781,9 +790,7 @@ describe("PATCH /api/users/:id", () => {
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(student);
     const updated = { ...student, name: "Updated Name" };
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(student)  // requireAuth
-      .mockResolvedValueOnce(student); // route handler existence check
+    // self-targeted existence check is answered by authenticateAs
     mockPrisma.user.update.mockResolvedValue(updated);
 
     const res = await request(app).patch("/api/users/2").send({ name: "Updated Name" });
@@ -795,9 +802,6 @@ describe("PATCH /api/users/:id", () => {
   it("returns 403 when student tries to update their own email", async () => {
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(student);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(student)  // requireAuth
-      .mockResolvedValueOnce(student); // route handler existence check
 
     const res = await request(app).patch("/api/users/2").send({ email: "new@student.com" });
 
@@ -807,9 +811,6 @@ describe("PATCH /api/users/:id", () => {
   it("returns 403 when student tries to change their own role", async () => {
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(student);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(student)  // requireAuth
-      .mockResolvedValueOnce(student); // route handler existence check
 
     const res = await request(app).patch("/api/users/2").send({ role: "TEACHER" });
 
@@ -847,10 +848,7 @@ describe("PATCH /api/users/:id", () => {
   it("returns 404 when ADMIN tries to update a user from a different school", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
     authenticateAs(admin);
-    // findFirst returns null because schoolId scoping excludes the cross-school user
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)  // requireAuth
-      .mockResolvedValueOnce(null);  // route handler: scoped findFirst finds nothing
+    // target lookup defaults to null — schoolId scoping excludes the cross-school user
 
     const res = await request(app).patch("/api/users/99").send({ name: "Hijack" });
 
@@ -863,9 +861,7 @@ describe("PATCH /api/users/:id", () => {
     const target = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(superAdmin);
     const updated = { ...target, schoolId: 2 };
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(superAdmin)
-      .mockResolvedValueOnce(target);
+    givenTargetUser(target);
     mockPrisma.user.update.mockResolvedValue(updated);
 
     const res = await request(app).patch("/api/users/2").send({ schoolId: 2 });
@@ -895,9 +891,7 @@ describe("DELETE /api/users/:id", () => {
   it("returns 404 when user does not exist", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(null);
+    // target lookup defaults to null — not found
 
     const res = await request(app).delete("/api/users/9999");
 
@@ -909,9 +903,7 @@ describe("DELETE /api/users/:id", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     const otherAdmin = { ...fakeUser, id: 7, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(otherAdmin);
+    givenTargetUser(otherAdmin);
 
     const res = await request(app).delete("/api/users/7");
 
@@ -923,9 +915,7 @@ describe("DELETE /api/users/:id", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(superAdmin);
+    givenTargetUser(superAdmin);
 
     const res = await request(app).delete("/api/users/5");
 
@@ -937,9 +927,7 @@ describe("DELETE /api/users/:id", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)
-      .mockResolvedValueOnce(student);
+    givenTargetUser(student);
     mockPrisma.user.update.mockResolvedValue({ ...student, deletedAt: new Date() });
 
     const res = await request(app).delete("/api/users/2");
@@ -955,9 +943,7 @@ describe("DELETE /api/users/:id", () => {
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(superAdmin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(superAdmin)
-      .mockResolvedValueOnce(admin);
+    givenTargetUser(admin);
     mockPrisma.user.update.mockResolvedValue({ ...admin, deletedAt: new Date() });
 
     const res = await request(app).delete("/api/users/3");
@@ -972,9 +958,7 @@ describe("DELETE /api/users/:id", () => {
   it("returns 403 when admin tries to delete themselves", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)  // requireAuth
-      .mockResolvedValueOnce(admin); // route handler: target is themselves
+    givenTargetUser(admin); // target is themselves
 
     const res = await request(app).delete("/api/users/3");
 
@@ -985,9 +969,7 @@ describe("DELETE /api/users/:id", () => {
   it("returns 403 when super_admin tries to delete themselves", async () => {
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
     authenticateAs(superAdmin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(superAdmin)  // requireAuth
-      .mockResolvedValueOnce(superAdmin); // route handler: target is themselves
+    // self-targeted existence check is answered by authenticateAs
 
     const res = await request(app).delete("/api/users/5");
 
@@ -999,9 +981,7 @@ describe("DELETE /api/users/:id", () => {
 describe("DB error handling", () => {
   it("GET /api/users/:id returns 500 when prisma throws", async () => {
     authenticateAs(fakeUser);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(fakeUser)
-      .mockRejectedValueOnce(new Error("DB error"));
+    givenTargetUserLookupError(new Error("DB error"));
 
     const res = await request(app).get("/api/users/1");
 
@@ -1022,9 +1002,7 @@ describe("DB error handling", () => {
   it("PATCH /api/users/:id returns 500 when prisma.findFirst throws on existence check", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)              // requireAuth
-      .mockRejectedValueOnce(new Error("DB error")); // existence check
+    givenTargetUserLookupError(new Error("DB error")); // existence check
 
     const res = await request(app).patch("/api/users/2").send({ name: "X" });
 
@@ -1036,9 +1014,7 @@ describe("DB error handling", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)    // requireAuth
-      .mockResolvedValueOnce(student); // existence check
+    givenTargetUser(student);
     mockPrisma.user.update.mockRejectedValue(new Error("DB error"));
 
     const res = await request(app).patch("/api/users/2").send({ name: "X" });
@@ -1051,9 +1027,7 @@ describe("DB error handling", () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     const student = { ...fakeUser, id: 2, role: "STUDENT" };
     authenticateAs(admin);
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(admin)    // requireAuth
-      .mockResolvedValueOnce(student); // existence check
+    givenTargetUser(student);
     mockPrisma.user.update.mockRejectedValue(new Error("DB error"));
 
     const res = await request(app).delete("/api/users/2");
