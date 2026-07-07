@@ -1,13 +1,14 @@
 import { Queue, Worker, type Job } from "bullmq";
-import Redis from "ioredis";
+import type Redis from "ioredis";
 import { logger } from "@hallpass/logger";
 import { env } from "../env.js";
 import { prisma, PassStatus } from "@hallpass/db";
+import { createBlockingRedis } from "./redis.js";
 import { releaseAndPromote, releasePassSlots, getMaxActivePasses } from "./slots.js";
 import { getTodayInTimezone } from "./time.js";
 import { emitPassEvent } from "./socket.js";
 
-const bullmqConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const bullmqConnection = createBlockingRedis();
 
 export const passExpiryQueue = new Queue("pass-expiry", {
   connection: bullmqConnection,
@@ -118,7 +119,7 @@ export async function processPassExpiry(job: Job): Promise<void> {
 let workerConnection: Redis | undefined;
 
 export function startExpiryWorker(): Worker {
-  workerConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  workerConnection = createBlockingRedis();
   const worker = new Worker("pass-expiry", processPassExpiry, {
     connection: workerConnection,
     prefix: env.REDIS_PREFIX,

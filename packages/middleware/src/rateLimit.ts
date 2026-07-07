@@ -16,7 +16,11 @@ export interface RateLimiterOptions {
  * General API limiter: keys per authenticated user (req.user.id) so users
  * behind a shared IP (e.g. a school NAT) don't exhaust each other's quota,
  * falling back to per-IP keying for unauthenticated requests.
- * Defaults to 100 requests per 15-minute window per key.
+ *
+ * Note: per-user keying only applies when req.user is populated upstream of
+ * the limiter. With the typical mount order (limiter in app.ts before any
+ * auth middleware), req.user is never set at keying time, so general traffic
+ * keys per-IP. Defaults to 100 requests per 15-minute window per key.
  */
 export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
