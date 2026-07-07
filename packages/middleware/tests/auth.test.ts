@@ -1,17 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
-
-const { mockGetSession } = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-}));
-
-vi.mock("@hallpass/auth", () => ({
-  createAuth: vi.fn(() => ({
-    api: { getSession: mockGetSession },
-  })),
-  toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-  fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
-}));
+import type { UserRole } from "@hallpass/types";
 
 vi.mock("@hallpass/db", () => ({
   prisma: {
@@ -21,12 +10,18 @@ vi.mock("@hallpass/db", () => ({
   },
 }));
 
-import { requireAuth } from "../../src/middleware/auth.js";
+import { resolveSessionUser, createRequireAuth } from "../src/auth";
 import { prisma } from "@hallpass/db";
 
 const mockPrisma = prisma as unknown as {
   user: { findFirst: ReturnType<typeof vi.fn> };
 };
+
+const mockGetSession = vi.fn();
+
+const stubAuth = {
+  api: { getSession: mockGetSession },
+} as unknown as Parameters<typeof createRequireAuth>[0];
 
 function mockRes() {
   const res = {} as Response;
@@ -39,7 +34,7 @@ const fakeUser = {
   id: 1,
   email: "admin@test.com",
   name: "Test Admin",
-  role: "ADMIN",
+  role: "ADMIN" as UserRole,
   schoolId: 1,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -50,7 +45,94 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("requireAuth", () => {
+describe("resolveSessionUser", () => {
+  it("returns the DB user for a valid session", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
+    mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toEqual(fakeUser);
+  });
+
+  it("queries DB with deletedAt: null to exclude soft-deleted users", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
+    mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
+
+    await resolveSessionUser(stubAuth, {});
+
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null },
+    });
+  });
+
+  it("returns null when getSession throws", async () => {
+    mockGetSession.mockRejectedValue(new Error("network error"));
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when getSession returns null (no session)", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when session user id is non-numeric", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "not-a-number" }, session: {} });
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when session user id is 0", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "0" }, session: {} });
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when session user id is negative", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "-1" }, session: {} });
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when the user is soft-deleted (deletedAt set)", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+
+    const user = await resolveSessionUser(stubAuth, {});
+
+    expect(user).toBeNull();
+  });
+
+  it("rejects when the DB query fails (error propagates, not swallowed)", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
+    mockPrisma.user.findFirst.mockRejectedValue(new Error("DB connection lost"));
+
+    await expect(resolveSessionUser(stubAuth, {})).rejects.toThrow(
+      "DB connection lost",
+    );
+  });
+});
+
+describe("createRequireAuth", () => {
+  const requireAuth = createRequireAuth(stubAuth);
+
   it("sets req.user and calls next() for a valid session", async () => {
     mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
@@ -141,7 +223,7 @@ describe("requireAuth", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("propagates DB errors when findFirst throws", async () => {
+  it("propagates DB errors when findFirst throws (Express catches and sends 500)", async () => {
     mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockRejectedValue(new Error("DB connection lost"));
     const req = { headers: {} } as Request;

@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { baseEnvSchema } from "@hallpass/express-middleware";
 
-const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
-  BETTER_AUTH_URL: z.string().min(1),
-  BETTER_AUTH_SECRET: z.string().min(1),
+const envSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().optional().default(3003),
-  CORS_ORIGIN: z.string().min(1),
   REDIS_URL: z.string().url(),
   // Namespaces all Redis keys (BullMQ, slot counters, socket.io pub/sub) —
   // dev and prod share a single Upstash database (free tier), so each

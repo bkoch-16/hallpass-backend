@@ -3,9 +3,8 @@ import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
 import { UserRole } from "@hallpass/types";
-import { resolveSessionUser } from "./sessionUser.js";
-import { roleRank } from "../middleware/roleGuard.js";
-import { corsOrigins } from "./cors.js";
+import { resolveSessionUser, roleRank, parseCorsOrigins } from "@hallpass/express-middleware";
+import { auth } from "../auth.js";
 import { env } from "../env.js";
 import { logger } from "@hallpass/logger";
 
@@ -15,7 +14,7 @@ export function initSocket(
   httpServer: HttpServer,
 ): { io: Server; pubClient: Redis; subClient: Redis } {
   io = new Server(httpServer, {
-    cors: { origin: corsOrigins, credentials: env.CORS_ORIGIN !== "*" },
+    cors: { origin: parseCorsOrigins(env), credentials: env.CORS_ORIGIN !== "*" },
   });
 
   const pubClient = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -32,7 +31,7 @@ export function initSocket(
 
   io.use(async (socket, next) => {
     try {
-      const user = await resolveSessionUser(socket.handshake.headers);
+      const user = await resolveSessionUser(auth, socket.handshake.headers);
       if (!user) {
         next(new Error("Unauthorized"));
         return;
