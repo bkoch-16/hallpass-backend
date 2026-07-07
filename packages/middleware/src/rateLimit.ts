@@ -10,6 +10,8 @@ export interface RateLimiterOptions {
   limit?: number;
   /** External store (e.g. Redis). Defaults to express-rate-limit's in-memory store. */
   store?: Store;
+  /** Let requests through if the store errors (fail-open). Defaults to express-rate-limit's false (fail-closed). */
+  passOnStoreError?: boolean;
 }
 
 /**
@@ -32,6 +34,9 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
     keyGenerator: (req: Request) =>
       req.user ? `user:${req.user.id}` : ipKeyGenerator(req.ip ?? ""),
     ...(options.store ? { store: options.store } : {}),
+    ...(options.passOnStoreError !== undefined
+      ? { passOnStoreError: options.passOnStoreError }
+      : {}),
   });
 }
 
@@ -57,5 +62,8 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
     ...(options.store ? { store: options.store } : {}),
+    ...(options.passOnStoreError !== undefined
+      ? { passOnStoreError: options.passOnStoreError }
+      : {}),
   });
 }

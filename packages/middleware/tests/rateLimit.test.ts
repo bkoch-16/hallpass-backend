@@ -52,6 +52,17 @@ function stubStore(totalHits = 1) {
   };
 }
 
+function erroringStore() {
+  return {
+    init: vi.fn(),
+    increment: vi.fn(async (_key: string) => {
+      throw new Error("store unavailable");
+    }),
+    decrement: vi.fn(),
+    resetKey: vi.fn(),
+  };
+}
+
 describe("createGeneralLimiter", () => {
   it("returns 429 with the pinned body and draft-8 headers once max is exceeded", async () => {
     const app = generalApp({ limit: 2 });
@@ -142,6 +153,26 @@ describe("createGeneralLimiter", () => {
     expect(res.status).toBe(429);
     expect(res.body).toEqual({ message: "Too many requests" });
   });
+
+  it("fails open (200) when the store errors and passOnStoreError is true", async () => {
+    const store = erroringStore();
+    const app = generalApp({ store, passOnStoreError: true } as LimiterOptions);
+
+    const res = await request(app).get("/");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(store.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays fail-closed (500) on store errors when passOnStoreError is not set", async () => {
+    const store = erroringStore();
+    const app = generalApp({ store } as LimiterOptions);
+
+    const res = await request(app).get("/");
+
+    expect(res.status).toBe(500);
+  });
 });
 
 describe("createAuthLimiter", () => {
@@ -213,6 +244,17 @@ describe("createAuthLimiter", () => {
     const res = await request(app).post("/login").send({ email: "e@example.com" });
 
     expect(res.status).toBe(200);
+    expect(store.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails open (200) when the store errors and passOnStoreError is true", async () => {
+    const store = erroringStore();
+    const app = authApp({ store, passOnStoreError: true } as LimiterOptions);
+
+    const res = await request(app).post("/login").send({ email: "f@example.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
     expect(store.increment).toHaveBeenCalledTimes(1);
   });
 });

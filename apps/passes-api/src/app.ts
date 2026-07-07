@@ -50,6 +50,8 @@ const limiter = createGeneralLimiter(
           sendCommand: (command: string, ...args: string[]) =>
             redis.call(command, ...args) as Promise<RedisReply>,
         }),
+        // fail-open — an Upstash outage must not take down the API; slots/queue paths have their own Redis dependency semantics
+        passOnStoreError: true,
       },
 );
 
