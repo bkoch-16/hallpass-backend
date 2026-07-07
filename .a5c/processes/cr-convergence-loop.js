@@ -23,8 +23,9 @@
 import { defineTask } from '@a5c-ai/babysitter-sdk';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const PROJECT_ROOT = '/Users/bkoch/development/hallpass-backend';
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const BASE_BRANCH = 'develop';
 const MAX_ITERATIONS = 5;
 const MAX_REPLAN_ATTEMPTS = 3;
@@ -100,6 +101,7 @@ export async function process(inputs, ctx) {
 
     let replanCount = 0;
     let escalated = false;
+    let skipIteration = false;
 
     while (!approvalResult.approved && replanCount < MAX_REPLAN_ATTEMPTS) {
       // Escalate only when BOTH agents independently flag it
@@ -122,6 +124,7 @@ export async function process(inputs, ctx) {
         escalated = true;
         if (!bpResult?.approved) {
           ctx.log('warn', 'User rejected escalation — skipping to next iteration');
+          skipIteration = true;
         }
         break;
       }
@@ -154,13 +157,26 @@ export async function process(inputs, ctx) {
       });
     }
 
+    if (skipIteration) {
+      continue;
+    }
+
     // Re-plan exhausted and still not approved (single-agent flag or just disagreement)
     if (!approvalResult.approved && !escalated) {
       ctx.log('warn', `Plan approval exhausted after ${MAX_REPLAN_ATTEMPTS} re-plan attempts`);
+      const dualEscalation = Boolean(approvalResult.needsEscalation && planResult.needsEscalation);
       const bpResult = await ctx.breakpoint({
         title: `Plan Approval Exhausted — Iteration ${iteration}`,
         question: [
           `The fix plan could not be approved after ${MAX_REPLAN_ATTEMPTS} re-plan attempts.`,
+          ...(dualEscalation
+            ? [
+                '',
+                'Both agents flagged this as requiring human input:',
+                `CR/Approval agent: ${approvalResult.escalationReason ?? '(see latest approval-vN.json)'}`,
+                `Planning agent: ${planResult.escalationReason ?? '(see latest fix-plan-vN.json)'}`,
+              ]
+            : []),
           '',
           `Last rejection: ${approvalResult.feedback}`,
           `Artifact directory: ${iterDir}`,
@@ -247,6 +263,12 @@ export async function process(inputs, ctx) {
     loopState.lastCompletedAt = new Date().toISOString();
     fs.writeFileSync(loopStatePath, JSON.stringify(loopState, null, 2));
     ctx.log('info', `Iteration ${iteration} complete — looping back to CR`);
+  }
+
+  if (loopState.status === 'running') {
+    loopState.status = 'max-iterations-reached';
+    loopState.finishedAt = new Date().toISOString();
+    fs.writeFileSync(loopStatePath, JSON.stringify(loopState, null, 2));
   }
 
   return {
@@ -556,7 +578,7 @@ const qualityGatesTask = defineTask('cr-quality-gates', (args, taskCtx) => ({
         'Run these three commands in order, capturing all output:',
         '  1. pnpm build',
         '  2. pnpm lint',
-        '  3. pnpm test run',
+        '  3. pnpm test',
         'Stop on the first failure — do not run subsequent commands if an earlier one fails.',
         'Capture both stdout and stderr for any failing command.',
         `Write results to: ${path.join(args.iterDir, `quality-gates-attempt-${args.attempt}.json`)}`,

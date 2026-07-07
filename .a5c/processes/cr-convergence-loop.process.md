@@ -36,7 +36,7 @@ Each iteration runs these phases in order:
 - Writes summary to `iteration-N/implementation.json`
 
 ### 5. Quality Gates (fresh agent each run, max 3 fix attempts)
-- Runs `pnpm build`, `pnpm lint`, `pnpm test run` in sequence
+- Runs `pnpm build`, `pnpm lint`, `pnpm test` in sequence
 - On failure: fix-quality agent reads the error output and applies targeted fixes
 - Re-runs the suite to verify
 - If still failing after 3 attempts → human breakpoint
@@ -87,11 +87,12 @@ This ensures the loop can be paused, resumed, or migrated across sessions cleanl
 ## How to Run
 
 ```bash
+# From the repository root
 babysitter run:create \
   --process-id cr-convergence-loop \
-  --entry /Users/bkoch/development/hallpass-backend/.a5c/processes/cr-convergence-loop.js#process \
+  --entry .a5c/processes/cr-convergence-loop.js#process \
   --prompt "Run the CR convergence loop until the branch is clean" \
   --harness claude-code \
-  --plugin-root "/Users/bkoch/.claude/plugins/cache/a5c-ai/babysitter/4.0.150" \
+  --plugin-root "$HOME/.claude/plugins/cache/a5c-ai/babysitter/<version>" \
   --json
 ```

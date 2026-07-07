@@ -58,7 +58,7 @@ START
 │  │  ┌──────────────────────┐                               │   │
 │  │  │  pnpm build          │                               │   │
 │  │  │  pnpm lint           │  → quality-gates-attempt-N    │   │
-│  │  │  pnpm test run       │                               │   │
+│  │  │  pnpm test           │                               │   │
 │  │  └──────────┬───────────┘                               │   │
 │  │             │                                            │   │
 │  │         passed?                                          │   │
