@@ -64,12 +64,17 @@ The factories accept a `store` option (test-covered), but passes-api runs the de
 
 **Fix:** add `rate-limit-redis` to passes-api (new dependency — needs approval) and pass a store into the factories in `apps/passes-api/src/app.ts`; `REDIS_PREFIX` namespacing applies.
 
-### 10. better-auth `trustedOrigins` cors parsing duplicated inline
+### 10. better-auth `trustedOrigins` cors parsing duplicated inline — RESOLVED 2026-07-07
 `apps/user-api/src/auth.ts:7` and `apps/schools-api/src/auth.ts:7` still hand-roll the CORS_ORIGIN split/trim ternary for better-auth `trustedOrigins`, duplicating the package's `parseCorsOrigins` split logic (passes-api's `auth.ts` already delegates to it; its `'*'` branch legitimately differs because better-auth wants `undefined` for wildcard). Behavior-neutral duplication.
 
-**Fix:** reuse `parseCorsOrigins` in both files with the same `'*'` → `undefined` mapping passes-api uses.
+**Resolution:** both files now delegate to `parseCorsOrigins` with the same `'*'` → `undefined` mapping passes-api uses; behavior is unchanged.
 
-### 11. Committed curl cookie file with a session token
+### 11. Committed curl cookie file with a session token — RESOLVED 2026-07-07
 `apps/user-api/src/middleware/student-cookies.txt` — a curl cookie jar containing a session token, committed since the initial commit (`728fbe2`). Predates the middleware refactor; surfaced by its leftover sweep.
 
-**Fix:** delete the file (and rotate/invalidate the token if it could still be valid).
+**Resolution:** deleted the file. Checked the leaked token against the local dev DB's `Session` table — no matching row exists, so there was nothing to invalidate.
+
+### 12. Mock-ordering fragility in user-api route tests
+`apps/user-api/tests/routes/user.test.ts` — tests layer `mockResolvedValueOnce` chains on the shared `mockPrisma.user.findFirst` on top of the persistent `mockResolvedValue` set by `authenticateAs()`, so any extra `findFirst` call silently shifts the `Once` queue and intermittently flips assertions. Observed flake signatures: `DELETE /api/users/5` 403→404, and the prisma-throw case 500→200, during the 2026-07-07 tech-debt run.
+
+**Fix:** make each test's mock sequence self-contained (e.g. use `mockImplementation` keyed on call args, or reset and rebuild the full mock chain per test) instead of stacking `Once` values over the shared persistent mock.
