@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-07T17:05:05.355Z — 17 files indexed_
+_Generated: 2026-07-07T17:55:00.810Z — 17 files indexed_
 
 ## File Summaries
 
@@ -34,7 +34,7 @@ Main Express application setup for the user-api service. Configures middleware s
 
 ### `apps/user-api/src/auth.ts`
 
-Thin wrapper that creates and exports the better-auth instance using createAuth from @hallpass/auth, configured with the base URL, secret, and trusted origins parsed from environment variables. Trusted origins are set to undefined (permissive) when CORS_ORIGIN is '*', otherwise split from a comma-separated string.
+Configures and exports the application's authentication instance using `createAuth` from `@hallpass/auth`. It reads configuration from environment variables (`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `CORS_ORIGIN`) via the `env` module. Trusted origins are conditionally set: if `CORS_ORIGIN` is `"*"`, no trusted origins are specified (allowing all); otherwise, origins are parsed using `parseCorsOrigins` from `@hallpass/express-middleware`. Developers modifying this file should be aware of the dependency on the `env.ts` module for validated environment variables and the shared `@hallpass/auth` and `@hallpass/express-middleware` packages.
 
 ### `apps/user-api/src/env.ts`
 
