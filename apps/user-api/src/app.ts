@@ -36,7 +36,11 @@ app.use(express.json());
 // Registered before the rate limiter so LB/uptime probes are never 429'd
 app.get("/health", createHealthRoute("user-api"));
 
-const limiter = createGeneralLimiter();
+// Effectively unlimited under test (NODE_ENV === "test", same convention as
+// passes-api) — route tests share one in-memory IP-keyed counter per file.
+const limiter = createGeneralLimiter(
+  process.env.NODE_ENV === "test" ? { limit: Number.MAX_SAFE_INTEGER } : {},
+);
 
 const authLimiter = createAuthLimiter();
 
