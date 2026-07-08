@@ -23,11 +23,16 @@ export interface RateLimiterOptions {
  * the limiter. With the typical mount order (limiter in app.ts before any
  * auth middleware), req.user is never set at keying time, so general traffic
  * keys per-IP. Defaults to 100 requests per 15-minute window per key.
+ * Under NODE_ENV === "test" the default limit is Number.MAX_SAFE_INTEGER so
+ * supertest suites sharing one in-memory IP-keyed counter per file never
+ * 429; pass an explicit `limit` to exercise rate limiting in tests.
  */
 export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
     windowMs: options.windowMs ?? FIFTEEN_MINUTES_MS,
-    limit: options.limit ?? 100,
+    limit:
+      options.limit ??
+      (process.env.NODE_ENV === "test" ? Number.MAX_SAFE_INTEGER : 100),
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: { message: "Too many requests" },

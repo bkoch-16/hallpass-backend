@@ -7,3 +7,4 @@ export { roleRank, requireRole, requireSelfOrRole, requireMinRole } from "./role
 export { createGeneralLimiter, createAuthLimiter, type RateLimiterOptions } from "./rateLimit.js";
 export { baseEnvSchema } from "./env.js";
 export { parseCorsOrigins } from "./cors.js";
+export { createTestServer, type TestServerHandle } from "./testing.js";

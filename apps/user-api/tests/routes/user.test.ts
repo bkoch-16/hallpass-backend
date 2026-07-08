@@ -1,6 +1,6 @@
-import { createServer, type Server } from "node:http";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -106,19 +106,10 @@ function authenticateAs(user: FakeUser) {
   });
 }
 
-// One shared server bound explicitly to 127.0.0.1 — supertest's default
-// request(server) spawns a wildcard-bound server per request, whose port a
-// foreign local process can shadow with a specific 127.0.0.1 bind (flaky
-// hangs/ECONNRESET/wrong statuses; tech-debt item 12).
-const server: Server = createServer(app);
+const { server, start, stop } = createTestServer(app);
 
-beforeAll(async () => {
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-});
-
-afterAll(async () => {
-  await new Promise((resolve) => server.close(resolve));
-});
+beforeAll(start);
+afterAll(stop);
 
 beforeEach(() => {
   vi.resetAllMocks();

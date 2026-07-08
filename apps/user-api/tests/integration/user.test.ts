@@ -6,9 +6,9 @@
  * Requires: docker-compose up -d (PostgreSQL on localhost:5432)
  */
 
-import { createServer, type Server } from "node:http";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -27,15 +27,9 @@ vi.mock("@hallpass/auth", () => ({
 import app from "../../src/app.js";
 import { prisma } from "@hallpass/db";
 
-// One shared server bound explicitly to 127.0.0.1 — supertest's default
-// request(server) spawns a wildcard-bound server per request, whose port a
-// foreign local process can shadow with a specific 127.0.0.1 bind (flaky
-// hangs/ECONNRESET/wrong statuses; tech-debt item 12).
-const server: Server = createServer(app);
+const { server, start, stop } = createTestServer(app);
 
-beforeAll(async () => {
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-});
+beforeAll(start);
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -57,7 +51,7 @@ afterAll(async () => {
   await prisma.scheduleType.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.school.deleteMany();
-  await new Promise((resolve) => server.close(resolve));
+  await stop();
   await prisma.$disconnect();
 });
 

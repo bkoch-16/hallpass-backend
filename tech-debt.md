@@ -88,4 +88,4 @@ The factories accept a `store` option (test-covered), but passes-api runs the de
 ### 13. Supertest wildcard-bind exposure in the other services' tests
 The port-collision mechanism from item 12 applies to every test file that calls supertest's `request(app)`: schools-api, passes-api, and `packages/middleware` tests all still spawn wildcard-bound servers per request and are latently exposed (not yet observed flaking there).
 
-**Fix:** apply item 12's pattern — one shared `createServer(app)` per file, `listen(0, "127.0.0.1")` in `beforeAll`, `close` in `afterAll`, `request(server)` at call sites. Check each app's general-limiter headroom while converting (user-api needed a test-mode limit raise).
+**Fix:** use `createTestServer(app)` from `@hallpass/express-middleware` — `const { server, start, stop } = createTestServer(app)`, `beforeAll(start)`, `afterAll(stop)`, `request(server)` at call sites (the three user-api test files show the pattern). General-limiter headroom is no longer a per-app concern: `createGeneralLimiter` now defaults to an effectively unlimited limit under `NODE_ENV === "test"` (user-api's per-app raise was folded into the factory).
