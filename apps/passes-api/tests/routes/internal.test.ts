@@ -31,9 +31,9 @@ vi.mock("../../src/lib/socket.js", () => ({
   initSocket: vi.fn(),
 }));
 
-vi.mock("../../src/lib/queue.js", () => ({
-  schedulePassExpiry: vi.fn().mockResolvedValue(undefined),
-  startExpiryWorker: vi.fn(),
+vi.mock("../../src/lib/expiry.js", () => ({
+  scheduleLocalExpiry: vi.fn(),
+  expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@hallpass/auth", () => ({
@@ -46,9 +46,10 @@ vi.mock("@hallpass/auth", () => ({
 
 import app from "../../src/app";
 import { prisma } from "@hallpass/db";
-import { schedulePassExpiry } from "../../src/lib/queue.js";
+import { scheduleLocalExpiry, expirePass } from "../../src/lib/expiry.js";
 
-const mockSchedulePassExpiry = schedulePassExpiry as unknown as ReturnType<typeof vi.fn>;
+const mockScheduleLocalExpiry = scheduleLocalExpiry as unknown as ReturnType<typeof vi.fn>;
+const mockExpirePass = expirePass as unknown as ReturnType<typeof vi.fn>;
 
 const mockPrisma = prisma as unknown as {
   pass: { findMany: ReturnType<typeof vi.fn> };
@@ -63,8 +64,8 @@ const AUTH_HEADER = "Bearer test-internal-secret";
 beforeEach(() => {
   vi.resetAllMocks();
   // resetAllMocks wipes the module-level mockResolvedValue — the route awaits
-  // schedulePassExpiry, so it must stay a promise
-  mockSchedulePassExpiry.mockResolvedValue(undefined);
+  // expirePass for due passes, so it must stay a promise
+  mockExpirePass.mockResolvedValue(undefined);
   // No waiting passes, no capped destinations/policies unless a test overrides
   mockPrisma.pass.findMany.mockResolvedValue([]);
   mockPrisma.destination.findMany.mockResolvedValue([]);
@@ -103,14 +104,12 @@ describe("POST /internal/reconcile-expiry", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.scheduled).toBe(1);
-    // Immediate expiry (now), NOT rescheduled to today's period end (15:00)
-    expect(mockSchedulePassExpiry).toHaveBeenCalledWith(
-      1,
-      new Date("2026-07-07T10:00:00.000Z"),
-    );
+    // Due now (prior-day) → expired immediately, NOT armed for today's period end (15:00)
+    expect(mockExpirePass).toHaveBeenCalledWith(1);
+    expect(mockScheduleLocalExpiry).not.toHaveBeenCalled();
   });
 
-  it("still reschedules a same-day ACTIVE pass to its period end", async () => {
+  it("arms a same-day ACTIVE pass to its period end", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-07T10:00:00Z"));
 
@@ -129,14 +128,15 @@ describe("POST /internal/reconcile-expiry", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.scheduled).toBe(1);
-    // periodEndDate("15:00", 5, "UTC") for today
-    expect(mockSchedulePassExpiry).toHaveBeenCalledWith(
+    // periodEndDate("15:00", 5, "UTC") for today — future, so arm a local timer
+    expect(mockScheduleLocalExpiry).toHaveBeenCalledWith(
       2,
       new Date("2026-07-07T15:05:00.000Z"),
     );
+    expect(mockExpirePass).not.toHaveBeenCalled();
   });
 
-  it("arms immediate expiry for a pass whose period was deleted", async () => {
+  it("expires a pass immediately when its period was deleted", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-07T10:00:00Z"));
 
@@ -154,9 +154,6 @@ describe("POST /internal/reconcile-expiry", () => {
     const res = await request(app).post(ENDPOINT).set("Authorization", AUTH_HEADER);
 
     expect(res.status).toBe(200);
-    expect(mockSchedulePassExpiry).toHaveBeenCalledWith(
-      3,
-      new Date("2026-07-07T10:00:00.000Z"),
-    );
+    expect(mockExpirePass).toHaveBeenCalledWith(3);
   });
 });

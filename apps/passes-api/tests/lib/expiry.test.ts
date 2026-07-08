@@ -1,34 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { passStatusMock } from "../utils/passStatusMock.js";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
 const {
-  mockQueueAdd,
-  mockQueueGetJob,
-  mockWorkerOn,
   mockPassFindUnique,
   mockPassUpdateMany,
   mockPassFindUniqueOrThrow,
-  mockPeriodFindUnique,
   mockPeriodFindMany,
   mockCalendarFindFirst,
-  mockDestinationFindUnique,
   mockEmitPassEvent,
   mockReleaseAndPromote,
   mockReleasePassSlots,
   mockGetMaxActivePasses,
 } = vi.hoisted(() => ({
-  mockQueueAdd: vi.fn().mockResolvedValue(undefined),
-  mockQueueGetJob: vi.fn().mockResolvedValue(undefined),
-  mockWorkerOn: vi.fn(),
   mockPassFindUnique: vi.fn(),
   mockPassUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
   mockPassFindUniqueOrThrow: vi.fn(),
-  mockPeriodFindUnique: vi.fn(),
   mockPeriodFindMany: vi.fn(),
   mockCalendarFindFirst: vi.fn(),
-  mockDestinationFindUnique: vi.fn(),
   mockEmitPassEvent: vi.fn(),
   mockReleaseAndPromote: vi.fn().mockResolvedValue(undefined),
   mockReleasePassSlots: vi.fn().mockResolvedValue(undefined),
@@ -36,29 +26,6 @@ const {
 }));
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
-
-vi.mock("bullmq", () => ({
-  Queue: class MockQueue {
-    constructor(_name: string, _opts?: unknown) {}
-    add = mockQueueAdd;
-    getJob = mockQueueGetJob;
-  },
-  Worker: class MockWorker {
-    constructor(_name: string, _processor: unknown, _opts?: unknown) {}
-    on = mockWorkerOn;
-  },
-}));
-
-vi.mock("ioredis", () => ({
-  default: class MockRedis {
-    constructor(_url: string, _opts?: unknown) {}
-    on = vi.fn();
-  },
-}));
-
-vi.mock("../../src/env.js", () => ({
-  env: { REDIS_URL: "redis://localhost:6379", REDIS_PREFIX: "test" },
-}));
 
 vi.mock("@hallpass/db", () => ({
   PassStatus: passStatusMock,
@@ -70,14 +37,10 @@ vi.mock("@hallpass/db", () => ({
       findUniqueOrThrow: mockPassFindUniqueOrThrow,
     },
     period: {
-      findUnique: mockPeriodFindUnique,
       findMany: mockPeriodFindMany,
     },
     schoolCalendar: {
       findFirst: mockCalendarFindFirst,
-    },
-    destination: {
-      findUnique: mockDestinationFindUnique,
     },
   },
 }));
@@ -95,14 +58,11 @@ vi.mock("../../src/lib/socket.js", () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
-import { schedulePassExpiry, processPassExpiry } from "../../src/lib/queue.js";
-import type { Job } from "bullmq";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeJob(passId: number): Job {
-  return { data: { passId } } as unknown as Job;
-}
+import {
+  scheduleLocalExpiry,
+  expirePass,
+  clearAllExpiryTimers,
+} from "../../src/lib/expiry.js";
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -110,90 +70,62 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("schedulePassExpiry", () => {
-  it("calls Queue.add with jobId pass-<id> and positive delay for future date", async () => {
-    const futureDate = new Date(Date.now() + 60_000);
-
-    await schedulePassExpiry(1, futureDate);
-
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "expire",
-      { passId: 1 },
-      expect.objectContaining({
-        jobId: "pass-1",
-        delay: expect.any(Number),
-      }),
-    );
-
-    const callArgs = mockQueueAdd.mock.calls[0][2] as { delay: number };
-    expect(callArgs.delay).toBeGreaterThan(0);
-    expect(callArgs.delay).toBeLessThanOrEqual(60_000);
+describe("scheduleLocalExpiry", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // expirePass returns early after findUnique unless a test says otherwise
+    mockPassFindUnique.mockResolvedValue(null);
   });
 
-  it("sets delay to 0 for past dates (Math.max(0, ...))", async () => {
-    const pastDate = new Date(Date.now() - 10_000);
-
-    await schedulePassExpiry(5, pastDate);
-
-    const callArgs = mockQueueAdd.mock.calls[0][2] as { delay: number };
-    expect(callArgs.delay).toBe(0);
+  afterEach(() => {
+    clearAllExpiryTimers();
+    vi.useRealTimers();
   });
 
-  it("uses correct jobId for different pass IDs", async () => {
-    await schedulePassExpiry(42, new Date(Date.now() + 1000));
+  it("arms a timer that expires the pass at fireAt", async () => {
+    scheduleLocalExpiry(1, new Date(Date.now() + 60_000));
+    expect(mockPassFindUnique).not.toHaveBeenCalled();
 
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "expire",
-      { passId: 42 },
-      expect.objectContaining({ jobId: "pass-42" }),
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(mockPassFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 } }),
     );
   });
 
-  it("evicts a completed job with the same id before re-adding", async () => {
-    const remove = vi.fn().mockResolvedValue(undefined);
-    mockQueueGetJob.mockResolvedValueOnce({
-      getState: vi.fn().mockResolvedValue("completed"),
-      remove,
-    });
+  it("fires ~immediately for a past fireAt (delay clamps to 0)", async () => {
+    scheduleLocalExpiry(3, new Date(Date.now() - 1000));
 
-    await schedulePassExpiry(7, new Date(Date.now() + 1000));
+    await vi.advanceTimersByTimeAsync(0);
 
-    expect(remove).toHaveBeenCalled();
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "expire",
-      { passId: 7 },
-      expect.objectContaining({ jobId: "pass-7" }),
+    expect(mockPassFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 3 } }),
     );
   });
 
-  it("evicts a failed job with the same id before re-adding", async () => {
-    const remove = vi.fn().mockResolvedValue(undefined);
-    mockQueueGetJob.mockResolvedValueOnce({
-      getState: vi.fn().mockResolvedValue("failed"),
-      remove,
-    });
+  it("re-arm replaces the prior timer (fires once, at the new time)", async () => {
+    scheduleLocalExpiry(2, new Date(Date.now() + 60_000));
+    scheduleLocalExpiry(2, new Date(Date.now() + 10_000));
 
-    await schedulePassExpiry(8, new Date(Date.now() + 1000));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mockPassFindUnique).toHaveBeenCalledTimes(1);
 
-    expect(remove).toHaveBeenCalled();
-    expect(mockQueueAdd).toHaveBeenCalled();
+    // Old 60s timer was cleared on re-arm — advancing past it fires nothing more
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mockPassFindUnique).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves a live delayed job untouched (add stays a dedup no-op)", async () => {
-    const remove = vi.fn();
-    mockQueueGetJob.mockResolvedValueOnce({
-      getState: vi.fn().mockResolvedValue("delayed"),
-      remove,
-    });
+  it("clearAllExpiryTimers cancels pending timers", async () => {
+    scheduleLocalExpiry(4, new Date(Date.now() + 10_000));
+    clearAllExpiryTimers();
 
-    await schedulePassExpiry(9, new Date(Date.now() + 1000));
+    await vi.advanceTimersByTimeAsync(20_000);
 
-    expect(remove).not.toHaveBeenCalled();
-    expect(mockQueueAdd).toHaveBeenCalled();
+    expect(mockPassFindUnique).not.toHaveBeenCalled();
   });
 });
 
-describe("processPassExpiry — terminal statuses", () => {
+describe("expirePass — terminal statuses", () => {
   it("skips a COMPLETED pass without updating", async () => {
     mockPassFindUnique.mockResolvedValue({
       id: 1,
@@ -204,7 +136,7 @@ describe("processPassExpiry — terminal statuses", () => {
       period: { endTime: "15:00", scheduleTypeId: 5 },
     });
 
-    await processPassExpiry(makeJob(1));
+    await expirePass(1);
 
     expect(mockPassUpdateMany).not.toHaveBeenCalled();
     expect(mockEmitPassEvent).not.toHaveBeenCalled();
@@ -220,7 +152,7 @@ describe("processPassExpiry — terminal statuses", () => {
       period: { endTime: "15:00", scheduleTypeId: 5 },
     });
 
-    await processPassExpiry(makeJob(2));
+    await expirePass(2);
 
     expect(mockPassUpdateMany).not.toHaveBeenCalled();
   });
@@ -235,7 +167,7 @@ describe("processPassExpiry — terminal statuses", () => {
       period: null,
     });
 
-    await processPassExpiry(makeJob(3));
+    await expirePass(3);
 
     expect(mockPassUpdateMany).not.toHaveBeenCalled();
   });
@@ -250,7 +182,7 @@ describe("processPassExpiry — terminal statuses", () => {
       period: null,
     });
 
-    await processPassExpiry(makeJob(4));
+    await expirePass(4);
 
     expect(mockPassUpdateMany).not.toHaveBeenCalled();
   });
@@ -258,14 +190,14 @@ describe("processPassExpiry — terminal statuses", () => {
   it("returns early when pass not found", async () => {
     mockPassFindUnique.mockResolvedValue(null);
 
-    await processPassExpiry(makeJob(999));
+    await expirePass(999);
 
     expect(mockPassUpdateMany).not.toHaveBeenCalled();
     expect(mockEmitPassEvent).not.toHaveBeenCalled();
   });
 });
 
-describe("processPassExpiry — PENDING pass", () => {
+describe("expirePass — PENDING pass", () => {
   it("updates PENDING pass to EXPIRED and emits pass:expired", async () => {
     const pass = {
       id: 10,
@@ -281,7 +213,7 @@ describe("processPassExpiry — PENDING pass", () => {
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
-    await processPassExpiry(makeJob(10));
+    await expirePass(10);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 10, status: { in: ["PENDING", "WAITING"] } },
@@ -292,7 +224,7 @@ describe("processPassExpiry — PENDING pass", () => {
   });
 });
 
-describe("processPassExpiry — WAITING pass", () => {
+describe("expirePass — WAITING pass", () => {
   it("updates WAITING pass to EXPIRED and emits pass:expired", async () => {
     const pass = {
       id: 11,
@@ -308,7 +240,7 @@ describe("processPassExpiry — WAITING pass", () => {
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
-    await processPassExpiry(makeJob(11));
+    await expirePass(11);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 11, status: { in: ["PENDING", "WAITING"] } },
@@ -318,7 +250,7 @@ describe("processPassExpiry — WAITING pass", () => {
   });
 });
 
-describe("processPassExpiry — ACTIVE pass", () => {
+describe("expirePass — ACTIVE pass", () => {
   it("marks ACTIVE pass COMPLETED with pass:returned when it IS the last period", async () => {
     const pass = {
       id: 20,
@@ -336,11 +268,10 @@ describe("processPassExpiry — ACTIVE pass", () => {
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
     // checkIsLastPeriod: current period found, calendar found, NO later periods
-    mockPeriodFindUnique.mockResolvedValue({ id: 3, endTime: "15:00", scheduleTypeId: 5 });
     mockCalendarFindFirst.mockResolvedValue({ id: 1, schoolId: 1, scheduleTypeId: 5 });
     mockPeriodFindMany.mockResolvedValue([]); // no later periods → is last
 
-    await processPassExpiry(makeJob(20));
+    await expirePass(20);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 20, status: "ACTIVE" },
@@ -368,13 +299,12 @@ describe("processPassExpiry — ACTIVE pass", () => {
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
     // checkIsLastPeriod: there IS a later period
-    mockPeriodFindUnique.mockResolvedValue({ id: 3, endTime: "10:00", scheduleTypeId: 5 });
     mockCalendarFindFirst.mockResolvedValue({ id: 1, schoolId: 1, scheduleTypeId: 5 });
     mockPeriodFindMany.mockResolvedValue([
       { id: 4, endTime: "12:00", startTime: "10:30", scheduleTypeId: 5 },
     ]);
 
-    await processPassExpiry(makeJob(21));
+    await expirePass(21);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 21, status: "ACTIVE" },
@@ -406,14 +336,13 @@ describe("processPassExpiry — ACTIVE pass", () => {
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
-    mockPeriodFindUnique.mockResolvedValue({ id: 3, endTime: "09:50", scheduleTypeId: 5 });
     mockCalendarFindFirst.mockResolvedValue({ id: 1, schoolId: 1, scheduleTypeId: 5 });
     // Next period starts exactly when this one ends — must still count as a later period
     mockPeriodFindMany.mockResolvedValue([
       { id: 4, endTime: "10:40", startTime: "09:50", scheduleTypeId: 5 },
     ]);
 
-    await processPassExpiry(makeJob(22));
+    await expirePass(22);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 22, status: "ACTIVE" },
@@ -439,7 +368,7 @@ describe("processPassExpiry — ACTIVE pass", () => {
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
 
-    await processPassExpiry(makeJob(22));
+    await expirePass(22);
 
     expect(mockPassUpdateMany).toHaveBeenCalledWith({
       where: { id: 22, status: "ACTIVE" },
@@ -448,7 +377,7 @@ describe("processPassExpiry — ACTIVE pass", () => {
     expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:returned");
   });
 
-  it("uses the job-fired-at time, not current time, for calendar lookup", async () => {
+  it("uses the fired-at time, not current time, for calendar lookup", async () => {
     const pass = {
       id: 23,
       status: "ACTIVE",
@@ -463,11 +392,10 @@ describe("processPassExpiry — ACTIVE pass", () => {
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
     mockPassFindUniqueOrThrow.mockResolvedValue(updatedPass);
-    mockPeriodFindUnique.mockResolvedValue({ id: 3, endTime: "15:00", scheduleTypeId: 5 });
     mockCalendarFindFirst.mockResolvedValue({ id: 1, schoolId: 1, scheduleTypeId: 5 });
     mockPeriodFindMany.mockResolvedValue([]); // no later periods → is last
 
-    await processPassExpiry(makeJob(23));
+    await expirePass(23);
 
     // The calendar lookup must have been invoked, confirming the referenceDate code path runs
     expect(mockCalendarFindFirst).toHaveBeenCalledOnce();

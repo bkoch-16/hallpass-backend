@@ -4,7 +4,7 @@ import { baseEnvSchema } from "@hallpass/express-middleware";
 const envSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().optional().default(3003),
   REDIS_URL: z.string().url(),
-  // Namespaces all Redis keys (BullMQ, slot counters, socket.io pub/sub) —
+  // Namespaces all Redis keys (slot counters, rate-limit, socket.io pub/sub) —
   // dev and prod share a single Upstash database (free tier), so each
   // environment MUST set a distinct prefix ("dev" / "prod"; "local" for local dev).
   // Required with no default: a missing value fails at boot rather than

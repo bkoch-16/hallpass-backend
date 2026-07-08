@@ -12,9 +12,9 @@ redis.on("error", (err) => {
 });
 
 /**
- * Creates a Redis connection for blocking consumers (BullMQ queue/worker
- * connections, the socket.io adapter's pub client), which require
- * `maxRetriesPerRequest: null` so blocking commands are never cut short.
+ * Creates a Redis connection for blocking consumers (the socket.io adapter's
+ * pub client), which require `maxRetriesPerRequest: null` so blocking commands
+ * are never cut short.
  */
 export function createBlockingRedis(): Redis {
   return new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
