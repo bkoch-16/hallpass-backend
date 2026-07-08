@@ -1,54 +1,60 @@
-import { Queue, Worker, type Job } from "bullmq";
-import type Redis from "ioredis";
 import { logger } from "@hallpass/logger";
-import { env } from "../env.js";
 import { prisma, PassStatus } from "@hallpass/db";
-import { createBlockingRedis } from "./redis.js";
 import { releaseAndPromote, releasePassSlots, getMaxActivePasses } from "./slots.js";
 import { calendarDate, getTodayInTimezone } from "./time.js";
 import { emitPassEvent } from "./socket.js";
 
-const bullmqConnection = createBlockingRedis();
+// setTimeout stores the delay in a 32-bit int; anything larger fires immediately.
+// Passes always expire same-day so this is only a footgun guard — beyond the
+// ceiling we skip the timer and let the reconcile sweep pick the pass up.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
-export const passExpiryQueue = new Queue("pass-expiry", {
-  connection: bullmqConnection,
-  prefix: env.REDIS_PREFIX,
-  defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: 50,
-    // processPassExpiry is idempotent (status-guarded updateMany), so retrying
-    // a transiently failed job is safe
-    attempts: 3,
-    backoff: { type: "exponential", delay: 5_000 },
-  },
-});
+// In-process timers keyed by passId. A pass expires promptly while its instance
+// is warm (i.e. exactly when a staff board is watching, since an open WebSocket
+// keeps the instance up); if the instance sleeps first the timer is lost and the
+// `passes-reconcile-expiry` sweep resolves the pass on its next run.
+const timers = new Map<number, NodeJS.Timeout>();
 
-// Uses a stable jobId so duplicate calls are idempotent (safe to call on pass creation and via
-// reconcile-expiry). BullMQ silently ignores add() while a job with this id exists in any state,
-// so a job lingering in the completed/failed sets would block reconcile from re-arming expiry
-// (e.g. a pass promoted WAITING→ACTIVE concurrently with its expiry fire, or a job that
-// exhausted its retries) — evict those before adding. Live delayed/waiting/active jobs are left
-// untouched, so reconcile still cannot correct a stale fire time for an existing delayed job —
-// it only re-queues jobs that are dead or were lost entirely (e.g. after a Redis flush).
-export async function schedulePassExpiry(
-  passId: number,
-  periodEndTime: Date,
-): Promise<void> {
-  const jobId = `pass-${passId}`;
-  const existing = await passExpiryQueue.getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === "completed" || state === "failed") {
-      await existing.remove();
-    }
+/**
+ * Arm (or re-arm) an in-process timer that expires `passId` at `fireAt`.
+ * Idempotent: replaces any existing timer for the id, so calling it again on
+ * reconcile or a policy change simply moves the fire time.
+ */
+export function scheduleLocalExpiry(passId: number, fireAt: Date): void {
+  const existing = timers.get(passId);
+  if (existing) clearTimeout(existing);
+
+  const delay = Math.max(0, fireAt.getTime() - Date.now());
+  if (delay > MAX_TIMER_DELAY_MS) {
+    timers.delete(passId);
+    return;
   }
-  const delay = Math.max(0, periodEndTime.getTime() - Date.now());
-  await passExpiryQueue.add("expire", { passId }, { jobId, delay });
+
+  const timer = setTimeout(() => {
+    timers.delete(passId);
+    void expirePass(passId).catch((err) =>
+      logger.error({ passId, err }, "[expiry] timer expiry failed"),
+    );
+  }, delay);
+  // Don't let a pending expiry timer keep the process alive during shutdown.
+  timer.unref();
+  timers.set(passId, timer);
 }
 
-export async function processPassExpiry(job: Job): Promise<void> {
-  const jobFiredAt = new Date();
-  const { passId } = job.data as { passId: number };
+/** Clear all pending expiry timers (graceful shutdown / tests). */
+export function clearAllExpiryTimers(): void {
+  for (const timer of timers.values()) clearTimeout(timer);
+  timers.clear();
+}
+
+/**
+ * Resolve a due pass: expire PENDING/WAITING, and for ACTIVE either COMPLETE it
+ * on the last period of the day or EXPIRE + promote the next WAITING student.
+ * Idempotent — every write is a status-guarded updateMany, so a duplicate call
+ * (timer + overlapping reconcile) is safe.
+ */
+export async function expirePass(passId: number): Promise<void> {
+  const firedAt = new Date();
   const pass = await prisma.pass.findUnique({
     where: { id: passId },
     include: {
@@ -81,7 +87,7 @@ export async function processPassExpiry(job: Job): Promise<void> {
   }
 
   if (pass.status === PassStatus.ACTIVE) {
-    const isLastPeriod = await checkIsLastPeriod(pass, jobFiredAt);
+    const isLastPeriod = await checkIsLastPeriod(pass, firedAt);
     const maxOccupancy = pass.destination.maxOccupancy;
 
     if (isLastPeriod) {
@@ -110,48 +116,6 @@ export async function processPassExpiry(job: Job): Promise<void> {
       const updated = await prisma.pass.findUniqueOrThrow({ where: { id: passId } });
       emitPassEvent(updated, "pass:expired");
       await releaseAndPromote(pass.schoolId, pass.destinationId, maxOccupancy);
-    }
-  }
-}
-
-// BullMQ does not close caller-provided ioredis instances on close() — keep a
-// reference so closeQueue() can quit it during shutdown.
-let workerConnection: Redis | undefined;
-
-export function startExpiryWorker(): Worker {
-  workerConnection = createBlockingRedis();
-  const worker = new Worker("pass-expiry", processPassExpiry, {
-    connection: workerConnection,
-    prefix: env.REDIS_PREFIX,
-  });
-
-  worker.on("error", (err) => logger.error(err, "[queue] worker error"));
-  worker.on("failed", (job, err) =>
-    logger.error({ jobId: job?.id, passId: job?.data?.passId, err }, "[queue] job failed"),
-  );
-  return worker;
-}
-
-/**
- * Close the expiry queue and its Redis connections. Call worker.close() first
- * so in-flight jobs finish before the connections go away.
- */
-export async function closeQueue(): Promise<void> {
-  try {
-    await passExpiryQueue.close();
-  } catch (err) {
-    logger.error(err, "[queue] error closing expiry queue");
-  }
-  try {
-    await bullmqConnection.quit();
-  } catch (err) {
-    logger.error(err, "[queue] error closing queue connection");
-  }
-  if (workerConnection) {
-    try {
-      await workerConnection.quit();
-    } catch (err) {
-      logger.error(err, "[queue] error closing worker connection");
     }
   }
 }

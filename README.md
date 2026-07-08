@@ -28,7 +28,7 @@ See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API desi
 
 - `apps/user-api` - User management REST API (Express)
 - `apps/schools-api` - Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API (Express)
-- `apps/passes-api` - Hall pass lifecycle REST API with real-time WebSocket (Socket.io) and delayed job processing (BullMQ)
+- `apps/passes-api` - Hall pass lifecycle REST API with real-time WebSocket (Socket.io) and scheduled pass expiry (in-process timers + reconcile-sweep backstop)
 - `packages/auth` - Authentication layer (better-auth)
 - `packages/db` - Database access layer (Prisma + PostgreSQL)
 

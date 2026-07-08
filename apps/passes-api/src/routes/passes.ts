@@ -24,7 +24,7 @@ import {
   getMaxActivePasses,
 } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
-import { schedulePassExpiry } from "../lib/queue.js";
+import { scheduleLocalExpiry } from "../lib/expiry.js";
 import {
   periodEndDate,
   getTodayInTimezone,
@@ -284,14 +284,14 @@ router.post(
       emitPassEvent(pass, slotClaimed ? "pass:approved" : "pass:waiting");
     }
 
-    void schedulePassExpiry(
+    scheduleLocalExpiry(
       pass.id,
       periodEndDate(
         activePeriod.endTime,
         activePeriod.scheduleType?.endBuffer ?? 0,
         timezone,
       ),
-    ).catch((err) => logger.warn(err, "Failed to schedule pass expiry — will be recovered by reconcile"));
+    );
 
     res.status(201).json(toPassResponse(pass));
   },

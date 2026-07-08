@@ -42,9 +42,9 @@ vi.mock("../src/lib/socket.js", () => ({
   initSocket: vi.fn(),
 }));
 
-vi.mock("../src/lib/queue.js", () => ({
-  schedulePassExpiry: vi.fn(),
-  startExpiryWorker: vi.fn(),
+vi.mock("../src/lib/expiry.js", () => ({
+  scheduleLocalExpiry: vi.fn(),
+  expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@hallpass/auth", () => ({

@@ -4,7 +4,7 @@ Hallpass backend — a Node.js monorepo providing API services for a digital hal
 ## Packages
 - `apps/user-api` — Main Express 5 REST API
 - `apps/schools-api` — Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API
-- `apps/passes-api` — Hall pass lifecycle REST API with real-time WebSocket support and delayed job processing
+- `apps/passes-api` — Hall pass lifecycle REST API with real-time WebSocket support and scheduled pass expiry
 - `packages/auth` — Authentication layer (better-auth)
 - `packages/db` — Database access (Prisma + PostgreSQL)
 - `packages/logger` — Shared structured logging (Pino)
@@ -176,9 +176,9 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 
 ### Dependencies
 - **Neon Postgres** (`DATABASE_URL`) — primary data store via Prisma
-- **Upstash Redis** (`REDIS_URL`) — Socket.io adapter (pub/sub across instances) and BullMQ job queue
+- **Upstash Redis** (`REDIS_URL`) — Socket.io adapter (pub/sub across instances), slot counters, and the rate-limit store
 - **Socket.io** — WebSocket upgrade handled on the same HTTP server; real-time pass status events
-- **BullMQ** — delayed job processing (e.g., auto-expiring passes); worker starts with the server process
+- **Pass expiry** — an in-process `setTimeout` per pass fires at the period end while the instance is warm (which it is whenever a staff board is connected). No polling worker. The `passes-reconcile-expiry` Cloud Scheduler job (`*/10`) is the cold-path backstop: it expires any pass that came due while no instance was warm and re-arms timers on a freshly-woken instance. Worst-case expiry lag = the scheduler interval.
 
 ### Required Environment Variables
 | Variable             | Description                                              |
@@ -186,15 +186,15 @@ GitHub Actions workflow: lint → build → test → Docker build → push to GC
 | `DATABASE_URL`       | Neon Postgres connection string                          |
 | `BETTER_AUTH_URL`    | Base URL of the auth service                             |
 | `BETTER_AUTH_SECRET` | Shared secret for better-auth session verification       |
-| `REDIS_URL`          | Upstash Redis URL (used by Socket.io adapter and BullMQ) |
-| `REDIS_PREFIX`       | Per-environment Redis key namespace (`dev` / `prod`; use `local` for local dev). Required — no default; boot fails with a ZodError if unset. Dev and prod share one Upstash DB (free tier), so this MUST differ per environment or workers cross-consume BullMQ jobs |
+| `REDIS_URL`          | Upstash Redis URL (Socket.io adapter, slot counters, rate-limit store) |
+| `REDIS_PREFIX`       | Per-environment Redis key namespace (`dev` / `prod`; use `local` for local dev). Required — no default; boot fails with a ZodError if unset. Dev and prod share one Upstash DB (free tier), so this MUST differ per environment or the two cross-contaminate each other's slot counters, rate-limit keys, and socket.io adapter channels |
 | `CORS_ORIGIN`        | Allowed CORS origin(s)                                   |
 | `INTERNAL_SECRET`    | Shared secret for the /internal/* routes (Cloud Scheduler) |
 | `PORT`               | HTTP listen port (defaults to `3003`)                    |
 
 ### Notes
 - Socket.io WebSocket upgrade is handled on the same HTTP server instance — no separate WS server or port needed.
-- BullMQ workers are started in-process when the server boots; Redis must be reachable before the server accepts traffic.
+- Pass expiry runs on in-process timers, not a job queue — no worker process to start. Redis is still used (Socket.io adapter, slot counters, rate-limit) but the connection is lazy, so a brief Redis outage does not block boot.
 - Env vars and secrets are managed directly on the Cloud Run service via GCP Secret Manager — nothing is passed through the workflow.
 
 Secrets are managed directly on the Cloud Run service (not in the workflow).
@@ -231,12 +231,13 @@ gcloud scheduler jobs create http passes-reconcile-expiry \
 
 Verify: `/health` returns 200; `gcloud scheduler jobs run passes-reconcile-expiry --location us-west1` succeeds and logs `{scheduled, reconciled}`; Upstash data browser shows `prod:*` keys alongside `dev:*` with no unprefixed strays.
 
-One-time legacy key cleanup (after the prefixed deploy is verified): the pre-prefix deploy left unprefixed keys in the shared DB — `bull:pass-expiry:*` (BullMQ bookkeeping: completed/failed sets and meta have no TTL and persist forever on a noeviction free-tier DB), `slots:*` counters (24h TTL, self-expire), and the default `socket.io` adapter channel state. Delete them from the Upstash data browser, or via redis-cli:
+One-time BullMQ key cleanup (after this deploy is verified): pass expiry no longer uses BullMQ, so all of its keys are permanently dead — the pre-prefix `bull:pass-expiry:*` set (completed/failed sets and meta have no TTL and persist forever on a noeviction free-tier DB) plus the prefixed `{dev,prod}:pass-expiry:*` keys from the BullMQ era. The old `slots:*` counters (24h TTL, self-expire) and default `socket.io` adapter channel state from the pre-prefix deploy can go too. Delete them from the Upstash data browser, or via redis-cli:
 
-    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'bull:*' | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
-    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'slots:*' | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
+    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'bull:*'         | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
+    redis-cli --tls -u "$REDIS_URL" --scan --pattern '*:pass-expiry:*' | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
+    redis-cli --tls -u "$REDIS_URL" --scan --pattern 'slots:*'        | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
 
-Safe to run: any expiry jobs that were pending under the old unprefixed queue are re-armed by the `passes-reconcile-expiry` scheduler job under the new prefix.
+Safe to run: expiry is now driven by in-process timers and the `passes-reconcile-expiry` sweep, so no queued jobs are lost — any in-flight pass is re-armed or expired on the next scheduler run.
 
 ## Conventions
 

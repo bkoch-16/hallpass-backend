@@ -41,8 +41,9 @@ vi.mock("../../src/lib/socket.js", () => ({
   initSocket: vi.fn(),
 }));
 
-vi.mock("../../src/lib/queue.js", () => ({
-  schedulePassExpiry: vi.fn().mockResolvedValue(undefined),
+vi.mock("../../src/lib/expiry.js", () => ({
+  scheduleLocalExpiry: vi.fn(),
+  expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
 import app from "../../src/app";
