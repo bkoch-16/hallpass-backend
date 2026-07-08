@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createGeneralLimiter, createAuthLimiter } from "../src/rateLimit";
@@ -64,6 +64,10 @@ function erroringStore() {
 }
 
 describe("createGeneralLimiter", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("returns 429 with the pinned body and draft-8 headers once max is exceeded", async () => {
     const app = generalApp({ limit: 2 });
 
@@ -109,7 +113,6 @@ describe("createGeneralLimiter", () => {
   it("defaults to 100 requests per 15-minute window outside test env", async () => {
     vi.stubEnv("NODE_ENV", "production");
     const app = generalApp();
-    vi.unstubAllEnvs();
 
     for (let i = 0; i < 100; i++) {
       const res = await request(app).get("/");
