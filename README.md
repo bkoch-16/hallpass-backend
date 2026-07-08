@@ -1,7 +1,7 @@
 # hallpass-backend
 
 Monorepo for HallPass backend services. The objective of this project is to build a fully functional school hallpass system.
-Designed as a microservice deployment with separate APIs for Users, Passes, Schools, Schedules, Destinations.
+Designed as a microservice deployment with separate APIs for Users, Passes, and Schools (which covers schedules, destinations, and pass policy).
 
 ## Stack
 
