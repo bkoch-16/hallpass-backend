@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -31,15 +32,20 @@ const mockPrisma = prisma as unknown as {
   user: { findFirst: ReturnType<typeof vi.fn> };
 };
 
+const { server, start, stop } = createTestServer(app);
+
+beforeAll(start);
+afterAll(stop);
+
 describe("Helmet security headers", () => {
   it("sets X-Content-Type-Options: nosniff on all responses", async () => {
-    const res = await request(app).get("/health");
+    const res = await request(server).get("/health");
 
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 
   it("sets X-Frame-Options on all responses", async () => {
-    const res = await request(app).get("/health");
+    const res = await request(server).get("/health");
 
     expect(res.headers["x-frame-options"]).toBeDefined();
   });
@@ -47,13 +53,13 @@ describe("Helmet security headers", () => {
 
 describe("CORS headers", () => {
   it("returns Access-Control-Allow-Origin for allowed origin", async () => {
-    const res = await request(app).get("/health").set("Origin", "http://localhost:3000");
+    const res = await request(server).get("/health").set("Origin", "http://localhost:3000");
 
     expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
   });
 
   it("does not return Access-Control-Allow-Origin for disallowed origin", async () => {
-    const res = await request(app).get("/health").set("Origin", "http://example.com");
+    const res = await request(server).get("/health").set("Origin", "http://example.com");
 
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
@@ -64,7 +70,7 @@ describe("Global error handler", () => {
     mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
     mockPrisma.user.findFirst.mockRejectedValue(new Error("DB connection lost"));
 
-    const res = await request(app).get("/api/users/me");
+    const res = await request(server).get("/api/users/me");
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ message: "Internal server error" });

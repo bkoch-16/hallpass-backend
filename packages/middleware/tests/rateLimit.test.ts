@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createGeneralLimiter, createAuthLimiter } from "../src/rateLimit";
@@ -64,6 +64,10 @@ function erroringStore() {
 }
 
 describe("createGeneralLimiter", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("returns 429 with the pinned body and draft-8 headers once max is exceeded", async () => {
     const app = generalApp({ limit: 2 });
 
@@ -106,7 +110,8 @@ describe("createGeneralLimiter", () => {
     expect((await request(app).get("/").set("x-user-id", "7")).status).toBe(200);
   });
 
-  it("defaults to 100 requests per 15-minute window", async () => {
+  it("defaults to 100 requests per 15-minute window outside test env", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     const app = generalApp();
 
     for (let i = 0; i < 100; i++) {
@@ -119,6 +124,18 @@ describe("createGeneralLimiter", () => {
     const limited = await request(app).get("/");
     expect(limited.status).toBe(429);
     expect(limited.body).toEqual({ message: "Too many requests" });
+  });
+
+  it('defaults to an effectively unlimited limit under NODE_ENV === "test"', async () => {
+    const app = generalApp();
+
+    const res = await request(app).get("/");
+
+    expect(res.status).toBe(200);
+    // Pins the test-env default: limit Number.MAX_SAFE_INTEGER (q=9007199254740991)
+    expect(res.headers["ratelimit-policy"]).toMatch(
+      new RegExp(`q=${Number.MAX_SAFE_INTEGER};\\s*w=900`),
+    );
   });
 
   it("honors a windowMs override", async () => {
@@ -146,7 +163,7 @@ describe("createGeneralLimiter", () => {
 
   it("lets the custom store's totalHits drive the 429 decision", async () => {
     const store = stubStore(1_000);
-    const app = generalApp({ store } as LimiterOptions);
+    const app = generalApp({ store, limit: 100 } as LimiterOptions);
 
     const res = await request(app).get("/");
 

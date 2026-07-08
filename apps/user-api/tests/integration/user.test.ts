@@ -6,8 +6,9 @@
  * Requires: docker-compose up -d (PostgreSQL on localhost:5432)
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -25,6 +26,10 @@ vi.mock("@hallpass/auth", () => ({
 
 import app from "../../src/app.js";
 import { prisma } from "@hallpass/db";
+
+const { server, start, stop } = createTestServer(app);
+
+beforeAll(start);
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -46,6 +51,7 @@ afterAll(async () => {
   await prisma.scheduleType.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.school.deleteMany();
+  await stop();
   await prisma.$disconnect();
 });
 
@@ -80,7 +86,7 @@ describe("GET /api/users/me (integration)", () => {
     const user = await seedUser({ role: "TEACHER" });
     authenticateAs(user);
 
-    const res = await request(app).get("/api/users/me");
+    const res = await request(server).get("/api/users/me");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(user.id);
@@ -91,7 +97,7 @@ describe("GET /api/users/me (integration)", () => {
     const user = await seedUser({ role: "TEACHER" });
     authenticateAs(user);
 
-    const res = await request(app).get("/api/users/me");
+    const res = await request(server).get("/api/users/me");
 
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty("deletedAt");
@@ -104,7 +110,7 @@ describe("GET /api/users/me (integration)", () => {
     // filters by deletedAt: null and finds nothing.
     mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 
-    const res = await request(app).get("/api/users/me");
+    const res = await request(server).get("/api/users/me");
 
     expect(res.status).toBe(401);
   });
@@ -117,7 +123,7 @@ describe("GET /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/users/${student.id}`);
+    const res = await request(server).get(`/api/users/${student.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: student.id, email: student.email });
@@ -131,7 +137,7 @@ describe("GET /api/users/:id (integration)", () => {
     const deleted = await seedUser({ deletedAt: new Date(), schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/users/${deleted.id}`);
+    const res = await request(server).get(`/api/users/${deleted.id}`);
 
     expect(res.status).toBe(404);
   });
@@ -145,7 +151,7 @@ describe("GET /api/users (integration)", () => {
     await seedUser({ role: "STUDENT", schoolId: school.id, deletedAt: new Date() });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/users");
+    const res = await request(server).get("/api/users");
 
     expect(res.status).toBe(200);
     // teacher + 1 active student = 2; deleted student excluded
@@ -159,7 +165,7 @@ describe("GET /api/users (integration)", () => {
     await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/users?role=STUDENT");
+    const res = await request(server).get("/api/users?role=STUDENT");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -173,7 +179,7 @@ describe("GET /api/users (integration)", () => {
     await seedUser({ role: "STUDENT", schoolId: school.id }); // not requested
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/users?ids=${a.id}`);
+    const res = await request(server).get(`/api/users?ids=${a.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -185,7 +191,7 @@ describe("GET /api/users (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/users?ids=0");
+    const res = await request(server).get("/api/users?ids=0");
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Invalid ID format" });
@@ -196,7 +202,7 @@ describe("GET /api/users (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/users?cursor=abc");
+    const res = await request(server).get("/api/users?cursor=abc");
 
     expect(res.status).toBe(400);
   });
@@ -206,7 +212,7 @@ describe("GET /api/users (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/users?cursor=0");
+    const res = await request(server).get("/api/users?cursor=0");
 
     expect(res.status).toBe(400);
   });
@@ -217,7 +223,7 @@ describe("POST /api/users (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users")
       .send({ email: "new@test.com", name: "New User" });
 
@@ -234,7 +240,7 @@ describe("POST /api/users (integration)", () => {
     await seedUser({ email: "dup@test.com", role: "STUDENT" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users")
       .send({ email: "dup@test.com", name: "Duplicate" });
 
@@ -246,7 +252,7 @@ describe("POST /api/users (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users")
       .send({ email: "clean@test.com", name: "Clean" });
 
@@ -263,7 +269,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ name: "Updated Name" });
 
@@ -280,7 +286,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ email: "updated@test.com" });
 
@@ -297,7 +303,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ role: "TEACHER" });
 
@@ -312,7 +318,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/nonexistent-id`)
       .send({ name: "Ghost" });
 
@@ -324,7 +330,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const deleted = await seedUser({ deletedAt: new Date() });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${deleted.id}`)
       .send({ name: "Ghost" });
 
@@ -337,7 +343,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ role: "SUPER_ADMIN" });
 
@@ -351,7 +357,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT" });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ name: "My New Name" });
 
@@ -365,7 +371,7 @@ describe("PATCH /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/users/${student.id}`)
       .send({ name: "Clean Response" });
 
@@ -380,7 +386,7 @@ describe("POST /api/users/bulk (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users/bulk")
       .send([
         { email: "bulk1@test.com", name: "Bulk One" },
@@ -402,7 +408,7 @@ describe("POST /api/users/bulk (integration)", () => {
     await seedUser({ email: "existing@test.com", role: "STUDENT" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users/bulk")
       .send([
         { email: "existing@test.com", name: "Duplicate" },
@@ -421,7 +427,7 @@ describe("POST /api/users/bulk (integration)", () => {
     await seedUser({ email: "dup2@test.com", role: "STUDENT" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users/bulk")
       .send([
         { email: "dup1@test.com", name: "Dup One" },
@@ -437,7 +443,7 @@ describe("POST /api/users/bulk (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/users/bulk")
       .send([{ email: "elevated@test.com", name: "Elevated", role: "SUPER_ADMIN" }]);
 
@@ -455,7 +461,7 @@ describe("DELETE /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(`/api/users/${student.id}`);
+    const res = await request(server).delete(`/api/users/${student.id}`);
 
     expect(res.status).toBe(204);
 
@@ -469,8 +475,8 @@ describe("DELETE /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(admin);
 
-    await request(app).delete(`/api/users/${student.id}`);
-    const res = await request(app).get(`/api/users/${student.id}`);
+    await request(server).delete(`/api/users/${student.id}`);
+    const res = await request(server).get(`/api/users/${student.id}`);
 
     expect(res.status).toBe(404);
   });
@@ -482,7 +488,7 @@ describe("DELETE /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: schoolB.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(`/api/users/${student.id}`);
+    const res = await request(server).delete(`/api/users/${student.id}`);
 
     expect(res.status).toBe(404);
 
@@ -496,7 +502,7 @@ describe("DELETE /api/users/:id (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(superAdmin);
 
-    const res = await request(app).delete(`/api/users/${student.id}`);
+    const res = await request(server).delete(`/api/users/${student.id}`);
 
     expect(res.status).toBe(204);
 

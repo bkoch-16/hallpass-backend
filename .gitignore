@@ -8,6 +8,7 @@ apps/demo-ui/config.js
 # Babysitter
 .a5c/logs/
 .a5c/runs/
-.a5c/processes/
+.a5c/processes/*
+!.a5c/processes/cr-convergence-loop.*
 **/.a5c/
 !/.a5c/
