@@ -22,6 +22,10 @@ export function createTestServer(app: RequestListener): TestServerHandle {
     server,
     start: () =>
       new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve)),
-    stop: () => new Promise((resolve) => server.close(() => resolve())),
+    stop: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
   };
 }
