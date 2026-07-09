@@ -9,37 +9,7 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Deployment & migrations 🔴
-
-The live `develop` deploy failure and its root cause live here. Fix as one change
-to the pipeline + entrypoints.
-
-- **Migrations run in the container entrypoint on every boot.**
-  `apps/passes-api/docker-entrypoint.sh:4` (and the `user-api` / `schools-api`
-  equivalents) run `prisma migrate deploy` before `exec node`. On scale-to-zero
-  Cloud Run this blocks every cold start on a DB round-trip.
-- **Concurrent boots contend on one advisory lock.** The deploy matrix
-  (`.github/workflows/deploy.yml:61-64`, `fail-fast: false`) launches all three
-  services at once; they share one `DATABASE_URL` and all call `migrate deploy`,
-  contending on Prisma's fixed advisory lock `pg_advisory_lock(72707369)`.
-- **Cold Neon DB + 10s lock timeout = failed boot.** With Neon scaled to zero,
-  the first connection is slow; stacked on lock contention it exceeds Prisma's
-  10s advisory-lock timeout → `P1002` → `exit(1)` → container never listens on
-  8080 → deploy fails. This is the intermittent failure seen on merge #78
-  (revision `passes-api-dev-00016`); the merge itself was test-only.
-
-**Fix:** run migrations **once** in the pipeline, not per-container.
-- Add a `migrate` job to `deploy.yml` that `needs: validate` and runs
-  `prisma migrate deploy` a single time before the deploy matrix.
-- Remove the `migrate deploy` line from all three `docker-entrypoint.sh` files
-  (leave `exec node …`).
-- Band-aid only if entrypoint migration must stay short-term: `max-parallel: 1`
-  on the matrix + raise the advisory-lock timeout (narrows the window, doesn't
-  close it).
-
----
-
-## 2. Rate limiting 🔴
+## 1. Rate limiting 🔴
 
 All three services share the `@hallpass/express-middleware` limiters; fix once
 there, roll out to all three `app.ts`.
@@ -60,7 +30,7 @@ store. Land it in the shared package so policy is uniform.
 
 ---
 
-## 3. Authorization & user onboarding 🔴🟠
+## 2. Authorization & user onboarding 🔴🟠
 
 Both touch `apps/user-api/src/routes/user.ts` and the auth model.
 
@@ -80,7 +50,7 @@ Both touch `apps/user-api/src/routes/user.ts` and the auth model.
 
 ---
 
-## 4. Cross-service invariants (schools-api ↔ passes-api) 🟠
+## 3. Cross-service invariants (schools-api ↔ passes-api) 🟠
 
 No layer owns the invariants passes-api depends on. Fix the destination case
 (the sharp one) together with the promotion query.
@@ -100,7 +70,7 @@ No layer owns the invariants passes-api depends on. Fix the destination case
 
 ---
 
-## 5. Validation & data integrity 🟠
+## 4. Validation & data integrity 🟠
 
 - **Timezone is unvalidated free text.** `createSchoolSchema` / `updateSchoolSchema`
   (`apps/schools-api/src/schemas/school.ts:18,25`) accept any string. In
@@ -119,7 +89,7 @@ No layer owns the invariants passes-api depends on. Fix the destination case
 
 ---
 
-## 6. Consistency & service drift 🟡
+## 5. Consistency & service drift 🟡
 
 The three apps are copy-paste siblings diverging; converge in
 `@hallpass/express-middleware`.
