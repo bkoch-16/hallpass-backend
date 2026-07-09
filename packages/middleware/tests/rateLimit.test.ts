@@ -1,24 +1,18 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
-import express, { type Request, type Response, type NextFunction } from "express";
+import express from "express";
 import { createGeneralLimiter, createAuthLimiter } from "../src/rateLimit";
 
 type LimiterOptions = Parameters<typeof createGeneralLimiter>[0];
 
 /**
- * Builds an app that authenticates via the `x-user-id` header (simulating
- * the apps' session middleware populating req.user) and then applies the
- * general limiter. Requests without the header are unauthenticated.
+ * Builds an app that applies the general limiter directly. The limiter keys by
+ * the session token (Authorization: Bearer or a *session_token cookie), so
+ * tests drive keying via request headers; requests without either are anonymous
+ * and key per-IP.
  */
 function generalApp(options?: LimiterOptions) {
   const app = express();
-  app.use((req: Request, _res: Response, next: NextFunction) => {
-    const id = req.header("x-user-id");
-    if (id) {
-      req.user = { id: Number(id) } as NonNullable<Request["user"]>;
-    }
-    next();
-  });
   app.use(createGeneralLimiter(options));
   app.get("/", (_req, res) => {
     res.json({ ok: true });
@@ -87,27 +81,39 @@ describe("createGeneralLimiter", () => {
     expect(limited.headers["x-ratelimit-limit"]).toBeUndefined();
   });
 
-  it("isolates counters per authenticated user behind the same IP", async () => {
+  it("isolates counters per session behind the same IP", async () => {
     const app = generalApp({ limit: 2 });
 
-    // User 1 exhausts their own quota
-    expect((await request(app).get("/").set("x-user-id", "1")).status).toBe(200);
-    expect((await request(app).get("/").set("x-user-id", "1")).status).toBe(200);
-    expect((await request(app).get("/").set("x-user-id", "1")).status).toBe(429);
+    // Session 1 (Bearer token) exhausts its own quota
+    const s1 = "Bearer token-one";
+    expect((await request(app).get("/").set("authorization", s1)).status).toBe(200);
+    expect((await request(app).get("/").set("authorization", s1)).status).toBe(200);
+    expect((await request(app).get("/").set("authorization", s1)).status).toBe(429);
 
-    // User 2 shares the IP but has an independent counter
-    expect((await request(app).get("/").set("x-user-id", "2")).status).toBe(200);
+    // Session 2 shares the IP but has an independent counter
+    expect(
+      (await request(app).get("/").set("authorization", "Bearer token-two")).status,
+    ).toBe(200);
+
+    // A session cookie is keyed the same way, independent of the above
+    expect(
+      (await request(app)
+        .get("/")
+        .set("cookie", "better-auth.session_token=cookie-token")).status,
+    ).toBe(200);
   });
 
-  it("falls back to IP keying for unauthenticated requests, independent of user keys", async () => {
+  it("falls back to IP keying for anonymous requests, independent of session keys", async () => {
     const app = generalApp({ limit: 1 });
 
-    // Unauthenticated requests share the IP-keyed counter
+    // Anonymous requests (no token/cookie) share the IP-keyed counter
     expect((await request(app).get("/")).status).toBe(200);
     expect((await request(app).get("/")).status).toBe(429);
 
-    // An authenticated user from the exhausted IP is unaffected
-    expect((await request(app).get("/").set("x-user-id", "7")).status).toBe(200);
+    // A session-bearing request from the exhausted IP is unaffected
+    expect(
+      (await request(app).get("/").set("authorization", "Bearer fresh")).status,
+    ).toBe(200);
   });
 
   it("defaults to 100 requests per 15-minute window outside test env", async () => {

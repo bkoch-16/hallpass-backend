@@ -1,7 +1,48 @@
+import { createHash } from "node:crypto";
 import type { Request } from "express";
 import { rateLimit, ipKeyGenerator, type Store } from "express-rate-limit";
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+
+/**
+ * Extract the better-auth session token from a request without a DB lookup or a
+ * runtime dependency on better-auth: the `Authorization: Bearer` token (the
+ * `bearer()` plugin is enabled), else a cookie whose name contains
+ * `session_token` (matches `better-auth.session_token` and its `__Secure-` /
+ * `__Host-` prefixed forms). Returns undefined for anonymous requests.
+ */
+function sessionToken(req: Request): string | undefined {
+  const authz = req.headers.authorization;
+  if (typeof authz === "string" && authz.startsWith("Bearer ")) {
+    const token = authz.slice(7).trim();
+    if (token) return token;
+  }
+  const cookie = req.headers.cookie;
+  if (typeof cookie === "string") {
+    for (const part of cookie.split(";")) {
+      const eq = part.indexOf("=");
+      if (eq === -1) continue;
+      const name = part.slice(0, eq).trim();
+      if (name.includes("session_token")) {
+        const value = part.slice(eq + 1).trim();
+        if (value) return decodeURIComponent(value);
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Key a request by its session (hashed, so raw tokens never become store keys or
+ * hit logs) when authenticated, else by IP. Keeping the token out of req.user
+ * means this works before any auth middleware runs — no DB round trip.
+ */
+function sessionOrIpKey(req: Request): string {
+  const token = sessionToken(req);
+  return token
+    ? `sess:${createHash("sha256").update(token).digest("hex")}`
+    : ipKeyGenerator(req.ip ?? "");
+}
 
 export interface RateLimiterOptions {
   /** Window length in milliseconds. Defaults to 15 minutes. */
@@ -15,17 +56,21 @@ export interface RateLimiterOptions {
 }
 
 /**
- * General API limiter: keys per authenticated user (req.user.id) so users
- * behind a shared IP (e.g. a school NAT) don't exhaust each other's quota,
- * falling back to per-IP keying for unauthenticated requests.
+ * General API limiter: keys per session (a hash of the better-auth session
+ * token) so users behind a shared IP (e.g. a school NAT) don't exhaust each
+ * other's quota, falling back to per-IP keying for anonymous requests. Keying
+ * off the token rather than req.user means it works before any auth middleware
+ * runs (the limiter is mounted globally, ahead of the per-route requireAuth).
  *
- * Note: per-user keying only applies when req.user is populated upstream of
- * the limiter. With the typical mount order (limiter in app.ts before any
- * auth middleware), req.user is never set at keying time, so general traffic
- * keys per-IP. Defaults to 100 requests per 15-minute window per key.
- * Under NODE_ENV === "test" the default limit is Number.MAX_SAFE_INTEGER so
- * supertest suites sharing one in-memory IP-keyed counter per file never
- * 429; pass an explicit `limit` to exercise rate limiting in tests.
+ * Trade-off: a client sending any token gets its own bucket, so per-token
+ * keying does not bound an attacker who rotates fake tokens (requireAuth still
+ * rejects them). Acceptable for cheap, DB-free per-user fairness; add a coarse
+ * per-IP backstop if DoS hardening is ever needed.
+ *
+ * Defaults to 100 requests per 15-minute window per key. Under
+ * NODE_ENV === "test" the default limit is Number.MAX_SAFE_INTEGER so supertest
+ * suites sharing one counter per file never 429; pass an explicit `limit` to
+ * exercise rate limiting in tests.
  */
 export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
@@ -36,8 +81,7 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: { message: "Too many requests" },
-    keyGenerator: (req: Request) =>
-      req.user ? `user:${req.user.id}` : ipKeyGenerator(req.ip ?? ""),
+    keyGenerator: sessionOrIpKey,
     ...(options.store ? { store: options.store } : {}),
     ...(options.passOnStoreError !== undefined
       ? { passOnStoreError: options.passOnStoreError }
