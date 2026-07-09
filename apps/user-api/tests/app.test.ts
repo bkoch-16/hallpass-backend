@@ -1,9 +1,30 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { createTestServer } from "@hallpass/express-middleware";
 
-const { mockGetSession } = vi.hoisted(() => ({
+const { mockGetSession, mockRedisStore } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
+  mockRedisStore: vi.fn(),
+}));
+
+vi.mock("rate-limit-redis", () => ({
+  RedisStore: class MockRedisStore {
+    init = vi.fn();
+    get = vi.fn();
+    increment = vi.fn();
+    decrement = vi.fn();
+    resetKey = vi.fn();
+    constructor(options: unknown) {
+      mockRedisStore(options);
+    }
+  },
+}));
+
+vi.mock("ioredis", () => ({
+  default: class {
+    on = vi.fn();
+    call = vi.fn();
+  },
 }));
 
 vi.mock("@hallpass/auth", () => ({
@@ -74,5 +95,38 @@ describe("Global error handler", () => {
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ message: "Internal server error" });
+  });
+});
+
+describe("app rate-limit store wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockRedisStore.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the in-memory store under NODE_ENV=test (no Redis server needed)", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+
+    await import("../src/app.js");
+
+    expect(mockRedisStore).not.toHaveBeenCalled();
+  });
+
+  it("wires general + auth RedisStores namespaced under REDIS_PREFIX outside the test env", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
+    vi.stubEnv("REDIS_PREFIX", "test");
+
+    await import("../src/app.js");
+
+    expect(mockRedisStore).toHaveBeenCalledTimes(2);
+    const prefixes = mockRedisStore.mock.calls.map(
+      (c) => (c[0] as { prefix: string }).prefix,
+    );
+    expect(prefixes).toEqual(["test:rl:user-api:general:", "test:rl:user-api:auth:"]);
   });
 });

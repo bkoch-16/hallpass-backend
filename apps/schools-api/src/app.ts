@@ -8,7 +8,9 @@ import {
   createErrorHandler,
   createGeneralLimiter,
   parseCorsOrigins,
+  createRateLimitRedis,
 } from "@hallpass/express-middleware";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
 import districtRouter from "./routes/district.js";
 import schoolRouter from "./routes/school.js";
@@ -17,6 +19,8 @@ import periodRouter from "./routes/period.js";
 import calendarRouter from "./routes/calendar.js";
 import destinationRouter from "./routes/destination.js";
 import policyRouter from "./routes/policy.js";
+
+const redis = createRateLimitRedis(env);
 
 const app = express();
 
@@ -39,7 +43,26 @@ app.use(express.json());
 // Registered before the rate limiter so LB/uptime probes are never 429'd
 app.get("/health", createHealthRoute("schools-api"));
 
-const limiter = createGeneralLimiter();
+// Redis-backed store so limits aggregate across instances and survive cold
+// starts; keys are namespaced by REDIS_PREFIX + service (shared Upstash DB).
+// Skipped under test and when REDIS_URL is unset, falling back to
+// express-rate-limit's in-memory store.
+const useRedisStore = redis !== null && process.env.NODE_ENV !== "test";
+
+const limiter = createGeneralLimiter(
+  useRedisStore
+    ? {
+        store: new RedisStore({
+          prefix: `${env.REDIS_PREFIX}:rl:schools-api:general:`,
+          sendCommand: (command: string, ...args: string[]) =>
+            redis!.call(command, ...args) as Promise<RedisReply>,
+        }),
+        passOnStoreError: true,
+      }
+    : {},
+);
+
+logger.info(`rate-limit store: ${useRedisStore ? "redis" : "in-memory"}`);
 
 app.use(limiter);
 

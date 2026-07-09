@@ -13,6 +13,7 @@
     "@hallpass/db": "workspace:*",
     "@hallpass/logger": "workspace:*",
     "@hallpass/types": "workspace:*",
+    "ioredis": "^5.10.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {

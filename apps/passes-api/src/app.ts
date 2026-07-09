@@ -46,7 +46,7 @@ const limiter = createGeneralLimiter(
     ? {}
     : {
         store: new RedisStore({
-          prefix: `${env.REDIS_PREFIX}:rl:general:`,
+          prefix: `${env.REDIS_PREFIX}:rl:passes-api:general:`,
           sendCommand: (command: string, ...args: string[]) =>
             redis.call(command, ...args) as Promise<RedisReply>,
         }),

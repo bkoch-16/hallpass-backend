@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { passStatusMock } from "./utils/passStatusMock.js";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
@@ -22,29 +21,15 @@ vi.mock("rate-limit-redis", () => ({
   },
 }));
 
+vi.mock("ioredis", () => ({
+  default: class {
+    on = vi.fn();
+    call = vi.fn();
+  },
+}));
+
 vi.mock("@hallpass/db", () => ({
-  PassStatus: passStatusMock,
   prisma: {},
-}));
-
-vi.mock("../src/lib/slots.js", () => ({
-  claimPassSlots: vi.fn(),
-  releasePassSlots: vi.fn(),
-  releaseAndPromote: vi.fn(),
-  getMaxActivePasses: vi.fn(),
-  reconcileSlots: vi.fn(),
-  reconcileSchoolSlots: vi.fn(),
-  promoteFromQueue: vi.fn(),
-}));
-
-vi.mock("../src/lib/socket.js", () => ({
-  emitPassEvent: vi.fn(),
-  initSocket: vi.fn(),
-}));
-
-vi.mock("../src/lib/expiry.js", () => ({
-  scheduleLocalExpiry: vi.fn(),
-  expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@hallpass/auth", () => ({
@@ -75,6 +60,8 @@ describe("app rate-limit store wiring", () => {
 
   it("wires a RedisStore namespaced under REDIS_PREFIX outside the test env", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
+    vi.stubEnv("REDIS_PREFIX", "test");
 
     await import("../src/app.js");
 
@@ -83,7 +70,7 @@ describe("app rate-limit store wiring", () => {
       prefix: string;
       sendCommand: unknown;
     };
-    expect(options.prefix).toBe("test:rl:passes-api:general:");
+    expect(options.prefix).toBe("test:rl:schools-api:general:");
     expect(typeof options.sendCommand).toBe("function");
   });
 });
