@@ -6,8 +6,9 @@
  * Requires: docker-compose up -d
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -60,12 +61,16 @@ function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/districts (integration)", () => {
   it("returns 403 for non-SUPER_ADMIN", async () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(403);
   });
@@ -74,7 +79,7 @@ describe("GET /api/districts (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(0);
@@ -87,7 +92,7 @@ describe("GET /api/districts (integration)", () => {
     await seedDistrict("District B");
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -100,7 +105,7 @@ describe("GET /api/districts (integration)", () => {
     await seedDistrict("Active");
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -113,7 +118,7 @@ describe("GET /api/districts (integration)", () => {
     await seedDistrict("Second");
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/districts?limit=1&cursor=${d1.id}`);
+    const res = await request(server).get(`/api/districts?limit=1&cursor=${d1.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -126,7 +131,7 @@ describe("POST /api/districts (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/districts")
       .send({ name: "New District" });
 
@@ -142,7 +147,7 @@ describe("POST /api/districts (integration)", () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/districts")
       .send({ name: "New District" });
 
@@ -156,7 +161,7 @@ describe("GET /api/districts/:id (integration)", () => {
     const district = await seedDistrict("Test District");
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/districts/${district.id}`);
+    const res = await request(server).get(`/api/districts/${district.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(district.id);
@@ -167,7 +172,7 @@ describe("GET /api/districts/:id (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/districts/99999");
+    const res = await request(server).get("/api/districts/99999");
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "District not found" });
@@ -179,7 +184,7 @@ describe("GET /api/districts/:id (integration)", () => {
     await prisma.district.update({ where: { id: d.id }, data: { deletedAt: new Date() } });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/districts/${d.id}`);
+    const res = await request(server).get(`/api/districts/${d.id}`);
 
     expect(res.status).toBe(404);
   });
@@ -191,7 +196,7 @@ describe("PATCH /api/districts/:id (integration)", () => {
     const district = await seedDistrict("Old Name");
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/districts/${district.id}`)
       .send({ name: "New Name" });
 
@@ -206,7 +211,7 @@ describe("PATCH /api/districts/:id (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).patch("/api/districts/99999").send({ name: "X" });
+    const res = await request(server).patch("/api/districts/99999").send({ name: "X" });
 
     expect(res.status).toBe(404);
   });
@@ -218,7 +223,7 @@ describe("DELETE /api/districts/:id (integration)", () => {
     const district = await seedDistrict("To Delete");
     authenticateAs(superAdmin);
 
-    const res = await request(app).delete(`/api/districts/${district.id}`);
+    const res = await request(server).delete(`/api/districts/${district.id}`);
 
     expect(res.status).toBe(204);
 
@@ -231,8 +236,8 @@ describe("DELETE /api/districts/:id (integration)", () => {
     const district = await seedDistrict("To Delete");
     authenticateAs(superAdmin);
 
-    await request(app).delete(`/api/districts/${district.id}`);
-    const res = await request(app).get("/api/districts");
+    await request(server).delete(`/api/districts/${district.id}`);
+    const res = await request(server).get("/api/districts");
 
     expect(res.body.data.map((d: { id: number }) => d.id)).not.toContain(district.id);
   });
@@ -243,7 +248,7 @@ describe("DELETE /api/districts/:id (integration)", () => {
     await prisma.district.update({ where: { id: d.id }, data: { deletedAt: new Date() } });
     authenticateAs(superAdmin);
 
-    const res = await request(app).delete(`/api/districts/${d.id}`);
+    const res = await request(server).delete(`/api/districts/${d.id}`);
 
     expect(res.status).toBe(404);
   });

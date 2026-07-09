@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -97,11 +98,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe(`GET ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
   });
@@ -110,7 +115,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeTeacher);
     mockPrisma.schoolCalendar.findMany.mockResolvedValue([fakeEntry]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -120,7 +125,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.schoolCalendar.findMany.mockResolvedValue([]);
 
-    await request(app).get(`${BASE}?from=2025-01-01&to=2025-06-30`);
+    await request(server).get(`${BASE}?from=2025-01-01&to=2025-06-30`);
 
     expect(mockPrisma.schoolCalendar.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -134,7 +139,7 @@ describe(`GET ${BASE}`, () => {
   it("returns 400 for invalid date format", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).get(`${BASE}?from=01/01/2025`);
+    const res = await request(server).get(`${BASE}?from=01/01/2025`);
 
     expect(res.status).toBe(400);
   });
@@ -144,7 +149,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send([{ date: "2025-09-01" }]);
+    const res = await request(server).post(BASE).send([{ date: "2025-09-01" }]);
 
     expect(res.status).toBe(401);
   });
@@ -152,7 +157,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
   it("returns 403 when TEACHER attempts bulk upsert", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).post(BASE).send([{ date: "2025-09-01" }]);
+    const res = await request(server).post(BASE).send([{ date: "2025-09-01" }]);
 
     expect(res.status).toBe(403);
   });
@@ -162,7 +167,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
     mockPrisma.schoolCalendar.findUnique.mockResolvedValue(null); // not existing → create
     mockPrisma.schoolCalendar.create.mockResolvedValue(fakeEntry);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send([{ date: "2025-09-01" }, { date: "2025-09-02" }]);
 
@@ -176,7 +181,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
     mockPrisma.schoolCalendar.findUnique.mockResolvedValue(fakeEntry); // existing → update
     mockPrisma.schoolCalendar.update.mockResolvedValue(fakeEntry);
 
-    const res = await request(app).post(BASE).send([{ date: "2025-09-01", note: "Updated" }]);
+    const res = await request(server).post(BASE).send([{ date: "2025-09-01", note: "Updated" }]);
 
     expect(res.status).toBe(200);
     expect(res.body.created).toBe(0);
@@ -188,7 +193,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
     mockPrisma.schoolCalendar.findUnique.mockResolvedValue(null);
     mockPrisma.schoolCalendar.create.mockResolvedValue(fakeEntry);
 
-    const res = await request(app).post(BASE).send({ date: "2025-09-01" });
+    const res = await request(server).post(BASE).send({ date: "2025-09-01" });
 
     expect(res.status).toBe(200);
     expect(res.body.created).toBe(1);
@@ -198,7 +203,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send([{ date: "2025-09-01", scheduleTypeId: 999 }]);
 
@@ -209,7 +214,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
   it("returns 400 for invalid date in bulk array", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post(BASE).send([{ date: "09/01/2025" }]);
+    const res = await request(server).post(BASE).send([{ date: "09/01/2025" }]);
 
     expect(res.status).toBe(400);
   });
@@ -220,7 +225,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/99999`)
       .send({ note: "Updated" });
 
@@ -234,7 +239,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeEntry);
     mockPrisma.schoolCalendar.update.mockResolvedValue(updated);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/1`)
       .send({ note: "Holiday" });
 
@@ -245,7 +250,7 @@ describe(`PATCH ${BASE}/:id`, () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch(`${BASE}/1`).send({});
+    const res = await request(server).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -257,7 +262,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeEntry);
     mockPrisma.schoolCalendar.delete.mockResolvedValue(fakeEntry);
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
     expect(mockPrisma.schoolCalendar.delete).toHaveBeenCalledWith({
@@ -269,7 +274,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete(`${BASE}/999`);
+    const res = await request(server).delete(`${BASE}/999`);
 
     expect(res.status).toBe(404);
     expect(mockPrisma.schoolCalendar.delete).not.toHaveBeenCalled();
@@ -278,7 +283,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("returns 403 when TEACHER attempts delete", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(403);
   });

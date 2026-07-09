@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth is mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -57,13 +58,17 @@ function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools/:schoolId/policy (integration)", () => {
   it("returns 404 when no policy is set", async () => {
     const school = await seedSchool();
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/policy`);
+    const res = await request(server).get(`/api/schools/${school.id}/policy`);
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "No policy set for this school" });
@@ -82,7 +87,7 @@ describe("GET /api/schools/:schoolId/policy (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/policy`);
+    const res = await request(server).get(`/api/schools/${school.id}/policy`);
 
     expect(res.status).toBe(200);
     expect(res.body.maxActivePasses).toBe(3);
@@ -96,7 +101,7 @@ describe("GET /api/schools/:schoolId/policy (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: otherSchool.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/policy`);
+    const res = await request(server).get(`/api/schools/${school.id}/policy`);
 
     expect(res.status).toBe(403);
   });
@@ -106,7 +111,7 @@ describe("GET /api/schools/:schoolId/policy (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/policy`);
+    const res = await request(server).get(`/api/schools/${school.id}/policy`);
 
     expect(res.status).toBe(404); // no policy, but not 403
   });
@@ -118,7 +123,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(`/api/schools/${school.id}/policy`)
       .send({ maxActivePasses: 2, interval: "WEEK", maxPerInterval: 10 });
 
@@ -139,7 +144,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(`/api/schools/${school.id}/policy`)
       .send({ maxActivePasses: 5, interval: "MONTH", maxPerInterval: 20 });
 
@@ -156,8 +161,8 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    await request(app).put(`/api/schools/${school.id}/policy`).send({ maxActivePasses: 1 });
-    await request(app).put(`/api/schools/${school.id}/policy`).send({ maxActivePasses: 2 });
+    await request(server).put(`/api/schools/${school.id}/policy`).send({ maxActivePasses: 1 });
+    await request(server).put(`/api/schools/${school.id}/policy`).send({ maxActivePasses: 2 });
 
     const policies = await prisma.passPolicy.findMany({ where: { schoolId: school.id } });
     expect(policies).toHaveLength(1);
@@ -169,7 +174,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(`/api/schools/${school.id}/policy`)
       .send({ maxActivePasses: 5 });
 
@@ -180,7 +185,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .put("/api/schools/99999/policy")
       .send({ maxActivePasses: 5 });
 
@@ -192,7 +197,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).put(`/api/schools/${school.id}/policy`).send({});
+    const res = await request(server).put(`/api/schools/${school.id}/policy`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.maxActivePasses).toBeNull();
@@ -204,7 +209,7 @@ describe("PUT /api/schools/:schoolId/policy (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(`/api/schools/${school.id}/policy`)
       .send({ interval: "DAY" });
 

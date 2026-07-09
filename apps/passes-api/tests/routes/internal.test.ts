@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { passStatusMock } from "../utils/passStatusMock.js";
 
@@ -45,6 +45,7 @@ vi.mock("@hallpass/auth", () => ({
 }));
 
 import app from "../../src/app";
+import { createTestServer } from "@hallpass/express-middleware";
 import { prisma } from "@hallpass/db";
 import { scheduleLocalExpiry, expirePass } from "../../src/lib/expiry.js";
 
@@ -76,9 +77,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("POST /internal/reconcile-expiry", () => {
   it("returns 401 without the internal secret", async () => {
-    const res = await request(app).post(ENDPOINT);
+    const res = await request(server).post(ENDPOINT);
 
     expect(res.status).toBe(401);
     expect(mockPrisma.pass.findMany).not.toHaveBeenCalled();
@@ -100,7 +105,7 @@ describe("POST /internal/reconcile-expiry", () => {
       .mockResolvedValueOnce([stalePass]) // batched in-flight scan
       .mockResolvedValueOnce([]); // waiting-schools scan
 
-    const res = await request(app).post(ENDPOINT).set("Authorization", AUTH_HEADER);
+    const res = await request(server).post(ENDPOINT).set("Authorization", AUTH_HEADER);
 
     expect(res.status).toBe(200);
     expect(res.body.scheduled).toBe(1);
@@ -124,7 +129,7 @@ describe("POST /internal/reconcile-expiry", () => {
       .mockResolvedValueOnce([todayPass])
       .mockResolvedValueOnce([]);
 
-    const res = await request(app).post(ENDPOINT).set("Authorization", AUTH_HEADER);
+    const res = await request(server).post(ENDPOINT).set("Authorization", AUTH_HEADER);
 
     expect(res.status).toBe(200);
     expect(res.body.scheduled).toBe(1);
@@ -151,7 +156,7 @@ describe("POST /internal/reconcile-expiry", () => {
       .mockResolvedValueOnce([orphanPass])
       .mockResolvedValueOnce([]);
 
-    const res = await request(app).post(ENDPOINT).set("Authorization", AUTH_HEADER);
+    const res = await request(server).post(ENDPOINT).set("Authorization", AUTH_HEADER);
 
     expect(res.status).toBe(200);
     expect(mockExpirePass).toHaveBeenCalledWith(3);
