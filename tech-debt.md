@@ -9,16 +9,10 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Authorization & user onboarding 🔴🟠
+## 1. Authorization & user onboarding 🔴
 
-Both touch `apps/user-api/src/routes/user.ts` and the auth model.
+Touches `apps/user-api/src/routes/user.ts` and the auth model.
 
-- 🟠 **`PATCH /api/users/:id` is missing the target-rank check that DELETE has**
-  (`user.ts:194-249` vs `user.ts:277`). A school ADMIN can edit a **peer ADMIN's
-  email** (redirect another admin's login identity), demote a peer ADMIN, or
-  promote a STUDENT to ADMIN. PATCH only checks the *assigned* role isn't above
-  the caller. Mirror DELETE: non-self targets must be strictly below the caller's
-  rank.
 - 🔴 **Admin-provisioned users can never log in.** `POST /api/users` and `/bulk`
   (`user.ts:120,154`) create `User` rows with no better-auth credential
   `Account`; better-auth sign-up then refuses their email (row exists). The seed
