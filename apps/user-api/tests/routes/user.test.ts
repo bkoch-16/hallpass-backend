@@ -761,6 +761,42 @@ describe("PATCH /api/users/:id", () => {
     expect(res.body.role).toBe("ADMIN");
   });
 
+  it("returns 403 when ADMIN tries to change a peer ADMIN's email", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    const peer = { ...fakeUser, id: 6, role: "ADMIN" };
+    authenticateAs(admin);
+    givenTargetUser(peer);
+
+    const res = await request(server).patch("/api/users/6").send({ email: "hijack@test.com" });
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when ADMIN tries to demote a peer ADMIN", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    const peer = { ...fakeUser, id: 6, role: "ADMIN" };
+    authenticateAs(admin);
+    givenTargetUser(peer);
+
+    const res = await request(server).patch("/api/users/6").send({ role: "STUDENT" });
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("allows SUPER_ADMIN to edit an ADMIN", async () => {
+    const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
+    const target = { ...fakeUser, id: 6, role: "ADMIN" };
+    authenticateAs(superAdmin);
+    givenTargetUser(target);
+    mockPrisma.user.update.mockResolvedValue({ ...target, name: "Renamed" });
+
+    const res = await request(server).patch("/api/users/6").send({ name: "Renamed" });
+
+    expect(res.status).toBe(200);
+  });
+
   it("returns 404 when user does not exist", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);

@@ -222,6 +222,11 @@ router.patch(
       return;
     }
 
+    if (!isSelf && roleRank(user.role as UserRole) >= roleRank(req.user!.role)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     if (req.body.email && roleRank(req.user!.role) < roleRank(UserRole.ADMIN)) {
       res.status(403).json({ message: "Forbidden" });
       return;
