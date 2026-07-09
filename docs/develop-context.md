@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-09T20:19:35.385Z — 17 files indexed_
+_Generated: 2026-07-09T20:39:29.729Z — 17 files indexed_
 
 ## File Summaries
 
@@ -50,7 +50,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Comprehensive Express router implementing full user CRUD with role-based access control. Provides endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (create), POST /bulk (bulk create), PATCH /:id (update), and DELETE /:id (soft delete via `deletedAt`). Enforces multi-tenant school scoping — non-SUPER_ADMIN users are restricted to their own `schoolId`. Uses `roleRank` to prevent privilege escalation (users cannot create/assign roles above their own). Relies on Prisma for database access, Zod schemas for request validation, and shared middleware (`requireAuth`, `requireRole`, `requireSelfOrRole`, `validateBody/Params/Query`). The `USER_SELECT` constant controls which fields are returned; `toUserResponse` maps DB rows to the `UserResponse` type. Handles Prisma error codes P2002 (unique constraint) and P2003 (foreign key) gracefully.
+Express router defining CRUD endpoints for user management: GET /me, GET / (cursor-paginated list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk (bulk create), PATCH /:id (update), and DELETE /:id (soft delete via deletedAt). Uses Prisma for database access with a consistent USER_SELECT projection and a toUserResponse helper to normalize output. Enforces role-based access control via requireAuth, requireRole, requireSelfOrRole, and roleRank utilities, ensuring users cannot create/modify/delete users of equal or higher rank, and non-SUPER_ADMIN users are scoped to their schoolId. Request validation is handled by validateBody/validateParams/validateQuery with Zod schemas imported from ../schemas/user.js. Soft-deleted records (deletedAt != null) are excluded from all queries. When modifying, note the route ordering matters (/me before /:id), the 100-ID batch limit, Prisma error code handling (P2002 for unique conflicts, P2003 for FK violations), and that bulk create uses Promise.allSettled for partial-success semantics returning BulkUserResult.
 
 ### `apps/user-api/src/schemas/user.ts`
 
