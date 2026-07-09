@@ -66,6 +66,8 @@ pnpm --filter @hallpass/schools-api lint
 
 ## Environment Variables
 
+Common to `user-api` and `schools-api`:
+
 | Variable | Default | Required |
 |---|---|---|
 | `DATABASE_URL` | — | Yes |
@@ -73,6 +75,16 @@ pnpm --filter @hallpass/schools-api lint
 | `BETTER_AUTH_URL` | `http://localhost:3001` | No |
 | `CORS_ORIGIN` | — | Yes |
 | `PORT` | `3001` | No |
+| `REDIS_URL` | — | No — rate-limit store; falls back to in-memory when unset |
+| `REDIS_PREFIX` | — | Required only when `REDIS_URL` is set (`dev`/`prod`; `local` in docker-compose) |
+
+When `REDIS_URL` is set the rate limiters use a shared-Redis store keyed
+`<REDIS_PREFIX>:rl:<service>:<general|auth>:` so counters aggregate across
+instances and survive cold starts; unset, they use express-rate-limit's in-memory
+store (fine for local `pnpm dev` and tests). The active store is logged at boot
+(`rate-limit store: redis|in-memory`). `passes-api` additionally **requires**
+`REDIS_URL`/`REDIS_PREFIX` (see its section) since it also uses Redis for slot
+counters and the socket.io adapter.
 
 ## Architecture
 
@@ -216,6 +228,30 @@ Recipe (per environment; dev secrets carry a `_DEV` suffix, prod secrets are uns
 3. `gcloud run services add-iam-policy-binding <service> --region us-west1 --member=allUsers --role=roles/run.invoker`
 4. passes-api only: create the reconcile scheduler job (mandatory heartbeat — scale-to-zero means its interval is the worst-case pass-expiry lag).
 
+### Redis-backed rate limiting on user-api / schools-api (one-time)
+
+These two services now use a Redis rate-limit store **when `REDIS_URL` is set**
+(optional — they fall back to in-memory otherwise, so this is safe to run before or
+after the deploy; the extra env is ignored by the current revision until the new code
+ships). No IAM grant needed — they run as the compute SA, which already has
+`secretAccessor` on `REDIS_URL`/`REDIS_URL_DEV`.
+
+```bash
+# dev
+gcloud run services update user-api-dev   --region us-west1 \
+  --set-secrets=REDIS_URL=REDIS_URL_DEV:latest --set-env-vars=REDIS_PREFIX=dev
+gcloud run services update schools-api-dev --region us-west1 \
+  --set-secrets=REDIS_URL=REDIS_URL_DEV:latest --set-env-vars=REDIS_PREFIX=dev
+# prod (before/with the first main deploy of this change)
+gcloud run services update user-api    --region us-west1 \
+  --set-secrets=REDIS_URL=REDIS_URL:latest --set-env-vars=REDIS_PREFIX=prod
+gcloud run services update schools-api --region us-west1 \
+  --set-secrets=REDIS_URL=REDIS_URL:latest --set-env-vars=REDIS_PREFIX=prod
+```
+
+Verify: boot log shows `rate-limit store: redis`; Upstash shows
+`<prefix>:rl:user-api:*` / `<prefix>:rl:schools-api:*` keys.
+
 ### passes-api prod (Phase B — run after the first `main` deploy creates the service)
 
 Phase A (done 2026-07-06): prod `REDIS_URL` + `INTERNAL_SECRET` secrets created with compute-SA access; prod DB migrations applied.
@@ -245,6 +281,8 @@ One-time BullMQ key cleanup (after this deploy is verified): pass expiry no long
     redis-cli --tls -u "$REDIS_URL" --scan --pattern 'slots:*'        | xargs -L 100 redis-cli --tls -u "$REDIS_URL" DEL
 
 Safe to run: expiry is now driven by in-process timers and the `passes-reconcile-expiry` sweep, so no queued jobs are lost — any in-flight pass is re-armed or expired on the next scheduler run.
+
+The passes-api general-limiter prefix moved from `<prefix>:rl:general:` to `<prefix>:rl:passes-api:general:` (uniform `:rl:<service>:` scheme across all three services). The old `*:rl:general:*` keys are orphaned but self-expire within the 15-minute limiter window, so no cleanup is required.
 
 ## Conventions
 

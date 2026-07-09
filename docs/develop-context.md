@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-09T18:35:10.757Z — 17 files indexed_
+_Generated: 2026-07-09T20:19:35.385Z — 17 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service. Configures middleware stack including helmet, CORS (with configurable origins), HTTP logging, JSON parsing, rate limiting, and error handling. Registers a health check route (before rate limiting to avoid 429s), delegates auth routes to `@hallpass/auth` via `toNodeHandler`, and mounts user CRUD routes at `/api/users`. Depends on shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`) and local `auth` and `env` modules. Sets `trust proxy` for running behind a load balancer. Exports the configured Express app as default.
+Configures and exports the Express application for the user-api service, wiring up middleware in a specific order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), rate limiters, auth routes, user routes, 404 handler, and error handler. Rate limiting uses Redis-backed stores (via rate-limit-redis/RedisStore) in production and falls back to in-memory stores during tests or when REDIS_URL is unset; each limiter gets its own RedisStore instance with namespaced keys. Auth routes are handled by `@hallpass/auth`'s `toNodeHandler` adapter with a stricter auth-specific rate limiter. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. The `trust proxy` setting is enabled for running behind load balancers (e.g., Cloud Run). Developers modifying this file should preserve middleware ordering, especially keeping the health route before rate limiters.
 
 ### `apps/user-api/src/auth.ts`
 
@@ -38,7 +38,7 @@ Configures and exports the application's authentication instance using `createAu
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports environment variables for the user-api service using Zod via the `baseEnvSchema` from `@hallpass/express-middleware`. The `env` object is parsed from `process.env` at import time, so missing or invalid variables will cause an immediate startup error. Any new environment variables needed by this service should be added to or extend `baseEnvSchema`.
+Validates and exports the environment configuration for the user-api service using Zod schemas from `@hallpass/express-middleware`. Extends `baseEnvSchema` with optional Redis environment variables (REDIS_URL, REDIS_PREFIX) and applies a refinement ensuring REDIS_PREFIX is provided whenever REDIS_URL is set. The parsed `env` object is used throughout the app for type-safe environment access. When modifying, ensure any new required environment variables are added to the schema and reflected in docker-compose.yml and deployment configs.
 
 ### `apps/user-api/src/index.ts`
 
@@ -58,7 +58,7 @@ Defines Zod validation schemas for user-related API endpoints. Exports `userIdSc
 
 ### `docker-compose.yml`
 
-Docker Compose configuration defining three services for local development: a PostgreSQL 16 (Alpine) database, and two API microservices (user-api on port 3001, schools-api on port 3002). Both APIs depend on Postgres with a health check ensuring the database is ready before they start. Environment variables include DATABASE_URL (pointing to the containerized Postgres), BETTER_AUTH_SECRET/URL for authentication, and CORS_ORIGIN for frontend access. Each API service builds from its own Dockerfile in the apps/ directory using the repo root as build context. A named volume `postgres_data` persists database data across container restarts. Developers need to set BETTER_AUTH_SECRET (and optionally BETTER_AUTH_URL/CORS_ORIGIN) via environment or .env file.
+Defines the local development stack for the Hallpass platform with four services: PostgreSQL 16 (database), Redis 7 (rate-limit/caching store), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy Postgres and Redis containers and share a common database URL pattern. Environment variables like BETTER_AUTH_SECRET and CORS_ORIGIN can be overridden via a .env file or shell environment. A named volume `postgres_data` persists database data across container restarts. Developers should note that both APIs share the same Postgres database and Redis instance, and the build context for both is the repo root (monorepo pattern with per-app Dockerfiles).
 
 ### `package.json`
 
