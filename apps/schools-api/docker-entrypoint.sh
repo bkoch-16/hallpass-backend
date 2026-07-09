@@ -1,6 +1,5 @@
 #!/bin/sh
 set -e
-echo "Running Prisma migrations..."
-pnpm --filter @hallpass/db exec prisma migrate deploy
-echo "Starting schools-api..."
+# Migrations run once in the deploy pipeline (migrate-{env} job), not per
+# container — see .github/workflows/deploy.yml and docs/INFRA.md.
 exec node apps/schools-api/dist/index.js
