@@ -282,6 +282,8 @@ One-time BullMQ key cleanup (after this deploy is verified): pass expiry no long
 
 Safe to run: expiry is now driven by in-process timers and the `passes-reconcile-expiry` sweep, so no queued jobs are lost — any in-flight pass is re-armed or expired on the next scheduler run.
 
+The passes-api general-limiter prefix moved from `<prefix>:rl:general:` to `<prefix>:rl:passes-api:general:` (uniform `:rl:<service>:` scheme across all three services). The old `*:rl:general:*` keys are orphaned but self-expire within the 15-minute limiter window, so no cleanup is required.
+
 ## Conventions
 
 - **Prettier**: 2-space indent, double quotes, semicolons, trailing commas

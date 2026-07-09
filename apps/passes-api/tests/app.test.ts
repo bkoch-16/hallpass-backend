@@ -83,7 +83,7 @@ describe("app rate-limit store wiring", () => {
       prefix: string;
       sendCommand: unknown;
     };
-    expect(options.prefix).toBe("test:rl:general:");
+    expect(options.prefix).toBe("test:rl:passes-api:general:");
     expect(typeof options.sendCommand).toBe("function");
   });
 });
