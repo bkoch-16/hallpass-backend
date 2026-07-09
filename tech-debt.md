@@ -9,28 +9,7 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Rate limiting 🔴
-
-All three services share the `@hallpass/express-middleware` limiters; fix once
-there, roll out to all three `app.ts`.
-
-- **General limiter keys per-IP in practice, not per-user.**
-  `packages/middleware/src/rateLimit.ts:23-28` documents it: the limiter keys by
-  `req.user.id`, but it is mounted before any auth middleware, so `req.user` is
-  never set at keying time and it falls back to per-IP. A school behind one NAT
-  IP still shares **100 req / 15 min** — product breaks first period, day one.
-  (The auth limiter, keyed by email, is correctly fixed.)
-- **In-memory store on `user-api` and `schools-api`.** Only `passes-api/app.ts:44-56`
-  uses the Redis store. The other two use `createGeneralLimiter()` with no store,
-  so counters are per-instance and reset on every scale event.
-
-**Fix:** key authenticated traffic by user id after `requireAuth` (or accept
-per-IP knowingly with a much higher limit), and back all three with the Redis
-store. Land it in the shared package so policy is uniform.
-
----
-
-## 2. Authorization & user onboarding 🔴🟠
+## 1. Authorization & user onboarding 🔴🟠
 
 Both touch `apps/user-api/src/routes/user.ts` and the auth model.
 
@@ -50,7 +29,7 @@ Both touch `apps/user-api/src/routes/user.ts` and the auth model.
 
 ---
 
-## 3. Cross-service invariants (schools-api ↔ passes-api) 🟠
+## 2. Cross-service invariants (schools-api ↔ passes-api) 🟠
 
 No layer owns the invariants passes-api depends on. Fix the destination case
 (the sharp one) together with the promotion query.
@@ -70,7 +49,7 @@ No layer owns the invariants passes-api depends on. Fix the destination case
 
 ---
 
-## 4. Validation & data integrity 🟠
+## 3. Validation & data integrity 🟠
 
 - **Timezone is unvalidated free text.** `createSchoolSchema` / `updateSchoolSchema`
   (`apps/schools-api/src/schemas/school.ts:18,25`) accept any string. In
@@ -89,7 +68,7 @@ No layer owns the invariants passes-api depends on. Fix the destination case
 
 ---
 
-## 5. Consistency & service drift 🟡
+## 4. Consistency & service drift 🟡
 
 The three apps are copy-paste siblings diverging; converge in
 `@hallpass/express-middleware`.
