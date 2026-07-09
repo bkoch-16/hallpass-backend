@@ -96,21 +96,7 @@ email) when the feature is actually on the table.
 
 Deferred until a concrete need appears. Ordered lightest-first.
 
-### 1. `signUpEmail` + temp password — SUPERSEDED (implemented)
-
-This item shipped, in a cleaner form than proposed. Instead of a two-step
-`signUpEmail` + `user.update`, provisioning now calls
-`createUserWithCredential` (`packages/auth/src/index.ts:60`), which sets
-`role`/`schoolId` server-side in the same path that creates the credential —
-no brief `STUDENT` window. `POST /api/users` and `/bulk` return a one-time temp
-password, and seed.ts dropped its scrypt hack. See the Background section above.
-
-The remaining caveat still holds: hashing is deliberately slow, so bulk runs
-with capped concurrency (`BULK_CONCURRENCY`, `user.ts:51,202`) rather than firing
-every call at once. The temp password still travels in plaintext and stays valid
-until changed — options 2 and 4 address that.
-
-### 2. `signUpEmail` + set-password link (no email)
+### 1. `signUpEmail` + set-password link (no email)
 
 Same creation, but instead of returning a password, return a signed,
 short-lived token as a `/set-password?token=...` link. The user sets their own
@@ -120,7 +106,7 @@ is forward-compatible with email invites (swap "return link" for "email link").
 - **Pro:** user owns the password; token expires; upgrade path to real invites.
 - **Con:** a new public endpoint + token verification to build and secure.
 
-### 3. better-auth admin plugin (`createUser`)
+### 2. better-auth admin plugin (`createUser`)
 
 `auth.api.createUser({ email, password, role, data: { schoolId } })` creates
 User + Account **and** sets role/school in one atomic call.
@@ -130,8 +116,8 @@ User + Account **and** sets role/school in one atomic call.
   our `Role` enum) plus `banned`/`banReason`/`banExpires` columns and endpoints
   we don't need — solves problems we don't have yet.
 
-### 4. Transactional email
+### 3. Transactional email
 
 An invite / password-reset email flow (Resend, SES, etc.) is the eventual
 polished UX, but no email provider exists in the repo today. Add it when bulk
-student onboarding (option 2) or general password-reset justifies the cost.
+student onboarding (option 1) or general password-reset justifies the cost.
