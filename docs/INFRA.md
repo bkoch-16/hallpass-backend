@@ -122,7 +122,8 @@ Built with `tsc` (no runtime dependencies). Import from `@hallpass/types`.
 - Prisma schema: `packages/db/prisma/schema.prisma`
 - Migrations: `packages/db/prisma/migrations/` (version-controlled)
 - Single PrismaClient instance per process
-- Migrations run automatically on deploy via `docker-entrypoint.sh`
+- Migrations run once per deploy in the `migrate-{env}` CI job (before the deploy
+  matrix), not in the container entrypoint — see `.github/workflows/deploy.yml`
 
 **Common commands:**
 ```bash
@@ -163,7 +164,13 @@ pnpm --filter @hallpass/db exec prisma studio
 | `main`    | Prod        | `schools-api`     |
 | `main`    | Prod        | `passes-api`      |
 
-GitHub Actions workflow: lint → build → test → Docker build → push to GCP Artifact Registry → deploy to Cloud Run → run migrations.
+GitHub Actions workflow: lint → build → test → migrate (once, per env) → Docker build → push to GCP Artifact Registry → deploy to Cloud Run.
+
+The `migrate-{env}` job fetches the env's `DATABASE_URL*` secret from Secret
+Manager and runs `prisma migrate deploy` a single time before the deploy matrix,
+so containers no longer migrate on boot. The CI service account
+(`github-actions-deploy@hallpass-access.iam.gserviceaccount.com`) therefore needs
+`roles/secretmanager.secretAccessor` on each environment's `DATABASE_URL*` secret.
 
 ## passes-api
 
@@ -201,7 +208,7 @@ Secrets are managed directly on the Cloud Run service (not in the workflow).
 
 ## One-time Cloud Run service setup (runbook)
 
-A brand-new service created by the deploy workflow starts with **zero env config and no public invoker access** — the workflow intentionally passes only the image. The first deploy of any new service therefore always fails ("container failed to listen on PORT=8080" — actually a ZodError from `env.ts` on missing vars, or the entrypoint's `prisma migrate deploy` failing without `DATABASE_URL`). This is expected; run the setup below once, and the failed revision recovers on the next `services update`.
+A brand-new service created by the deploy workflow starts with **zero env config and no public invoker access** — the workflow intentionally passes only the image. The first deploy of any new service therefore always fails ("container failed to listen on PORT=8080" — a ZodError from `env.ts` on missing vars). This is expected; run the setup below once, and the failed revision recovers on the next `services update`. Note migrations no longer run in the container, so a missing `DATABASE_URL` no longer breaks boot; instead the `migrate-{env}` CI job fails first if the CI service account lacks `secretAccessor` on the env's `DATABASE_URL*` secret.
 
 Recipe (per environment; dev secrets carry a `_DEV` suffix, prod secrets are unsuffixed):
 1. Create any missing secrets and grant `roles/secretmanager.secretAccessor` to the compute SA (`509242588558-compute@developer.gserviceaccount.com`).

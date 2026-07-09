@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-07T17:55:00.810Z — 17 files indexed_
+_Generated: 2026-07-09T18:35:10.757Z — 17 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD pipeline triggered on pushes to main/develop, PRs, and manual dispatch with environment selection. The 'validate' job runs lint, build, and test with dummy environment variables and Prisma client generation on Node 22 with pnpm. Deploy jobs use a matrix strategy across three services (user-api, schools-api, passes-api), building Docker images with Buildx/GHA caching and pushing to Google Artifact Registry. Dev deploys trigger from the develop branch, prod deploys from main only. Environment variables and secrets are managed directly on Cloud Run via GCP Secret Manager rather than being passed in the workflow.
+CI/CD workflow for the HallPass backend monorepo that validates (lint, build, test) on every push/PR, then deploys to dev or prod environments on Google Cloud Run. Triggered by pushes to `main` (prod) or `develop` (dev), PRs (validate only), or manual `workflow_dispatch` with an environment selector. Uses a matrix strategy to deploy three microservices (`user-api`, `schools-api`, `passes-api`) as separate Cloud Run services, with Docker images pushed to GCP Artifact Registry and cached via GitHub Actions cache. Database migrations run via `prisma migrate deploy` against Neon databases, with connection strings fetched securely from GCP Secret Manager at runtime to avoid log exposure. The validate job uses dummy env vars since tests mock `@hallpass/db` but env validation still requires them. Developers modifying this file should note: env vars/secrets on Cloud Run are managed in GCP directly (not in the workflow), the pnpm monorepo filter `@hallpass/db` targets the shared Prisma package, and prod deploys additionally require the workflow to run from `main`.
 
 ### `.github/workflows/index-codebase.yml`
 
