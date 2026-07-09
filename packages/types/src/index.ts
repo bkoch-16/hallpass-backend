@@ -59,6 +59,10 @@ export interface UserResponse {
   createdAt: Date;
 }
 
+export interface ProvisionUserResponse extends UserResponse {
+  tempPassword: string;
+}
+
 export interface SchoolResponse {
   id: number;
   name: string;

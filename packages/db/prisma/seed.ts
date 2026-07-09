@@ -1,28 +1,26 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { scryptAsync } from "@noble/hashes/scrypt";
-import { bytesToHex, randomBytes } from "@noble/hashes/utils";
+import { createAuth, createUserWithCredential, EmailInUseError } from "@hallpass/auth";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set");
+}
+if (!process.env.BETTER_AUTH_URL) {
+  throw new Error("BETTER_AUTH_URL environment variable is not set");
+}
+if (!process.env.BETTER_AUTH_SECRET) {
+  throw new Error("BETTER_AUTH_SECRET environment variable is not set");
 }
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-// Must match better-auth's password hashing config exactly (dist/crypto/password.mjs)
-async function hashPassword(password: string): Promise<string> {
-  const salt = bytesToHex(randomBytes(16));
-  const key = await scryptAsync(password.normalize("NFKC"), salt, {
-    N: 16384,
-    r: 16,
-    p: 1,
-    dkLen: 64,
-    maxmem: 128 * 16384 * 16 * 2,
-  });
-  return `${salt}:${bytesToHex(key)}`;
-}
+const auth = createAuth({
+  prisma,
+  baseURL: process.env.BETTER_AUTH_URL,
+  secret: process.env.BETTER_AUTH_SECRET,
+});
 
 const seedUsers = [
   { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const, assignSchool: true },
@@ -34,8 +32,6 @@ const seedUsers = [
 const DEFAULT_PASSWORD = "password";
 
 async function main() {
-  const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
-
   let district = await prisma.district.findFirst({ where: { name: "Demo District" } });
   if (!district) {
     district = await prisma.district.create({ data: { name: "Demo District" } });
@@ -49,38 +45,22 @@ async function main() {
   console.log(`Seeded school: ${school.name}`);
 
   for (const userData of seedUsers) {
-    const user = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.upsert({
-        where: { email: userData.email },
-        update: {},
-        create: {
-          email: userData.email,
-          name: userData.name,
-          role: userData.role,
-          emailVerified: true,
-          schoolId: userData.assignSchool ? school.id : null,
-        },
+    try {
+      await createUserWithCredential(auth, {
+        email: userData.email,
+        password: DEFAULT_PASSWORD,
+        name: userData.name,
+        role: userData.role,
+        schoolId: userData.assignSchool ? school.id : null,
       });
-
-      const existingAccount = await tx.account.findFirst({
-        where: { accountId: userData.email, providerId: "credential" },
-      });
-
-      if (!existingAccount) {
-        await tx.account.create({
-          data: {
-            accountId: userData.email,
-            providerId: "credential",
-            password: hashedPassword,
-            userId: user.id,
-          },
-        });
+      console.log(`Seeded ${userData.role}: ${userData.email}`);
+    } catch (e) {
+      if (e instanceof EmailInUseError) {
+        console.log(`Skipped existing ${userData.role}: ${userData.email}`);
+      } else {
+        throw e;
       }
-
-      return user;
-    });
-
-    console.log(`Seeded ${user.role}: ${user.email}`);
+    }
   }
 
   await seedSchoolData(school.id);

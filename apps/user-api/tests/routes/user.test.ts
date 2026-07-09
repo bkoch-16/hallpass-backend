@@ -2,9 +2,19 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vites
 import request from "supertest";
 import { createTestServer } from "@hallpass/express-middleware";
 
-const { mockGetSession } = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-}));
+const { mockGetSession, mockCreateUserWithCredential, EmailInUseError } = vi.hoisted(() => {
+  class EmailInUseError extends Error {
+    constructor() {
+      super("Email already in use");
+      this.name = "EmailInUseError";
+    }
+  }
+  return {
+    mockGetSession: vi.fn(),
+    mockCreateUserWithCredential: vi.fn(),
+    EmailInUseError,
+  };
+});
 
 // Mock @hallpass/db before importing app
 vi.mock("@hallpass/db", () => ({
@@ -33,6 +43,8 @@ vi.mock("@hallpass/auth", () => ({
   })),
   toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
+  createUserWithCredential: mockCreateUserWithCredential,
+  EmailInUseError,
 }));
 
 import app from "../../src/app.js";
@@ -418,6 +430,17 @@ describe("GET /api/users", () => {
   });
 });
 
+function provisionResolves(user: Partial<FakeUser> & { id: number }) {
+  mockCreateUserWithCredential.mockResolvedValue({
+    id: user.id,
+    email: user.email ?? "new@test.com",
+    name: user.name ?? "New User",
+    role: user.role ?? "STUDENT",
+    schoolId: user.schoolId ?? null,
+    createdAt: user.createdAt ?? new Date(),
+  });
+}
+
 describe("POST /api/users", () => {
   it("returns 403 when admin tries to create a super_admin", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
@@ -429,14 +452,13 @@ describe("POST /api/users", () => {
 
     expect(res.status).toBe(403);
     expect(res.body).toEqual({ message: "Forbidden" });
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
-  it("allows admin to create a student", async () => {
+  it("provisions user via createUserWithCredential (not prisma.user.create) and returns a one-time tempPassword", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    const created = { id: 10, email: "new@test.com", name: "New User", role: "STUDENT", createdAt: new Date() };
-    mockPrisma.user.create.mockResolvedValue(created);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User", role: "STUDENT" });
 
     const res = await request(server)
       .post("/api/users")
@@ -444,40 +466,53 @@ describe("POST /api/users", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.email).toBe("new@test.com");
+    expect(res.body.tempPassword).toEqual(expect.any(String));
+    expect((res.body.tempPassword as string).length).toBeGreaterThan(0);
+    expect(mockCreateUserWithCredential).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("passes the generated password to the provisioning helper", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    authenticateAs(admin);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User" });
+
+    const res = await request(server)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    const callArg = mockCreateUserWithCredential.mock.calls[0][1] as { password: string };
+    expect(callArg.password).toBe(res.body.tempPassword);
   });
 
   it("scopes created user to admin's schoolId", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
     authenticateAs(admin);
-    const created = { id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: 1, createdAt: new Date() };
-    mockPrisma.user.create.mockResolvedValue(created);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: 1 });
 
     await request(server).post("/api/users").send({ email: "new@test.com", name: "New User" });
 
-    expect(mockPrisma.user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ schoolId: 1 }),
-      }),
+    expect(mockCreateUserWithCredential).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ schoolId: 1 }),
     );
   });
 
   it("does not force schoolId when super_admin creates a user", async () => {
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN", schoolId: null };
     authenticateAs(superAdmin);
-    const created = { id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: null, createdAt: new Date() };
-    mockPrisma.user.create.mockResolvedValue(created);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User", role: "STUDENT", schoolId: null });
 
     await request(server).post("/api/users").send({ email: "new@test.com", name: "New User" });
 
-    const callArg = mockPrisma.user.create.mock.calls[0][0] as { data: Record<string, unknown> };
-    expect(callArg.data).not.toHaveProperty("schoolId");
+    const callArg = mockCreateUserWithCredential.mock.calls[0][1] as { schoolId?: unknown };
+    expect(callArg.schoolId).toBeUndefined();
   });
 
   it("allows super_admin to create a super_admin", async () => {
     const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN" };
     authenticateAs(superAdmin);
-    const created = { id: 10, email: "new@test.com", name: "New User", role: "SUPER_ADMIN", createdAt: new Date() };
-    mockPrisma.user.create.mockResolvedValue(created);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User", role: "SUPER_ADMIN" });
 
     const res = await request(server)
       .post("/api/users")
@@ -537,7 +572,7 @@ describe("POST /api/users/bulk", () => {
     const res = await request(server).post("/api/users/bulk").send([]);
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
   it("returns 400 when body contains an invalid user", async () => {
@@ -549,7 +584,7 @@ describe("POST /api/users/bulk", () => {
       .send([{ email: "not-an-email", name: "A" }]);
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
   it("returns 403 when trying to create a user with a higher role", async () => {
@@ -561,15 +596,15 @@ describe("POST /api/users/bulk", () => {
       .send([{ email: "a@test.com", name: "A", role: "SUPER_ADMIN" }]);
 
     expect(res.status).toBe(403);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
-  it("creates all users and returns created count", async () => {
+  it("provisions all users via the helper and returns created count", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.create
-      .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() })
-      .mockResolvedValueOnce({ id: 11, email: "b@test.com", name: "B", role: "STUDENT", createdAt: new Date() });
+    mockCreateUserWithCredential
+      .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", schoolId: null, createdAt: new Date() })
+      .mockResolvedValueOnce({ id: 11, email: "b@test.com", name: "B", role: "STUDENT", schoolId: null, createdAt: new Date() });
 
     const res = await request(server)
       .post("/api/users/bulk")
@@ -577,12 +612,14 @@ describe("POST /api/users/bulk", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ created: 2, failed: [] });
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).toHaveBeenCalledTimes(2);
   });
 
   it("scopes bulk created users to admin's schoolId", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: 1 };
     authenticateAs(admin);
-    mockPrisma.user.create
+    mockCreateUserWithCredential
       .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", schoolId: 1, createdAt: new Date() })
       .mockResolvedValueOnce({ id: 11, email: "b@test.com", name: "B", role: "STUDENT", schoolId: 1, createdAt: new Date() });
 
@@ -590,18 +627,18 @@ describe("POST /api/users/bulk", () => {
       .post("/api/users/bulk")
       .send([{ email: "a@test.com", name: "A" }, { email: "b@test.com", name: "B" }]);
 
-    for (const call of mockPrisma.user.create.mock.calls) {
-      const arg = call[0] as { data: Record<string, unknown> };
-      expect(arg.data).toMatchObject({ schoolId: 1 });
+    for (const call of mockCreateUserWithCredential.mock.calls) {
+      const arg = call[1] as { schoolId?: unknown };
+      expect(arg).toMatchObject({ schoolId: 1 });
     }
   });
 
-  it("returns partial success when some users fail to create", async () => {
+  it("returns partial success when some users fail to provision", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.create
-      .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() })
-      .mockRejectedValueOnce(new Error("Unique constraint"));
+    mockCreateUserWithCredential
+      .mockResolvedValueOnce({ id: 10, email: "a@test.com", name: "A", role: "STUDENT", schoolId: null, createdAt: new Date() })
+      .mockRejectedValueOnce(new EmailInUseError());
 
     const res = await request(server)
       .post("/api/users/bulk")
@@ -613,10 +650,10 @@ describe("POST /api/users/bulk", () => {
     expect(res.body.failed[0]).toMatchObject({ index: 1, email: "dup@test.com" });
   });
 
-  it("returns 400 when all users fail to create", async () => {
+  it("returns 400 when all users fail to provision", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.create.mockRejectedValue(new Error("DB error"));
+    mockCreateUserWithCredential.mockRejectedValue(new Error("DB error"));
 
     const res = await request(server)
       .post("/api/users/bulk")
@@ -630,6 +667,38 @@ describe("POST /api/users/bulk", () => {
     expect(res.body.failed).toHaveLength(2);
   });
 
+  it("provisions a large batch with bounded concurrency (does not fire all at once)", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    authenticateAs(admin);
+
+    const BATCH = 40;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockCreateUserWithCredential.mockImplementation(async (_auth: unknown, input: { email: string; name: string }) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return { id: 100, email: input.email, name: input.name, role: "STUDENT", schoolId: null, createdAt: new Date() };
+    });
+
+    const payload = Array.from({ length: BATCH }, (_, i) => ({ email: `u${i}@test.com`, name: `U${i}` }));
+
+    const res = await request(server).post("/api/users/bulk").send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(BATCH);
+    // Every user must be provisioned through the helper (not prisma.user.create).
+    expect(mockCreateUserWithCredential).toHaveBeenCalledTimes(BATCH);
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    // The helper must be throttled to a small pool rather than launched for the
+    // whole batch simultaneously. Expect a cap around 5-10, and proof the pool
+    // actually ran concurrently (not fully serial).
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(10);
+    expect(maxInFlight).toBeLessThan(BATCH);
+  });
+
 
   it("returns 400 when email is missing", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
@@ -640,7 +709,7 @@ describe("POST /api/users/bulk", () => {
       .send({ name: "New User" });
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
   it("returns 400 when email is invalid format", async () => {
@@ -652,7 +721,7 @@ describe("POST /api/users/bulk", () => {
       .send({ email: "not-an-email", name: "New User" });
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
   it("returns 400 when name is missing", async () => {
@@ -664,14 +733,13 @@ describe("POST /api/users/bulk", () => {
       .send({ email: "valid@test.com" });
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 
-  it("returns 409 when email already exists (unique constraint violation)", async () => {
+  it("returns 409 when the helper throws EmailInUseError", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    const error = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
-    mockPrisma.user.create.mockRejectedValue(error);
+    mockCreateUserWithCredential.mockRejectedValue(new EmailInUseError());
 
     const res = await request(server)
       .post("/api/users")
@@ -681,10 +749,10 @@ describe("POST /api/users/bulk", () => {
     expect(res.body).toEqual({ message: "Email already in use" });
   });
 
-  it("returns 500 when prisma.user.create throws an unexpected error", async () => {
+  it("returns 500 when the provisioning helper throws an unexpected error", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
-    mockPrisma.user.create.mockRejectedValue(new Error("unexpected DB error"));
+    mockCreateUserWithCredential.mockRejectedValue(new Error("unexpected DB error"));
 
     const res = await request(server)
       .post("/api/users")

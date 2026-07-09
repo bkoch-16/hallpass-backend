@@ -1,7 +1,10 @@
 import { Router, Request, Response } from "express";
+import { randomBytes } from "node:crypto";
 import { prisma } from "@hallpass/db";
+import { createUserWithCredential, EmailInUseError } from "@hallpass/auth";
 import { UserRole } from "@hallpass/types";
-import type { UserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
+import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
+import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
@@ -22,6 +25,30 @@ type UserRow = { id: number; email: string; name: string | null; role: UserRole;
 function toUserResponse(u: UserRow): UserResponse {
   return { id: u.id, email: u.email, name: u.name, role: u.role, schoolId: u.schoolId, createdAt: u.createdAt };
 }
+
+// Server-generated one-time password. 24 url-safe base64 chars — comfortably
+// above better-auth's 8-char minimum. Never logged; returned to the caller once.
+function generateTempPassword(): string {
+  return randomBytes(18).toString("base64url");
+}
+
+// role/schoolId are better-auth additionalFields — present at runtime (the helper
+// sets them) but absent from the helper's static return type.
+type ProvisionedUser = Awaited<ReturnType<typeof createUserWithCredential>>;
+
+function provisionedToRow(u: ProvisionedUser): UserRow {
+  const withFields = u as ProvisionedUser & { role: UserRole; schoolId: number | null };
+  return {
+    id: withFields.id,
+    email: withFields.email,
+    name: withFields.name,
+    role: withFields.role,
+    schoolId: withFields.schoolId,
+    createdAt: withFields.createdAt,
+  };
+}
+
+const BULK_CONCURRENCY = 8;
 
 // GET /me — must come before /:id
 router.get("/me", requireAuth, (req: Request, res: Response) => {
@@ -130,19 +157,19 @@ router.post(
       return;
     }
 
+    const tempPassword = generateTempPassword();
+
     try {
-      const user = await prisma.user.create({
-        data: {
-          email: req.body.email,
-          name: req.body.name,
-          role: targetRole,
-          ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
-        },
-        select: USER_SELECT,
+      const user = await createUserWithCredential(auth, {
+        email: req.body.email,
+        name: req.body.name,
+        password: tempPassword,
+        role: targetRole,
+        ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
       });
-      res.status(201).json(toUserResponse(user));
+      res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      if (err instanceof EmailInUseError) {
         res.status(409).json({ message: "Email already in use" });
         return;
       }
@@ -167,19 +194,26 @@ router.post(
       }
     }
 
-    const results = await Promise.allSettled(
-      users.map((u) =>
-        prisma.user.create({
-          data: {
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const results: PromiseSettledResult<unknown>[] = new Array(users.length);
+
+    // scrypt hashing is deliberately slow — throttle to a small pool rather than
+    // firing every provisioning call at once.
+    for (let start = 0; start < users.length; start += BULK_CONCURRENCY) {
+      const batch = users.slice(start, start + BULK_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map((u) =>
+          createUserWithCredential(auth, {
             email: u.email,
             name: u.name,
+            password: generateTempPassword(),
             role: u.role ?? UserRole.STUDENT,
-            ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
-          },
-          select: USER_SELECT,
-        }),
-      ),
-    );
+            ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+          }),
+        ),
+      );
+      for (let i = 0; i < settled.length; i += 1) results[start + i] = settled[i];
+    }
 
     const created = results.filter((r) => r.status === "fulfilled").length;
     const failed = results

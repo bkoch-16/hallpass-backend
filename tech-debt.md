@@ -9,17 +9,24 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Authorization & user onboarding 🔴
+## 1. Authorization & user onboarding 🟡
 
 Touches `apps/user-api/src/routes/user.ts` and the auth model.
+See `docs/ONBOARDING.md` for the current provisioning flow.
 
-- 🔴 **Admin-provisioned users can never log in.** `POST /api/users` and `/bulk`
-  (`user.ts:120,154`) create `User` rows with no better-auth credential
-  `Account`; better-auth sign-up then refuses their email (row exists). The seed
-  works around this by hand-crafting scrypt hashes that must "match better-auth's
-  config exactly" (`packages/db/prisma/seed.ts:14-25`) — a version-upgrade
-  landmine, and not something the API offers. Needs a real invite / set-password
-  flow (or better-auth admin plugin) before onboarding a school.
+- ✅ **RESOLVED — admin-provisioned users can now log in.** `POST /api/users` and
+  `/bulk` (`user.ts:147,181`) provision through `createUserWithCredential`
+  (`packages/auth/src/index.ts:60`), which creates the `User` **and** a
+  `credential` `Account` via better-auth's own `auth.$context`, and return a
+  one-time temp password. The seed routes through the same helper
+  (`packages/db/prisma/seed.ts:47-64`); the hand-rolled scrypt hash and
+  `@noble/hashes` dependency are deleted, closing the version-upgrade landmine.
+- 🟡 **Still deferred — onboarding UX / bulk-student delivery.** The bulk route
+  returns a `created`/`failed` summary, not the per-student temp passwords, so
+  there's no mechanism to deliver a credential to each student. A set-password
+  link or transactional-email invite is still needed before onboarding a school
+  at scale — see the "Future optimizations" options 2 and 4 in
+  `docs/ONBOARDING.md`.
 
 ---
 
