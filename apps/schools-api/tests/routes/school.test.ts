@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -90,11 +91,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.status).toBe(401);
   });
@@ -102,7 +107,7 @@ describe("GET /api/schools", () => {
   it("returns 403 when ADMIN attempts list", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.status).toBe(403);
   });
@@ -111,7 +116,7 @@ describe("GET /api/schools", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.findMany.mockResolvedValue([fakeSchool]);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -124,7 +129,7 @@ describe("GET /api/schools", () => {
     const schools = Array.from({ length: 51 }, (_, i) => ({ ...fakeSchool, id: i + 1 }));
     mockPrisma.school.findMany.mockResolvedValue(schools);
 
-    const res = await request(app).get("/api/schools?limit=50");
+    const res = await request(server).get("/api/schools?limit=50");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(50);
@@ -136,7 +141,7 @@ describe("POST /api/schools", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post("/api/schools").send({ name: "New School" });
+    const res = await request(server).post("/api/schools").send({ name: "New School" });
 
     expect(res.status).toBe(401);
   });
@@ -144,7 +149,7 @@ describe("POST /api/schools", () => {
   it("returns 403 when ADMIN attempts create", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post("/api/schools").send({ name: "New School" });
+    const res = await request(server).post("/api/schools").send({ name: "New School" });
 
     expect(res.status).toBe(403);
   });
@@ -153,7 +158,7 @@ describe("POST /api/schools", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.create.mockResolvedValue(fakeSchool);
 
-    const res = await request(app).post("/api/schools").send({ name: "Westside High" });
+    const res = await request(server).post("/api/schools").send({ name: "Westside High" });
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(1);
@@ -165,7 +170,7 @@ describe("POST /api/schools", () => {
     const withTimezone = { ...fakeSchool, timezone: "America/New_York" };
     mockPrisma.school.create.mockResolvedValue(withTimezone);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools")
       .send({ name: "East School", timezone: "America/New_York" });
 
@@ -176,7 +181,7 @@ describe("POST /api/schools", () => {
   it("returns 400 for missing name", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).post("/api/schools").send({});
+    const res = await request(server).post("/api/schools").send({});
 
     expect(res.status).toBe(400);
     expect(mockPrisma.school.create).not.toHaveBeenCalled();
@@ -188,7 +193,7 @@ describe("GET /api/schools/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
 
-    const res = await request(app).get("/api/schools/1");
+    const res = await request(server).get("/api/schools/1");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(1);
@@ -199,7 +204,7 @@ describe("GET /api/schools/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/schools/9999");
+    const res = await request(server).get("/api/schools/9999");
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "School not found" });
@@ -208,7 +213,7 @@ describe("GET /api/schools/:id", () => {
   it("returns 403 when ADMIN attempts get by id", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).get("/api/schools/1");
+    const res = await request(server).get("/api/schools/1");
 
     expect(res.status).toBe(403);
   });
@@ -216,7 +221,7 @@ describe("GET /api/schools/:id", () => {
   it("returns 400 for non-numeric id", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).get("/api/schools/abc");
+    const res = await request(server).get("/api/schools/abc");
 
     expect(res.status).toBe(400);
   });
@@ -226,7 +231,7 @@ describe("PATCH /api/schools/:id", () => {
   it("returns 403 when ADMIN attempts update", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch("/api/schools/1").send({ name: "Updated" });
+    const res = await request(server).patch("/api/schools/1").send({ name: "Updated" });
 
     expect(res.status).toBe(403);
   });
@@ -237,7 +242,7 @@ describe("PATCH /api/schools/:id", () => {
     mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
     mockPrisma.school.update.mockResolvedValue(updated);
 
-    const res = await request(app).patch("/api/schools/1").send({ name: "Updated School" });
+    const res = await request(server).patch("/api/schools/1").send({ name: "Updated School" });
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Updated School");
@@ -247,7 +252,7 @@ describe("PATCH /api/schools/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).patch("/api/schools/9999").send({ name: "X" });
+    const res = await request(server).patch("/api/schools/9999").send({ name: "X" });
 
     expect(res.status).toBe(404);
   });
@@ -255,7 +260,7 @@ describe("PATCH /api/schools/:id", () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).patch("/api/schools/1").send({});
+    const res = await request(server).patch("/api/schools/1").send({});
 
     expect(res.status).toBe(400);
     expect(mockPrisma.school.update).not.toHaveBeenCalled();
@@ -268,7 +273,7 @@ describe("DELETE /api/schools/:id", () => {
     mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
     mockPrisma.school.update.mockResolvedValue({ ...fakeSchool, deletedAt: new Date() });
 
-    const res = await request(app).delete("/api/schools/1");
+    const res = await request(server).delete("/api/schools/1");
 
     expect(res.status).toBe(204);
     expect(mockPrisma.school.update).toHaveBeenCalledWith({
@@ -281,7 +286,7 @@ describe("DELETE /api/schools/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete("/api/schools/9999");
+    const res = await request(server).delete("/api/schools/9999");
 
     expect(res.status).toBe(404);
     expect(mockPrisma.school.update).not.toHaveBeenCalled();
@@ -290,7 +295,7 @@ describe("DELETE /api/schools/:id", () => {
   it("returns 403 when ADMIN attempts delete", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).delete("/api/schools/1");
+    const res = await request(server).delete("/api/schools/1");
 
     expect(res.status).toBe(403);
   });

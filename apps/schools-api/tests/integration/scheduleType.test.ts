@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth is mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -67,6 +68,10 @@ function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools/:schoolId/schedule-types (integration)", () => {
   it("returns schedule types for the school", async () => {
     const school = await seedSchool();
@@ -75,7 +80,7 @@ describe("GET /api/schools/:schoolId/schedule-types (integration)", () => {
     await seedScheduleType(school.id, "B Block");
     authenticateAs(admin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/schedule-types`);
+    const res = await request(server).get(`/api/schools/${school.id}/schedule-types`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
@@ -87,7 +92,7 @@ describe("GET /api/schools/:schoolId/schedule-types (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: otherSchool.id });
     authenticateAs(admin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/schedule-types`);
+    const res = await request(server).get(`/api/schools/${school.id}/schedule-types`);
 
     expect(res.status).toBe(403);
   });
@@ -100,7 +105,7 @@ describe("GET /api/schools/:schoolId/schedule-types (integration)", () => {
     await seedScheduleType(school.id, "Active");
     authenticateAs(admin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/schedule-types`);
+    const res = await request(server).get(`/api/schools/${school.id}/schedule-types`);
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].name).toBe("Active");
@@ -112,7 +117,7 @@ describe("GET /api/schools/:schoolId/schedule-types (integration)", () => {
     await seedScheduleType(school.id);
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/schedule-types`);
+    const res = await request(server).get(`/api/schools/${school.id}/schedule-types`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -125,7 +130,7 @@ describe("POST /api/schools/:schoolId/schedule-types (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/schedule-types`)
       .send({ name: "C Block", startBuffer: 5, endBuffer: 10 });
 
@@ -143,7 +148,7 @@ describe("POST /api/schools/:schoolId/schedule-types (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/schedule-types`)
       .send({ name: "D Block" });
 
@@ -154,7 +159,7 @@ describe("POST /api/schools/:schoolId/schedule-types (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/99999/schedule-types")
       .send({ name: "A Block" });
 
@@ -169,7 +174,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id (integration)", () => 
     const st = await seedScheduleType(school.id, "Old Name");
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/schedule-types/${st.id}`)
       .send({ name: "New Name" });
 
@@ -185,7 +190,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id (integration)", () => 
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/schedule-types/99999`)
       .send({ name: "X" });
 
@@ -200,7 +205,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id (integration)", () =>
     const st = await seedScheduleType(school.id, "To Delete");
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/schedule-types/${st.id}`,
     );
 
@@ -219,7 +224,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id (integration)", () =>
     });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/schedule-types/${st.id}`,
     );
 
@@ -234,7 +239,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id (integration)", () =>
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/schedule-types/99999`,
     );
 

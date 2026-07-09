@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -88,11 +89,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/districts", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ message: "Unauthorized" });
@@ -101,7 +106,7 @@ describe("GET /api/districts", () => {
   it("returns 403 when ADMIN attempts list", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(403);
   });
@@ -110,7 +115,7 @@ describe("GET /api/districts", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findMany.mockResolvedValue([fakeDistrict]);
 
-    const res = await request(app).get("/api/districts");
+    const res = await request(server).get("/api/districts");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -123,7 +128,7 @@ describe("GET /api/districts", () => {
     const districts = Array.from({ length: 51 }, (_, i) => ({ ...fakeDistrict, id: i + 1 }));
     mockPrisma.district.findMany.mockResolvedValue(districts);
 
-    const res = await request(app).get("/api/districts?limit=50");
+    const res = await request(server).get("/api/districts?limit=50");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(50);
@@ -133,7 +138,7 @@ describe("GET /api/districts", () => {
   it("returns 400 for invalid limit", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).get("/api/districts?limit=0");
+    const res = await request(server).get("/api/districts?limit=0");
 
     expect(res.status).toBe(400);
   });
@@ -143,7 +148,7 @@ describe("POST /api/districts", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post("/api/districts").send({ name: "New District" });
+    const res = await request(server).post("/api/districts").send({ name: "New District" });
 
     expect(res.status).toBe(401);
   });
@@ -151,7 +156,7 @@ describe("POST /api/districts", () => {
   it("returns 403 when ADMIN attempts create", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post("/api/districts").send({ name: "New District" });
+    const res = await request(server).post("/api/districts").send({ name: "New District" });
 
     expect(res.status).toBe(403);
   });
@@ -160,7 +165,7 @@ describe("POST /api/districts", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.create.mockResolvedValue(fakeDistrict);
 
-    const res = await request(app).post("/api/districts").send({ name: "New District" });
+    const res = await request(server).post("/api/districts").send({ name: "New District" });
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(10);
@@ -170,7 +175,7 @@ describe("POST /api/districts", () => {
   it("returns 400 for missing name", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).post("/api/districts").send({});
+    const res = await request(server).post("/api/districts").send({});
 
     expect(res.status).toBe(400);
     expect(mockPrisma.district.create).not.toHaveBeenCalled();
@@ -179,7 +184,7 @@ describe("POST /api/districts", () => {
   it("returns 400 for empty name", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).post("/api/districts").send({ name: "" });
+    const res = await request(server).post("/api/districts").send({ name: "" });
 
     expect(res.status).toBe(400);
     expect(mockPrisma.district.create).not.toHaveBeenCalled();
@@ -190,7 +195,7 @@ describe("GET /api/districts/:id", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/districts/10");
+    const res = await request(server).get("/api/districts/10");
 
     expect(res.status).toBe(401);
   });
@@ -199,7 +204,7 @@ describe("GET /api/districts/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findFirst.mockResolvedValue(fakeDistrict);
 
-    const res = await request(app).get("/api/districts/10");
+    const res = await request(server).get("/api/districts/10");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(10);
@@ -209,7 +214,7 @@ describe("GET /api/districts/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/districts/9999");
+    const res = await request(server).get("/api/districts/9999");
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "District not found" });
@@ -218,7 +223,7 @@ describe("GET /api/districts/:id", () => {
   it("returns 400 for non-numeric id", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).get("/api/districts/abc");
+    const res = await request(server).get("/api/districts/abc");
 
     expect(res.status).toBe(400);
   });
@@ -228,7 +233,7 @@ describe("PATCH /api/districts/:id", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).patch("/api/districts/10").send({ name: "Updated" });
+    const res = await request(server).patch("/api/districts/10").send({ name: "Updated" });
 
     expect(res.status).toBe(401);
   });
@@ -239,7 +244,7 @@ describe("PATCH /api/districts/:id", () => {
     mockPrisma.district.findFirst.mockResolvedValue(fakeDistrict);
     mockPrisma.district.update.mockResolvedValue(updated);
 
-    const res = await request(app).patch("/api/districts/10").send({ name: "Updated District" });
+    const res = await request(server).patch("/api/districts/10").send({ name: "Updated District" });
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Updated District");
@@ -249,7 +254,7 @@ describe("PATCH /api/districts/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).patch("/api/districts/9999").send({ name: "X" });
+    const res = await request(server).patch("/api/districts/9999").send({ name: "X" });
 
     expect(res.status).toBe(404);
   });
@@ -257,7 +262,7 @@ describe("PATCH /api/districts/:id", () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeSuperAdmin);
 
-    const res = await request(app).patch("/api/districts/10").send({});
+    const res = await request(server).patch("/api/districts/10").send({});
 
     expect(res.status).toBe(400);
     expect(mockPrisma.district.update).not.toHaveBeenCalled();
@@ -268,7 +273,7 @@ describe("DELETE /api/districts/:id", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).delete("/api/districts/10");
+    const res = await request(server).delete("/api/districts/10");
 
     expect(res.status).toBe(401);
   });
@@ -276,7 +281,7 @@ describe("DELETE /api/districts/:id", () => {
   it("returns 403 when ADMIN attempts delete", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).delete("/api/districts/10");
+    const res = await request(server).delete("/api/districts/10");
 
     expect(res.status).toBe(403);
   });
@@ -286,7 +291,7 @@ describe("DELETE /api/districts/:id", () => {
     mockPrisma.district.findFirst.mockResolvedValue(fakeDistrict);
     mockPrisma.district.update.mockResolvedValue({ ...fakeDistrict, deletedAt: new Date() });
 
-    const res = await request(app).delete("/api/districts/10");
+    const res = await request(server).delete("/api/districts/10");
 
     expect(res.status).toBe(204);
     expect(mockPrisma.district.update).toHaveBeenCalledWith({
@@ -299,7 +304,7 @@ describe("DELETE /api/districts/:id", () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete("/api/districts/9999");
+    const res = await request(server).delete("/api/districts/9999");
 
     expect(res.status).toBe(404);
     expect(mockPrisma.district.update).not.toHaveBeenCalled();

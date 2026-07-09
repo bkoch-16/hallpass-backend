@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { passStatusMock } from "../utils/passStatusMock.js";
 
@@ -54,6 +54,7 @@ vi.mock("@hallpass/auth", () => ({
 }));
 
 import app from "../../src/app";
+import { createTestServer } from "@hallpass/express-middleware";
 import { prisma } from "@hallpass/db";
 import * as slotsModule from "../../src/lib/slots.js";
 import { emitPassEvent } from "../../src/lib/socket.js";
@@ -208,11 +209,15 @@ beforeEach(() => {
 
 // ─── POST /passes ──────────────────────────────────────────────────────────────
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("POST /api/passes", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(401);
   });
@@ -226,7 +231,7 @@ describe("POST /api/passes", () => {
     mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
     mockPrisma.pass.create.mockResolvedValue(fakePass);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(100);
@@ -245,7 +250,7 @@ describe("POST /api/passes", () => {
     mockPrisma.passPolicy.findFirst.mockResolvedValue(null);
     mockPrisma.destination.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ destinationId: 99 });
+    const res = await request(server).post(BASE).send({ destinationId: 99 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("Destination not found");
@@ -255,7 +260,7 @@ describe("POST /api/passes", () => {
     authenticateAs(fakeStudent);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("School not found");
@@ -266,7 +271,7 @@ describe("POST /api/passes", () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("No active period");
@@ -277,7 +282,7 @@ describe("POST /api/passes", () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue({ ...fakeCalendar, scheduleTypeId: null });
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("No active period");
@@ -289,7 +294,7 @@ describe("POST /api/passes", () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
     mockPrisma.period.findMany.mockResolvedValue([]);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("No active period");
@@ -309,7 +314,7 @@ describe("POST /api/passes", () => {
     });
     mockPrisma.pass.count.mockResolvedValue(3);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("Pass limit reached");
@@ -318,7 +323,7 @@ describe("POST /api/passes", () => {
   it("returns 400 for missing destinationId", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).post(BASE).send({});
+    const res = await request(server).post(BASE).send({});
 
     expect(res.status).toBe(400);
   });
@@ -332,7 +337,7 @@ describe("POST /api/passes", () => {
     mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
     mockPrisma.pass.create.mockResolvedValue(fakePass);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 99 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 99 });
 
     expect(res.status).toBe(201);
     expect(mockPrisma.pass.create).toHaveBeenCalledWith(
@@ -378,7 +383,7 @@ describe("POST /api/passes — midnight window clamp", () => {
     mockPrisma.destination.findFirst.mockResolvedValue({ id: 1, schoolId: 1, maxOccupancy: 10, deletedAt: null });
     mockPrisma.pass.create.mockResolvedValue({ ...fakePass, periodId: 3 });
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     // Old wrapping behavior yielded windowStart "23:55" and a 422 "No active period"
     expect(res.status).toBe(201);
@@ -426,7 +431,7 @@ describe("POST /api/passes — teacher-created", () => {
     mockSlots.claimPassSlots.mockResolvedValue("claimed");
     mockPrisma.pass.create.mockResolvedValue(teacherCreatedPass);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("ACTIVE");
@@ -455,7 +460,7 @@ describe("POST /api/passes — teacher-created", () => {
     const waitingPass = { ...teacherCreatedPass, status: "WAITING", activatedAt: null };
     mockPrisma.pass.create.mockResolvedValue(waitingPass);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("WAITING");
@@ -471,7 +476,7 @@ describe("POST /api/passes — teacher-created", () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
     mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1 });
+    const res = await request(server).post(BASE).send({ destinationId: 1 });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("studentId is required");
@@ -481,7 +486,7 @@ describe("POST /api/passes — teacher-created", () => {
     authenticateTeacherWithTarget(null);
     mockActivePeriodAndDestination();
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 99 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 99 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("Student not found");
@@ -507,7 +512,7 @@ describe("POST /api/passes — teacher-created", () => {
     });
     mockPrisma.pass.count.mockResolvedValue(3);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("Pass limit reached");
@@ -524,7 +529,7 @@ describe("POST /api/passes — teacher-created", () => {
     mockSlots.claimPassSlots.mockResolvedValue("claimed");
     mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toBe("Active pass already exists");
@@ -537,7 +542,7 @@ describe("POST /api/passes — teacher-created", () => {
     mockSlots.claimPassSlots.mockResolvedValue("destination_full");
     mockPrisma.pass.create.mockRejectedValue({ code: "P2002" });
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(409);
     expect(mockSlots.releasePassSlots).not.toHaveBeenCalled();
@@ -556,7 +561,7 @@ describe("POST /api/passes — teacher-created", () => {
     mockSlots.claimPassSlots.mockResolvedValue("claimed");
     mockPrisma.pass.create.mockResolvedValue(teacherCreatedPass);
 
-    const res = await request(app).post(BASE).send({ destinationId: 1, studentId: 11 });
+    const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 11 });
 
     expect(res.status).toBe(201);
     expect(mockSlots.claimPassSlots).toHaveBeenCalledWith(1, 5, 1, 10);
@@ -569,7 +574,7 @@ describe("GET /api/passes", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
   });
@@ -578,7 +583,7 @@ describe("GET /api/passes", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -591,7 +596,7 @@ describe("GET /api/passes", () => {
     const passes = [fakePass, { ...fakePass, id: 101, studentId: 11 }];
     mockPrisma.pass.findMany.mockResolvedValue(passes);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -601,7 +606,7 @@ describe("GET /api/passes", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
   });
@@ -610,7 +615,7 @@ describe("GET /api/passes", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
 
-    const res = await request(app).get(`${BASE}?status=PENDING`);
+    const res = await request(server).get(`${BASE}?status=PENDING`);
 
     expect(res.status).toBe(200);
     expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
@@ -623,7 +628,7 @@ describe("GET /api/passes", () => {
   it("returns 400 for invalid status query param", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).get(`${BASE}?status=INVALID`);
+    const res = await request(server).get(`${BASE}?status=INVALID`);
 
     expect(res.status).toBe(400);
   });
@@ -634,7 +639,7 @@ describe("GET /api/passes", () => {
     const passes = [fakePass, { ...fakePass, id: 101 }, { ...fakePass, id: 102 }];
     mockPrisma.pass.findMany.mockResolvedValue(passes);
 
-    const res = await request(app).get(`${BASE}?limit=2`);
+    const res = await request(server).get(`${BASE}?limit=2`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -648,7 +653,7 @@ describe("GET /api/passes", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findMany.mockResolvedValue([{ ...fakePass, id: 102 }]);
 
-    const res = await request(app).get(`${BASE}?cursor=101`);
+    const res = await request(server).get(`${BASE}?cursor=101`);
 
     expect(res.status).toBe(200);
     expect(res.body.nextCursor).toBeNull();
@@ -660,9 +665,9 @@ describe("GET /api/passes", () => {
   it("returns 400 for invalid cursor or limit", async () => {
     authenticateAs(fakeTeacher);
 
-    expect((await request(app).get(`${BASE}?cursor=abc`)).status).toBe(400);
-    expect((await request(app).get(`${BASE}?limit=0`)).status).toBe(400);
-    expect((await request(app).get(`${BASE}?limit=101`)).status).toBe(400);
+    expect((await request(server).get(`${BASE}?cursor=abc`)).status).toBe(400);
+    expect((await request(server).get(`${BASE}?limit=0`)).status).toBe(400);
+    expect((await request(server).get(`${BASE}?limit=101`)).status).toBe(400);
   });
 });
 
@@ -672,7 +677,7 @@ describe("GET /api/passes/:id", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(`${BASE}/100`);
+    const res = await request(server).get(`${BASE}/100`);
 
     expect(res.status).toBe(401);
   });
@@ -681,7 +686,7 @@ describe("GET /api/passes/:id", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
 
-    const res = await request(app).get(`${BASE}/100`);
+    const res = await request(server).get(`${BASE}/100`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(100);
@@ -691,7 +696,7 @@ describe("GET /api/passes/:id", () => {
     authenticateAs(fakeOtherStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).get(`${BASE}/100`);
+    const res = await request(server).get(`${BASE}/100`);
 
     expect(res.status).toBe(404);
   });
@@ -700,7 +705,7 @@ describe("GET /api/passes/:id", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(fakePass);
 
-    const res = await request(app).get(`${BASE}/100`);
+    const res = await request(server).get(`${BASE}/100`);
 
     expect(res.status).toBe(200);
   });
@@ -709,7 +714,7 @@ describe("GET /api/passes/:id", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).get(`${BASE}/9999`);
+    const res = await request(server).get(`${BASE}/9999`);
 
     expect(res.status).toBe(404);
   });
@@ -717,7 +722,7 @@ describe("GET /api/passes/:id", () => {
   it("returns 400 for non-numeric id", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).get(`${BASE}/abc`);
+    const res = await request(server).get(`${BASE}/abc`);
 
     expect(res.status).toBe(400);
   });
@@ -729,7 +734,7 @@ describe("POST /api/passes/:id/approve", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(401);
   });
@@ -737,7 +742,7 @@ describe("POST /api/passes/:id/approve", () => {
   it("returns 403 when STUDENT attempts to approve", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(403);
   });
@@ -756,7 +761,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(approvedPass);
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ACTIVE");
@@ -777,7 +782,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(waitingPass);
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("WAITING");
@@ -791,7 +796,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({ ...fakePass, status: "ACTIVE", approverId: 30, approvedAt: new Date() });
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ACTIVE");
@@ -804,7 +809,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockSlots.claimPassSlots.mockResolvedValue("claimed");
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(409);
     expect(mockSlots.releasePassSlots).toHaveBeenCalledWith(
@@ -830,7 +835,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(waitingPass);
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("WAITING");
@@ -849,7 +854,7 @@ describe("POST /api/passes/:id/approve", () => {
     mockSlots.claimPassSlots.mockResolvedValue("destination_full");
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 0 });
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(409);
     expect(mockSlots.releasePassSlots).not.toHaveBeenCalled();
@@ -859,7 +864,7 @@ describe("POST /api/passes/:id/approve", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
-    const res = await request(app).post(`${BASE}/100/approve`).send({});
+    const res = await request(server).post(`${BASE}/100/approve`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -868,7 +873,7 @@ describe("POST /api/passes/:id/approve", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/9999/approve`).send({});
+    const res = await request(server).post(`${BASE}/9999/approve`).send({});
 
     expect(res.status).toBe(404);
   });
@@ -880,7 +885,7 @@ describe("POST /api/passes/:id/deny", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/deny`).send({});
+    const res = await request(server).post(`${BASE}/100/deny`).send({});
 
     expect(res.status).toBe(401);
   });
@@ -888,7 +893,7 @@ describe("POST /api/passes/:id/deny", () => {
   it("returns 403 when STUDENT attempts to deny", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).post(`${BASE}/100/deny`).send({});
+    const res = await request(server).post(`${BASE}/100/deny`).send({});
 
     expect(res.status).toBe(403);
   });
@@ -905,7 +910,7 @@ describe("POST /api/passes/:id/deny", () => {
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(deniedPass);
 
-    const res = await request(app).post(`${BASE}/100/deny`).send({});
+    const res = await request(server).post(`${BASE}/100/deny`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("DENIED");
@@ -923,7 +928,7 @@ describe("POST /api/passes/:id/deny", () => {
       denierNote: "Hall is closed",
     });
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`${BASE}/100/deny`)
       .send({ denierNote: "Hall is closed" });
 
@@ -938,7 +943,7 @@ describe("POST /api/passes/:id/deny", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "WAITING" });
 
-    const res = await request(app).post(`${BASE}/100/deny`).send({});
+    const res = await request(server).post(`${BASE}/100/deny`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -947,7 +952,7 @@ describe("POST /api/passes/:id/deny", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
-    const res = await request(app).post(`${BASE}/100/deny`).send({});
+    const res = await request(server).post(`${BASE}/100/deny`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -956,7 +961,7 @@ describe("POST /api/passes/:id/deny", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/9999/deny`).send({});
+    const res = await request(server).post(`${BASE}/9999/deny`).send({});
 
     expect(res.status).toBe(404);
   });
@@ -968,7 +973,7 @@ describe("POST /api/passes/:id/return", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(401);
   });
@@ -984,7 +989,7 @@ describe("POST /api/passes/:id/return", () => {
       returnedAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("COMPLETED");
@@ -1001,7 +1006,7 @@ describe("POST /api/passes/:id/return", () => {
     });
     mockSlots.releaseAndPromote.mockRejectedValue(new Error("redis down"));
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("COMPLETED");
@@ -1018,7 +1023,7 @@ describe("POST /api/passes/:id/return", () => {
       returnedAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("COMPLETED");
@@ -1035,7 +1040,7 @@ describe("POST /api/passes/:id/return", () => {
       returnedAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(200);
   });
@@ -1044,7 +1049,7 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "PENDING" });
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -1053,7 +1058,7 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/9999/return`).send({});
+    const res = await request(server).post(`${BASE}/9999/return`).send({});
 
     expect(res.status).toBe(404);
   });
@@ -1062,7 +1067,7 @@ describe("POST /api/passes/:id/return", () => {
     authenticateAs(fakeOtherStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/return`).send({});
+    const res = await request(server).post(`${BASE}/100/return`).send({});
 
     expect(res.status).toBe(404);
   });
@@ -1074,7 +1079,7 @@ describe("POST /api/passes/:id/cancel", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(401);
   });
@@ -1090,7 +1095,7 @@ describe("POST /api/passes/:id/cancel", () => {
       cancelledAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");
@@ -1107,7 +1112,7 @@ describe("POST /api/passes/:id/cancel", () => {
       cancelledAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");
@@ -1124,7 +1129,7 @@ describe("POST /api/passes/:id/cancel", () => {
       cancelledAt: new Date(),
     });
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");
@@ -1135,7 +1140,7 @@ describe("POST /api/passes/:id/cancel", () => {
     // findFirst returns null because query filters by studentId = req.user.id
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     // 404 because pass not found for this student (ownership enforced in query)
     expect(res.status).toBe(404);
@@ -1145,7 +1150,7 @@ describe("POST /api/passes/:id/cancel", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Pass must be PENDING or WAITING to cancel");
@@ -1156,7 +1161,7 @@ describe("POST /api/passes/:id/cancel", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "COMPLETED" });
 
-    const res = await request(app).post(`${BASE}/100/cancel`).send({});
+    const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -1165,7 +1170,7 @@ describe("POST /api/passes/:id/cancel", () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(`${BASE}/9999/cancel`).send({});
+    const res = await request(server).post(`${BASE}/9999/cancel`).send({});
 
     expect(res.status).toBe(404);
   });

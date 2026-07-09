@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -104,11 +105,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools/:schoolId/schedule-types", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/schools/1/schedule-types");
+    const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(401);
   });
@@ -116,7 +121,7 @@ describe("GET /api/schools/:schoolId/schedule-types", () => {
   it("returns 403 when user is from a different school", async () => {
     authenticateAs(fakeWrongSchoolUser);
 
-    const res = await request(app).get("/api/schools/1/schedule-types");
+    const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(403);
   });
@@ -125,7 +130,7 @@ describe("GET /api/schools/:schoolId/schedule-types", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findMany.mockResolvedValue([fakeScheduleType]);
 
-    const res = await request(app).get("/api/schools/1/schedule-types");
+    const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -136,7 +141,7 @@ describe("GET /api/schools/:schoolId/schedule-types", () => {
     authenticateAs(fakeTeacher);
     mockPrisma.scheduleType.findMany.mockResolvedValue([fakeScheduleType]);
 
-    const res = await request(app).get("/api/schools/1/schedule-types");
+    const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(200);
   });
@@ -146,7 +151,7 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/1/schedule-types")
       .send({ name: "B Block" });
 
@@ -156,7 +161,7 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
   it("returns 403 when TEACHER attempts create", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/1/schedule-types")
       .send({ name: "B Block" });
 
@@ -168,7 +173,7 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "Test School", deletedAt: null });
     mockPrisma.scheduleType.create.mockResolvedValue(fakeScheduleType);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/1/schedule-types")
       .send({ name: "A Block", startBuffer: 5 });
 
@@ -180,7 +185,7 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/1/schedule-types")
       .send({ name: "A Block" });
 
@@ -191,7 +196,7 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
   it("returns 400 for missing name", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/1/schedule-types")
       .send({});
 
@@ -204,7 +209,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch("/api/schools/1/schedule-types/99999")
       .send({ name: "Updated" });
 
@@ -218,7 +223,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {
     mockPrisma.scheduleType.findFirst.mockResolvedValue(fakeScheduleType);
     mockPrisma.scheduleType.update.mockResolvedValue(updated);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch("/api/schools/1/schedule-types/1")
       .send({ name: "Updated Block" });
 
@@ -229,7 +234,7 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch("/api/schools/1/schedule-types/1")
       .send({});
 
@@ -244,7 +249,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id", () => {
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(null);
     mockPrisma.scheduleType.update.mockResolvedValue({ ...fakeScheduleType, deletedAt: new Date() });
 
-    const res = await request(app).delete("/api/schools/1/schedule-types/1");
+    const res = await request(server).delete("/api/schools/1/schedule-types/1");
 
     expect(res.status).toBe(204);
     expect(mockPrisma.scheduleType.update).toHaveBeenCalledWith({
@@ -258,7 +263,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id", () => {
     mockPrisma.scheduleType.findFirst.mockResolvedValue(fakeScheduleType);
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue({ id: 1, scheduleTypeId: 1 });
 
-    const res = await request(app).delete("/api/schools/1/schedule-types/1");
+    const res = await request(server).delete("/api/schools/1/schedule-types/1");
 
     expect(res.status).toBe(409);
     expect(mockPrisma.scheduleType.update).not.toHaveBeenCalled();
@@ -268,7 +273,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id", () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete("/api/schools/1/schedule-types/999");
+    const res = await request(server).delete("/api/schools/1/schedule-types/999");
 
     expect(res.status).toBe(404);
   });
@@ -276,7 +281,7 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id", () => {
   it("returns 403 when TEACHER attempts delete", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).delete("/api/schools/1/schedule-types/1");
+    const res = await request(server).delete("/api/schools/1/schedule-types/1");
 
     expect(res.status).toBe(403);
   });

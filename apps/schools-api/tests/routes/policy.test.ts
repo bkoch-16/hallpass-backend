@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -111,11 +112,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe(`GET ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
   });
@@ -123,7 +128,7 @@ describe(`GET ${BASE}`, () => {
   it("returns 403 when user is from a different school", async () => {
     authenticateAs(fakeWrongSchool);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(403);
   });
@@ -132,7 +137,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeTeacher);
     mockPrisma.passPolicy.findUnique.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "No policy set for this school" });
@@ -142,7 +147,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeTeacher);
     mockPrisma.passPolicy.findUnique.mockResolvedValue(fakePolicy);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(1);
@@ -155,7 +160,7 @@ describe(`PUT ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).put(BASE).send({ maxActivePasses: 5 });
+    const res = await request(server).put(BASE).send({ maxActivePasses: 5 });
 
     expect(res.status).toBe(401);
   });
@@ -163,7 +168,7 @@ describe(`PUT ${BASE}`, () => {
   it("returns 403 when TEACHER attempts upsert", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).put(BASE).send({ maxActivePasses: 5 });
+    const res = await request(server).put(BASE).send({ maxActivePasses: 5 });
 
     expect(res.status).toBe(403);
   });
@@ -171,7 +176,7 @@ describe(`PUT ${BASE}`, () => {
   it("returns 403 when user is from a different school", async () => {
     authenticateAs(fakeWrongSchool);
 
-    const res = await request(app).put(BASE).send({ maxActivePasses: 5 });
+    const res = await request(server).put(BASE).send({ maxActivePasses: 5 });
 
     expect(res.status).toBe(403);
   });
@@ -181,7 +186,7 @@ describe(`PUT ${BASE}`, () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });
     mockPrisma.passPolicy.upsert.mockResolvedValue(fakePolicy);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(BASE)
       .send({ maxActivePasses: 5, interval: "DAY", maxPerInterval: 3 });
 
@@ -193,7 +198,7 @@ describe(`PUT ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).put(BASE).send({ maxActivePasses: 5 });
+    const res = await request(server).put(BASE).send({ maxActivePasses: 5 });
 
     expect(res.status).toBe(404);
     expect(mockPrisma.passPolicy.upsert).not.toHaveBeenCalled();
@@ -202,7 +207,7 @@ describe(`PUT ${BASE}`, () => {
   it("returns 400 when interval set without maxPerInterval", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).put(BASE).send({ interval: "DAY" });
+    const res = await request(server).put(BASE).send({ interval: "DAY" });
 
     expect(res.status).toBe(400);
     expect(mockPrisma.passPolicy.upsert).not.toHaveBeenCalled();
@@ -211,7 +216,7 @@ describe(`PUT ${BASE}`, () => {
   it("returns 400 for invalid interval value", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).put(BASE).send({ interval: "YEAR", maxPerInterval: 5 });
+    const res = await request(server).put(BASE).send({ interval: "YEAR", maxPerInterval: 5 });
 
     expect(res.status).toBe(400);
   });
@@ -221,7 +226,7 @@ describe(`PUT ${BASE}`, () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });
     mockPrisma.passPolicy.upsert.mockResolvedValue(fakePolicy);
 
-    const res = await request(app)
+    const res = await request(server)
       .put(BASE)
       .send({ maxActivePasses: 5, interval: "DAY", maxPerInterval: 3 });
 
@@ -240,7 +245,7 @@ describe(`PUT ${BASE}`, () => {
       maxPerInterval: null,
     });
 
-    const res = await request(app).put(BASE).send({});
+    const res = await request(server).put(BASE).send({});
 
     expect(res.status).toBe(200);
   });

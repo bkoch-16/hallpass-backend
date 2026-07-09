@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth is mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -71,12 +72,16 @@ function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools (integration)", () => {
   it("returns 403 for ADMIN", async () => {
     const admin = await seedUser({ role: "ADMIN" });
     authenticateAs(admin);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.status).toBe(403);
   });
@@ -87,7 +92,7 @@ describe("GET /api/schools (integration)", () => {
     await seedSchool({ name: "School B" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -100,7 +105,7 @@ describe("GET /api/schools (integration)", () => {
     await seedSchool({ name: "Active" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/schools");
+    const res = await request(server).get("/api/schools");
 
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].name).toBe("Active");
@@ -112,7 +117,7 @@ describe("POST /api/schools (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools")
       .send({ name: "New School" });
 
@@ -128,7 +133,7 @@ describe("POST /api/schools (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools")
       .send({ name: "East School", timezone: "America/New_York" });
 
@@ -141,7 +146,7 @@ describe("POST /api/schools (integration)", () => {
     const district = await seedDistrict("Central District");
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools")
       .send({ name: "West School", districtId: district.id });
 
@@ -156,7 +161,7 @@ describe("GET /api/schools/:id (integration)", () => {
     const school = await seedSchool({ name: "Riverside" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/schools/${school.id}`);
+    const res = await request(server).get(`/api/schools/${school.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(school.id);
@@ -167,7 +172,7 @@ describe("GET /api/schools/:id (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get("/api/schools/99999");
+    const res = await request(server).get("/api/schools/99999");
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "School not found" });
@@ -180,7 +185,7 @@ describe("PATCH /api/schools/:id (integration)", () => {
     const school = await seedSchool({ name: "Old Name" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}`)
       .send({ name: "New Name" });
 
@@ -197,7 +202,7 @@ describe("PATCH /api/schools/:id (integration)", () => {
     const school = await seedSchool({ districtId: district.id });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}`)
       .send({ districtId: null });
 
@@ -212,7 +217,7 @@ describe("DELETE /api/schools/:id (integration)", () => {
     const school = await seedSchool({ name: "To Delete" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).delete(`/api/schools/${school.id}`);
+    const res = await request(server).delete(`/api/schools/${school.id}`);
 
     expect(res.status).toBe(204);
 
@@ -225,8 +230,8 @@ describe("DELETE /api/schools/:id (integration)", () => {
     const school = await seedSchool({ name: "Gone" });
     authenticateAs(superAdmin);
 
-    await request(app).delete(`/api/schools/${school.id}`);
-    const res = await request(app).get("/api/schools");
+    await request(server).delete(`/api/schools/${school.id}`);
+    const res = await request(server).get("/api/schools");
 
     expect(res.body.data.map((s: { id: number }) => s.id)).not.toContain(school.id);
   });
