@@ -5,6 +5,12 @@ export { notFound, createErrorHandler } from "./errorHandler.js";
 export { resolveSessionUser, createRequireAuth, type SessionAuth } from "./auth.js";
 export { roleRank, requireRole, requireSelfOrRole, requireMinRole } from "./roleGuard.js";
 export { createGeneralLimiter, createAuthLimiter, type RateLimiterOptions } from "./rateLimit.js";
-export { baseEnvSchema } from "./env.js";
+export {
+  baseEnvSchema,
+  optionalRedisEnvShape,
+  requireRedisPrefixWithUrl,
+  REDIS_PREFIX_REFINE_MESSAGE,
+} from "./env.js";
+export { createRateLimitRedis } from "./redis.js";
 export { parseCorsOrigins } from "./cors.js";
 export { createTestServer, type TestServerHandle } from "./testing.js";

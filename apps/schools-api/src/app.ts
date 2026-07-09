@@ -8,10 +8,10 @@ import {
   createErrorHandler,
   createGeneralLimiter,
   parseCorsOrigins,
+  createRateLimitRedis,
 } from "@hallpass/express-middleware";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
-import { redis } from "./lib/redis.js";
 import districtRouter from "./routes/district.js";
 import schoolRouter from "./routes/school.js";
 import scheduleTypeRouter from "./routes/scheduleType.js";
@@ -19,6 +19,8 @@ import periodRouter from "./routes/period.js";
 import calendarRouter from "./routes/calendar.js";
 import destinationRouter from "./routes/destination.js";
 import policyRouter from "./routes/policy.js";
+
+const redis = createRateLimitRedis(env);
 
 const app = express();
 

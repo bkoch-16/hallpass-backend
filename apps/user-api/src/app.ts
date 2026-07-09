@@ -10,12 +10,14 @@ import {
   createGeneralLimiter,
   createAuthLimiter,
   parseCorsOrigins,
+  createRateLimitRedis,
 } from "@hallpass/express-middleware";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
-import { redis } from "./lib/redis.js";
 import userRouter from "./routes/user.js";
+
+const redis = createRateLimitRedis(env);
 
 const app = express();
 
