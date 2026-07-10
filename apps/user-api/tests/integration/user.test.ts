@@ -14,13 +14,42 @@ const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
-vi.mock("@hallpass/auth", () => ({
-  createAuth: vi.fn(() => ({
-    api: { getSession: mockGetSession },
-  })),
-  toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-  fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
-}));
+vi.mock("@hallpass/auth", () => {
+  class EmailInUseError extends Error {
+    constructor() {
+      super("Email already in use");
+      this.name = "EmailInUseError";
+    }
+  }
+  // Real-DB-backed stand-in for the provisioning helper: mirrors its contract
+  // (lowercase email, EmailInUseError on duplicate) while persisting through the
+  // real Prisma client. Auth account/credential linking is not exercised here.
+  async function createUserWithCredential(
+    _auth: unknown,
+    input: { email: string; name: string; role?: string; schoolId?: number | null },
+  ) {
+    const { prisma } = await import("@hallpass/db");
+    const email = input.email.toLowerCase();
+    if (await prisma.user.findFirst({ where: { email } })) throw new EmailInUseError();
+    return prisma.user.create({
+      data: {
+        email,
+        name: input.name,
+        ...(input.role ? { role: input.role } : {}),
+        ...(input.schoolId !== undefined ? { schoolId: input.schoolId } : {}),
+      },
+    });
+  }
+  return {
+    createAuth: vi.fn(() => ({
+      api: { getSession: mockGetSession },
+    })),
+    toNodeHandler: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+    fromNodeHeaders: vi.fn((headers: Record<string, string>) => new Headers(headers)),
+    createUserWithCredential,
+    EmailInUseError,
+  };
+});
 
 // Do NOT mock @hallpass/db — use the real Prisma client.
 

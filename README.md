@@ -10,6 +10,7 @@ Designed as a microservice deployment with separate APIs for Users, Passes, and 
 - **Auth**: better-auth
 - **ORM**: Prisma
 - **Database**: PostgreSQL (local via Docker, cloud via [Neon](https://neon.tech))
+- **Cache / rate limiting**: Redis (local via Docker, cloud via [Upstash](https://upstash.com))
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Infrastructure**: Google Cloud Run, GCP Artifact Registry, GCP Secret Manager
 - **CI/CD**: GitHub Actions
@@ -80,7 +81,7 @@ These users exist on the dev cloud environment and are created locally when you 
 ## Local Development
 
 ```bash
-# Start the local database
+# Start local Postgres + Redis (rate limiting); integration tests need both
 docker-compose up -d
 
 # Install dependencies

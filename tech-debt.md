@@ -9,17 +9,17 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Authorization & user onboarding 🔴
+## 1. User onboarding — bulk-student delivery 🟡
 
-Touches `apps/user-api/src/routes/user.ts` and the auth model.
+Touches `apps/user-api/src/routes/user.ts`. Provisioning itself is solved
+(`createUserWithCredential`); see `docs/ONBOARDING.md`.
 
-- 🔴 **Admin-provisioned users can never log in.** `POST /api/users` and `/bulk`
-  (`user.ts:120,154`) create `User` rows with no better-auth credential
-  `Account`; better-auth sign-up then refuses their email (row exists). The seed
-  works around this by hand-crafting scrypt hashes that must "match better-auth's
-  config exactly" (`packages/db/prisma/seed.ts:14-25`) — a version-upgrade
-  landmine, and not something the API offers. Needs a real invite / set-password
-  flow (or better-auth admin plugin) before onboarding a school.
+- **No mechanism to deliver credentials at scale.** `POST /api/users/bulk`
+  returns a `created`/`failed` summary, not the per-student temp passwords, so
+  there's no way to get a credential to each student. A set-password link or
+  transactional-email invite is still needed before onboarding a school at scale
+  — see the "Future optimizations" (set-password link, transactional email) in
+  `docs/ONBOARDING.md`.
 
 ---
 
@@ -82,3 +82,10 @@ The three apps are copy-paste siblings diverging; converge in
   warns every `prisma migrate dev` regenerates a `DROP INDEX` that must be
   hand-deleted. passes-api's 409 duplicate-pass contract silently degrades if
   applied. Add a CI grep / post-migrate assertion so the failure is loud.
+- **Integration suites collide on one shared Postgres.** Each app pins
+  `fileParallelism: false` (`apps/*/vitest.integration.config.ts`), so a suite is
+  serial *within itself* — but `pnpm turbo test:integration` runs all three apps'
+  vitest processes concurrently against the same DB, and their `deleteMany`
+  teardowns trip FK/contention errors. Every suite passes in isolation; the
+  combined run flakes. Give each app its own database/schema, run the turbo task
+  with `--concurrency=1`, or isolate teardown per-suite.
