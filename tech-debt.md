@@ -23,19 +23,18 @@ Touches `apps/user-api/src/routes/user.ts`. Provisioning itself is solved
 
 ---
 
-## 2. Cross-service invariants (schools-api ↔ passes-api) 🟠
+## 2. Cross-service invariants (schools-api ↔ passes-api) 🟡
 
-No layer owns the invariants passes-api depends on. Fix the destination case
-(the sharp one) together with the promotion query.
+No layer owns the invariants passes-api depends on. The sharp destination case
+is now closed; what remains is the bounded-staleness case below.
 
-- **Destination delete doesn't guard in-flight passes.**
-  `apps/schools-api/src/routes/destination.ts:94` soft-deletes with no check,
-  and `promoteFromQueue` (`apps/passes-api/src/lib/slots.ts:197-201`) doesn't
-  filter `deletedAt` — a WAITING student is promoted into a destination that no
-  longer exists. The pattern to copy exists: `scheduleType` DELETE guards its
-  references (`scheduleType.ts:115-122`). Add a 409 guard on destination delete
-  while non-terminal passes reference it, and `deletedAt: null` to the promotion
-  query.
+- ✅ **RESOLVED — destination delete guards in-flight passes.** `DELETE
+  /destinations/:id` (`apps/schools-api/src/routes/destination.ts`) now returns
+  `409` while a non-terminal (`PENDING`/`WAITING`/`ACTIVE`) pass references the
+  destination, and `promoteFromQueue` (`apps/passes-api/src/lib/slots.ts:197-198`)
+  filters `destination: { deletedAt: null }` — a WAITING student can no longer be
+  promoted into a soft-deleted destination. Mirrors the `scheduleType` DELETE
+  guard (`scheduleType.ts:115-122`).
 - **`maxOccupancy` shrink / period `endTime` edit leave stale state.** Redis
   counters and already-armed expiry timers aren't updated until the scheduled
   reconcile. Acceptable *if* reconcile runs frequently — write that assumption
@@ -45,12 +44,13 @@ No layer owns the invariants passes-api depends on. Fix the destination case
 
 ## 3. Validation & data integrity 🟠
 
-- **Timezone is unvalidated free text.** `createSchoolSchema` / `updateSchoolSchema`
-  (`apps/schools-api/src/schemas/school.ts:18,25`) accept any string. In
-  passes-api, `tzOffsetMs` / `localMidnightAsUTC` (`apps/passes-api/src/lib/time.ts:30-56`)
-  throw `RangeError` on a bad zone — pass creation 500s *after* the row is
-  inserted, and quota checks throw. Validate with `Intl.supportedValuesOf("timeZone")`
-  in the schema; the whole failure family disappears at the edge.
+- ✅ **RESOLVED — timezone is validated at the schema edge.** `createSchoolSchema`
+  / `updateSchoolSchema` (`apps/schools-api/src/schemas/school.ts`) now `refine`
+  `timezone` against `Intl.supportedValuesOf("timeZone")`, so a bad zone is
+  rejected with `422` before the row is written. This closes the downstream
+  `RangeError` family in passes-api (`tzOffsetMs` / `localMidnightAsUTC`,
+  `apps/passes-api/src/lib/time.ts:30-56`) — no more 500-after-insert on pass
+  creation or in quota checks.
 - **Bulk calendar upsert is non-atomic.** `apps/schools-api/src/routes/calendar.ts:66-107`
   loops entries and returns a bare 422 mid-loop on a bad `scheduleTypeId` —
   earlier entries are already written and the client can't tell which. Also N+1.

@@ -110,6 +110,15 @@ router.delete(
       return;
     }
 
+    const passRef = await prisma.pass.findFirst({
+      where: { destinationId: id, status: { in: ["PENDING", "WAITING", "ACTIVE"] } },
+    });
+
+    if (passRef) {
+      res.status(409).json({ message: "Cannot delete: destination has in-flight passes" });
+      return;
+    }
+
     await prisma.destination.update({
       where: { id },
       data: { deletedAt: new Date() },
