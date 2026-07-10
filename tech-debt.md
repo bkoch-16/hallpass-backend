@@ -51,11 +51,11 @@ is now closed; what remains is the bounded-staleness case below.
   `RangeError` family in passes-api (`tzOffsetMs` / `localMidnightAsUTC`,
   `apps/passes-api/src/lib/time.ts:30-56`) — no more 500-after-insert on pass
   creation or in quota checks.
-- **Bulk calendar upsert is non-atomic.** `apps/schools-api/src/routes/calendar.ts:66-107`
-  loops entries and returns a bare 422 mid-loop on a bad `scheduleTypeId` —
-  earlier entries are already written and the client can't tell which. Also N+1.
-  Wrap in `$transaction`, validate all up front, or adopt `/users/bulk`'s
-  per-item result shape.
+- ✅ **RESOLVED — bulk calendar upsert is atomic.**
+  `apps/schools-api/src/routes/calendar.ts` now validates every referenced
+  `scheduleTypeId` up front in a single query (also killing the N+1) and returns
+  `422` before any write, then performs all upserts inside one
+  `prisma.$transaction` — so a bad id mid-batch leaves no partial state.
 - **Quota check is read-then-write (TOCTOU).** `apps/passes-api/src/routes/passes.ts:180-203`:
   concurrent create/complete cycles can exceed `maxPerInterval` by one. The
   partial unique index bounds it to one extra — acceptable, but note it.

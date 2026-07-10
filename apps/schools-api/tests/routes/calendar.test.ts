@@ -9,16 +9,18 @@ const { mockGetSession } = vi.hoisted(() => ({
 vi.mock("@hallpass/db", () => ({
   prisma: {
     user: { findFirst: vi.fn() },
-    scheduleType: { findFirst: vi.fn() },
+    scheduleType: { findFirst: vi.fn(), findMany: vi.fn() },
     schoolCalendar: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      upsert: vi.fn(),
       delete: vi.fn(),
     },
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
   },
 }));
 
@@ -35,15 +37,17 @@ import { prisma } from "@hallpass/db";
 
 const mockPrisma = prisma as unknown as {
   user: { findFirst: ReturnType<typeof vi.fn> };
-  scheduleType: { findFirst: ReturnType<typeof vi.fn> };
+  scheduleType: { findFirst: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   schoolCalendar: {
     findMany: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
   };
+  $transaction: ReturnType<typeof vi.fn>;
 };
 
 interface FakeUser {
@@ -164,8 +168,8 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("creates new entries and returns created count", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findUnique.mockResolvedValue(null); // not existing → create
-    mockPrisma.schoolCalendar.create.mockResolvedValue(fakeEntry);
+    mockPrisma.schoolCalendar.findMany.mockResolvedValue([]); // none existing → create
+    mockPrisma.$transaction.mockResolvedValue([]);
 
     const res = await request(server)
       .post(BASE)
@@ -178,8 +182,10 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("updates existing entries and returns updated count", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findUnique.mockResolvedValue(fakeEntry); // existing → update
-    mockPrisma.schoolCalendar.update.mockResolvedValue(fakeEntry);
+    mockPrisma.schoolCalendar.findMany.mockResolvedValue([
+      { date: new Date("2025-09-01") },
+    ]); // existing → update
+    mockPrisma.$transaction.mockResolvedValue([]);
 
     const res = await request(server).post(BASE).send([{ date: "2025-09-01", note: "Updated" }]);
 
@@ -190,8 +196,8 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("accepts a single entry object (not array)", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findUnique.mockResolvedValue(null);
-    mockPrisma.schoolCalendar.create.mockResolvedValue(fakeEntry);
+    mockPrisma.schoolCalendar.findMany.mockResolvedValue([]);
+    mockPrisma.$transaction.mockResolvedValue([]);
 
     const res = await request(server).post(BASE).send({ date: "2025-09-01" });
 
@@ -201,14 +207,14 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("returns 422 when scheduleTypeId does not belong to the school", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
+    mockPrisma.scheduleType.findMany.mockResolvedValue([]); // id not found for school
 
     const res = await request(server)
       .post(BASE)
       .send([{ date: "2025-09-01", scheduleTypeId: 999 }]);
 
     expect(res.status).toBe(422);
-    expect(mockPrisma.schoolCalendar.create).not.toHaveBeenCalled();
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid date in bulk array", async () => {
