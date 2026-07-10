@@ -393,6 +393,45 @@ describe("promoteFromQueue", () => {
     expect(mockRedis.eval).toHaveBeenCalledTimes(1);
   });
 
+  it("does not promote a WAITING pass whose destination is soft-deleted, but still promotes one to a live destination", async () => {
+    // Oldest WAITING pass points at a soft-deleted destination and must be skipped;
+    // the next pass points at a live destination and must still be promoted (no starvation).
+    const liveDestPass = {
+      id: 71,
+      schoolId: 1,
+      destinationId: 2,
+      status: "WAITING",
+      requestedAt: new Date("2025-09-15T08:05:00Z"),
+      destination: { maxOccupancy: 10, deletedAt: null },
+    };
+    const promotedPass = { ...liveDestPass, status: "ACTIVE", activatedAt: new Date() };
+    // The query is expected to exclude soft-deleted destinations, so it only ever
+    // returns the live-destination pass. Mock that filtered result.
+    mockPrisma.pass.findMany.mockResolvedValue([liveDestPass]);
+    mockRedis.eval.mockResolvedValue(1); // live destination + school claimed
+    mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue(promotedPass);
+
+    await promoteFromQueue(1, 5);
+
+    // The WAITING query must filter out passes headed to a soft-deleted destination.
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          destination: { deletedAt: null },
+        }),
+      }),
+    );
+    // Only the live-destination pass is promoted; the soft-deleted one never is.
+    expect(mockPrisma.pass.updateMany).toHaveBeenCalledWith({
+      where: { id: 71, status: "WAITING" },
+      data: expect.objectContaining({ status: "ACTIVE" }),
+    });
+    expect(mockPrisma.pass.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 70, status: "WAITING" } }),
+    );
+  });
+
   it("skips a full destination and promotes the next destination's oldest candidate", async () => {
     const fullDestPass = {
       id: 53,

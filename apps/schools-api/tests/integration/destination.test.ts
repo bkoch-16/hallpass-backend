@@ -24,12 +24,14 @@ import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  await prisma.pass.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
 });
 
 afterAll(async () => {
+  await prisma.pass.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
@@ -63,6 +65,23 @@ async function seedDestination(schoolId: number, overrides: Partial<{
       schoolId,
       name: overrides.name ?? "Library",
       maxOccupancy: overrides.maxOccupancy ?? null,
+    },
+  });
+}
+
+async function seedPass(
+  schoolId: number,
+  destinationId: number,
+  studentId: number,
+  status: "PENDING" | "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "DENIED" | "EXPIRED",
+) {
+  return prisma.pass.create({
+    data: {
+      schoolId,
+      destinationId,
+      studentId,
+      requesterId: studentId,
+      status,
     },
   });
 }
@@ -264,4 +283,46 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it.each(["PENDING", "WAITING", "ACTIVE"] as const)(
+    "returns 409 and does NOT soft-delete when a %s pass references the destination",
+    async (status) => {
+      const school = await seedSchool();
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+      await seedPass(school.id, dest.id, student.id, status);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/destinations/${dest.id}`,
+      );
+
+      expect(res.status).toBe(409);
+
+      const inDb = await prisma.destination.findUnique({ where: { id: dest.id } });
+      expect(inDb?.deletedAt).toBeNull();
+    },
+  );
+
+  it.each(["COMPLETED", "CANCELLED", "DENIED", "EXPIRED"] as const)(
+    "returns 204 and soft-deletes when only a %s (terminal) pass references the destination",
+    async (status) => {
+      const school = await seedSchool();
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+      await seedPass(school.id, dest.id, student.id, status);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/destinations/${dest.id}`,
+      );
+
+      expect(res.status).toBe(204);
+
+      const inDb = await prisma.destination.findUnique({ where: { id: dest.id } });
+      expect(inDb?.deletedAt).not.toBeNull();
+    },
+  );
 });

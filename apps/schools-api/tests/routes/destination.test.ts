@@ -16,6 +16,9 @@ vi.mock("@hallpass/db", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    pass: {
+      findFirst: vi.fn(),
+    },
     $queryRaw: vi.fn(),
   },
 }));
@@ -40,6 +43,7 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  pass: { findFirst: ReturnType<typeof vi.fn> };
 };
 
 interface FakeUser {
@@ -271,6 +275,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("soft deletes destination and returns 204", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
     const res = await request(server).delete(`${BASE}/1`);
@@ -280,6 +285,17 @@ describe(`DELETE ${BASE}/:id`, () => {
       where: { id: 1 },
       data: { deletedAt: expect.any(Date) },
     });
+  });
+
+  it("returns 409 and does not soft-delete when a non-terminal pass references the destination", async () => {
+    authenticateAs(fakeAdmin);
+    mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue({ id: 99, destinationId: 1, status: "ACTIVE" });
+
+    const res = await request(server).delete(`${BASE}/1`);
+
+    expect(res.status).toBe(409);
+    expect(mockPrisma.destination.update).not.toHaveBeenCalled();
   });
 
   it("returns 404 when destination not found", async () => {
@@ -328,6 +344,7 @@ describe("SUPER_ADMIN write access", () => {
   it("SUPER_ADMIN can delete a destination", async () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
     const res = await request(server).delete(`${BASE}/1`);
