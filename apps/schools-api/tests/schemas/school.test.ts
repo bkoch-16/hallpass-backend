@@ -89,6 +89,18 @@ describe("createSchoolSchema", () => {
   it("rejects non-positive districtId", () => {
     expect(createSchoolSchema.safeParse({ name: "Test", districtId: 0 }).success).toBe(false);
   });
+
+  it("accepts a valid IANA timezone", () => {
+    expect(createSchoolSchema.safeParse({ name: "Test", timezone: "America/New_York" }).success).toBe(true);
+  });
+
+  it("rejects an invalid timezone", () => {
+    expect(createSchoolSchema.safeParse({ name: "Test", timezone: "Not/AZone" }).success).toBe(false);
+  });
+
+  it("timezone remains optional (omitting it passes)", () => {
+    expect(createSchoolSchema.safeParse({ name: "Test" }).success).toBe(true);
+  });
 });
 
 describe("updateSchoolSchema", () => {
@@ -112,5 +124,17 @@ describe("updateSchoolSchema", () => {
 
   it("rejects unknown fields only (stripped → empty → refine fails)", () => {
     expect(updateSchoolSchema.safeParse({ unknown: "x" }).success).toBe(false);
+  });
+
+  it("accepts a valid IANA timezone", () => {
+    expect(updateSchoolSchema.safeParse({ timezone: "America/New_York" }).success).toBe(true);
+  });
+
+  it("rejects an invalid timezone", () => {
+    expect(updateSchoolSchema.safeParse({ timezone: "Not/AZone" }).success).toBe(false);
+  });
+
+  it("timezone remains optional (omitting it passes when another field present)", () => {
+    expect(updateSchoolSchema.safeParse({ name: "New Name" }).success).toBe(true);
   });
 });
