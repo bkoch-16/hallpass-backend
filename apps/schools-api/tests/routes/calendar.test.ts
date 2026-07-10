@@ -22,6 +22,10 @@ vi.mock("@hallpass/db", () => ({
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
+  Prisma: {
+    sql: (...args: unknown[]) => args,
+    join: (...args: unknown[]) => args,
+  },
 }));
 
 vi.mock("@hallpass/auth", () => ({
@@ -47,6 +51,7 @@ const mockPrisma = prisma as unknown as {
     upsert: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
   };
+  $queryRaw: ReturnType<typeof vi.fn>;
   $transaction: ReturnType<typeof vi.fn>;
 };
 
@@ -168,8 +173,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("creates new entries and returns created count", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findMany.mockResolvedValue([]); // none existing → create
-    mockPrisma.$transaction.mockResolvedValue([]);
+    mockPrisma.$queryRaw.mockResolvedValue([{ inserted: true }, { inserted: true }]);
 
     const res = await request(server)
       .post(BASE)
@@ -182,10 +186,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("updates existing entries and returns updated count", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findMany.mockResolvedValue([
-      { date: new Date("2025-09-01") },
-    ]); // existing → update
-    mockPrisma.$transaction.mockResolvedValue([]);
+    mockPrisma.$queryRaw.mockResolvedValue([{ inserted: false }]); // existing → update
 
     const res = await request(server).post(BASE).send([{ date: "2025-09-01", note: "Updated" }]);
 
@@ -196,8 +197,7 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
   it("accepts a single entry object (not array)", async () => {
     authenticateAs(fakeAdmin);
-    mockPrisma.schoolCalendar.findMany.mockResolvedValue([]);
-    mockPrisma.$transaction.mockResolvedValue([]);
+    mockPrisma.$queryRaw.mockResolvedValue([{ inserted: true }]);
 
     const res = await request(server).post(BASE).send({ date: "2025-09-01" });
 

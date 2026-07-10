@@ -28,13 +28,6 @@ Touches `apps/user-api/src/routes/user.ts`. Provisioning itself is solved
 No layer owns the invariants passes-api depends on. The sharp destination case
 is now closed; what remains is the bounded-staleness case below.
 
-- ✅ **RESOLVED — destination delete guards in-flight passes.** `DELETE
-  /destinations/:id` (`apps/schools-api/src/routes/destination.ts`) now returns
-  `409` while a non-terminal (`PENDING`/`WAITING`/`ACTIVE`) pass references the
-  destination, and `promoteFromQueue` (`apps/passes-api/src/lib/slots.ts:197-198`)
-  filters `destination: { deletedAt: null }` — a WAITING student can no longer be
-  promoted into a soft-deleted destination. Mirrors the `scheduleType` DELETE
-  guard (`scheduleType.ts:115-122`).
 - **`maxOccupancy` shrink / period `endTime` edit leave stale state.** Redis
   counters and already-armed expiry timers aren't updated until the scheduled
   reconcile. Acceptable *if* reconcile runs frequently — write that assumption
@@ -42,37 +35,7 @@ is now closed; what remains is the bounded-staleness case below.
 
 ---
 
-## 3. Validation & data integrity 🟠
-
-- ✅ **RESOLVED — timezone is validated at the schema edge.** `createSchoolSchema`
-  / `updateSchoolSchema` (`apps/schools-api/src/schemas/school.ts`) now `refine`
-  `timezone` against `Intl.supportedValuesOf("timeZone")`, so a bad zone is
-  rejected with `422` before the row is written. This closes the downstream
-  `RangeError` family in passes-api (`tzOffsetMs` / `localMidnightAsUTC`,
-  `apps/passes-api/src/lib/time.ts:30-56`) — no more 500-after-insert on pass
-  creation or in quota checks.
-- ✅ **RESOLVED — bulk calendar upsert is atomic.**
-  `apps/schools-api/src/routes/calendar.ts` now validates every referenced
-  `scheduleTypeId` up front in a single query (also killing the N+1) and returns
-  `422` before any write, then performs all upserts inside one
-  `prisma.$transaction` — so a bad id mid-batch leaves no partial state.
-- **Quota check is read-then-write (TOCTOU).** `apps/passes-api/src/routes/passes.ts:180-203`:
-  concurrent create/complete cycles can exceed `maxPerInterval` by one. The
-  partial unique index bounds it to one extra — acceptable, but note it.
-- **Bulk calendar `created`/`updated` counts are read-then-write (TOCTOU).**
-  `apps/schools-api/src/routes/calendar.ts:103-117`: the count split is derived
-  from an `existingDates` snapshot read *outside* the `$transaction`, so a
-  concurrent insert of one of those dates makes the response report `created`
-  where the upsert actually did an update. The write stays correct and idempotent
-  — only the advisory counts can be wrong, and only under concurrent bulk writes
-  to the same school's calendar (admin-only, rare). Same class as the quota
-  TOCTOU above; both would be closed by a shared serializable-tx-with-retry
-  helper. Exact counts otherwise need raw `INSERT ... ON CONFLICT ... RETURNING
-  (xmax = 0)` (the model has no `createdAt`/`updatedAt` to compare).
-
----
-
-## 4. Consistency & service drift 🟡
+## 3. Consistency & service drift 🟡
 
 The three apps are copy-paste siblings diverging; converge in
 `@hallpass/express-middleware`.
