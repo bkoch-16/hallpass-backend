@@ -60,51 +60,72 @@ router.post(
     const schoolId = Number(req.params.schoolId);
     const entries = Array.isArray(req.body) ? req.body : [req.body];
 
-    let created = 0;
-    let updated = 0;
+    // Validate every referenced schedule type up front, in one query, before
+    // any write — so a bad id returns 422 without leaving partial state.
+    const byDate = new Map<number, { date: Date; scheduleTypeId: number | null; note: string | null }>();
+    for (const e of entries) {
+      const date = new Date(e.date);
+      if (byDate.has(date.getTime())) {
+        res.status(422).json({ message: `Duplicate date ${e.date} in request` });
+        return;
+      }
+      byDate.set(date.getTime(), {
+        date,
+        scheduleTypeId: e.scheduleTypeId ?? null,
+        note: e.note ?? null,
+      });
+    }
+    const validatedEntries = [...byDate.values()];
 
-    for (const entry of entries) {
-      if (entry.scheduleTypeId) {
-        const scheduleType = await prisma.scheduleType.findFirst({
-          where: { id: Number(entry.scheduleTypeId), schoolId },
-        });
+    const scheduleTypeIds = [
+      ...new Set(
+        validatedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
+      ),
+    ];
+    if (scheduleTypeIds.length) {
+      const scheduleTypes = await prisma.scheduleType.findMany({
+        where: { id: { in: scheduleTypeIds }, schoolId },
+      });
+      const byId = new Map(scheduleTypes.map((st) => [st.id, st]));
+      for (const id of scheduleTypeIds) {
+        const scheduleType = byId.get(id);
         if (!scheduleType) {
-          res.status(422).json({ message: `Schedule type ${entry.scheduleTypeId} not found for this school` });
+          res.status(422).json({ message: `Schedule type ${id} not found for this school` });
           return;
         }
         if (scheduleType.deletedAt !== null) {
-          res.status(422).json({ message: `Schedule type ${entry.scheduleTypeId} has been deleted` });
+          res.status(422).json({ message: `Schedule type ${id} has been deleted` });
           return;
         }
       }
+    }
 
-      const date = new Date(entry.date);
+    const existing = await prisma.schoolCalendar.findMany({
+      where: { schoolId, date: { in: validatedEntries.map((e) => e.date) } },
+      select: { date: true },
+    });
+    const existingDates = new Set(existing.map((e) => e.date.getTime()));
 
-      const existing = await prisma.schoolCalendar.findUnique({
-        where: { schoolId_date: { schoolId, date } },
-      });
-
-      if (existing) {
-        await prisma.schoolCalendar.update({
-          where: { schoolId_date: { schoolId, date } },
-          data: {
-            scheduleTypeId: entry.scheduleTypeId ?? null,
-            note: entry.note ?? null,
-          },
-        });
+    let created = 0;
+    let updated = 0;
+    for (const entry of validatedEntries) {
+      if (existingDates.has(entry.date.getTime())) {
         updated++;
       } else {
-        await prisma.schoolCalendar.create({
-          data: {
-            schoolId,
-            date,
-            scheduleTypeId: entry.scheduleTypeId ?? null,
-            note: entry.note ?? null,
-          },
-        });
         created++;
       }
     }
+
+    await prisma.$transaction(
+      validatedEntries.map((entry) => {
+        const data = { scheduleTypeId: entry.scheduleTypeId, note: entry.note };
+        return prisma.schoolCalendar.upsert({
+          where: { schoolId_date: { schoolId, date: entry.date } },
+          update: data,
+          create: { schoolId, date: entry.date, ...data },
+        });
+      }),
+    );
 
     res.status(200).json({ created, updated } satisfies BulkUpsertResult);
   },

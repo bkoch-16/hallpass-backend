@@ -51,14 +51,24 @@ is now closed; what remains is the bounded-staleness case below.
   `RangeError` family in passes-api (`tzOffsetMs` / `localMidnightAsUTC`,
   `apps/passes-api/src/lib/time.ts:30-56`) — no more 500-after-insert on pass
   creation or in quota checks.
-- **Bulk calendar upsert is non-atomic.** `apps/schools-api/src/routes/calendar.ts:66-107`
-  loops entries and returns a bare 422 mid-loop on a bad `scheduleTypeId` —
-  earlier entries are already written and the client can't tell which. Also N+1.
-  Wrap in `$transaction`, validate all up front, or adopt `/users/bulk`'s
-  per-item result shape.
+- ✅ **RESOLVED — bulk calendar upsert is atomic.**
+  `apps/schools-api/src/routes/calendar.ts` now validates every referenced
+  `scheduleTypeId` up front in a single query (also killing the N+1) and returns
+  `422` before any write, then performs all upserts inside one
+  `prisma.$transaction` — so a bad id mid-batch leaves no partial state.
 - **Quota check is read-then-write (TOCTOU).** `apps/passes-api/src/routes/passes.ts:180-203`:
   concurrent create/complete cycles can exceed `maxPerInterval` by one. The
   partial unique index bounds it to one extra — acceptable, but note it.
+- **Bulk calendar `created`/`updated` counts are read-then-write (TOCTOU).**
+  `apps/schools-api/src/routes/calendar.ts:103-117`: the count split is derived
+  from an `existingDates` snapshot read *outside* the `$transaction`, so a
+  concurrent insert of one of those dates makes the response report `created`
+  where the upsert actually did an update. The write stays correct and idempotent
+  — only the advisory counts can be wrong, and only under concurrent bulk writes
+  to the same school's calendar (admin-only, rare). Same class as the quota
+  TOCTOU above; both would be closed by a shared serializable-tx-with-retry
+  helper. Exact counts otherwise need raw `INSERT ... ON CONFLICT ... RETURNING
+  (xmax = 0)` (the model has no `createdAt`/`updatedAt` to compare).
 
 ---
 

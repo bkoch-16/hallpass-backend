@@ -201,6 +201,26 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     expect(res.status).toBe(422);
   });
 
+  it("writes nothing when a later entry has an invalid scheduleTypeId (atomic)", async () => {
+    const school = await seedSchool();
+    const otherSchool = await seedSchool();
+    const badSt = await seedScheduleType(otherSchool.id);
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    authenticateAs(admin);
+
+    const res = await request(server)
+      .post(`/api/schools/${school.id}/calendar`)
+      .send([
+        { date: "2025-09-01" }, // valid, would have been written first
+        { date: "2025-09-02", scheduleTypeId: badSt.id }, // invalid
+      ]);
+
+    expect(res.status).toBe(422);
+
+    const inDb = await prisma.schoolCalendar.findMany({ where: { schoolId: school.id } });
+    expect(inDb).toHaveLength(0); // the valid first entry must not have been persisted
+  });
+
   it("links valid scheduleTypeId to calendar entry", async () => {
     const school = await seedSchool();
     const st = await seedScheduleType(school.id);
