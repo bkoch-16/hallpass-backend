@@ -62,8 +62,21 @@ router.post(
 
     // Validate every referenced schedule type up front, in one query, before
     // any write — so a bad id returns 422 without leaving partial state.
+    const byDate = new Map<number, { date: Date; scheduleTypeId: number | null; note: string | null }>();
+    for (const e of entries) {
+      const date = new Date(e.date);
+      byDate.set(date.getTime(), {
+        date,
+        scheduleTypeId: e.scheduleTypeId ?? null,
+        note: e.note ?? null,
+      });
+    }
+    const dedupedEntries = [...byDate.values()];
+
     const scheduleTypeIds = [
-      ...new Set(entries.filter((e) => e.scheduleTypeId).map((e) => Number(e.scheduleTypeId))),
+      ...new Set(
+        dedupedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
+      ),
     ];
     if (scheduleTypeIds.length) {
       const scheduleTypes = await prisma.scheduleType.findMany({
@@ -83,32 +96,29 @@ router.post(
       }
     }
 
-    const dates = entries.map((e) => new Date(e.date));
     const existing = await prisma.schoolCalendar.findMany({
-      where: { schoolId, date: { in: dates } },
+      where: { schoolId, date: { in: dedupedEntries.map((e) => e.date) } },
       select: { date: true },
     });
     const existingDates = new Set(existing.map((e) => e.date.getTime()));
 
     let created = 0;
     let updated = 0;
+    for (const entry of dedupedEntries) {
+      if (existingDates.has(entry.date.getTime())) {
+        updated++;
+      } else {
+        created++;
+      }
+    }
 
     await prisma.$transaction(
-      entries.map((entry, i) => {
-        const date = dates[i];
-        const data = {
-          scheduleTypeId: entry.scheduleTypeId ?? null,
-          note: entry.note ?? null,
-        };
-        if (existingDates.has(date.getTime())) {
-          updated++;
-        } else {
-          created++;
-        }
+      dedupedEntries.map((entry) => {
+        const data = { scheduleTypeId: entry.scheduleTypeId, note: entry.note };
         return prisma.schoolCalendar.upsert({
-          where: { schoolId_date: { schoolId, date } },
+          where: { schoolId_date: { schoolId, date: entry.date } },
           update: data,
-          create: { schoolId, date, ...data },
+          create: { schoolId, date: entry.date, ...data },
         });
       }),
     );
