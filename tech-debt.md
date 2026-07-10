@@ -9,24 +9,17 @@ with `docs/audit-2026-07-06.md`, re-verified against `develop`).
 
 ---
 
-## 1. Authorization & user onboarding 🟡
+## 1. User onboarding — bulk-student delivery 🟡
 
-Touches `apps/user-api/src/routes/user.ts` and the auth model.
-See `docs/ONBOARDING.md` for the current provisioning flow.
+Touches `apps/user-api/src/routes/user.ts`. Provisioning itself is solved
+(`createUserWithCredential`); see `docs/ONBOARDING.md`.
 
-- ✅ **RESOLVED — admin-provisioned users can now log in.** `POST /api/users` and
-  `/bulk` (`user.ts:147,181`) provision through `createUserWithCredential`
-  (`packages/auth/src/index.ts:60`), which creates the `User` **and** a
-  `credential` `Account` via better-auth's own `auth.$context`, and return a
-  one-time temp password. The seed routes through the same helper
-  (`packages/db/prisma/seed.ts:47-64`); the hand-rolled scrypt hash and
-  `@noble/hashes` dependency are deleted, closing the version-upgrade landmine.
-- 🟡 **Still deferred — onboarding UX / bulk-student delivery.** The bulk route
+- **No mechanism to deliver credentials at scale.** `POST /api/users/bulk`
   returns a `created`/`failed` summary, not the per-student temp passwords, so
-  there's no mechanism to deliver a credential to each student. A set-password
-  link or transactional-email invite is still needed before onboarding a school
-  at scale — see the "Future optimizations" (set-password link, transactional
-  email) in `docs/ONBOARDING.md`.
+  there's no way to get a credential to each student. A set-password link or
+  transactional-email invite is still needed before onboarding a school at scale
+  — see the "Future optimizations" (set-password link, transactional email) in
+  `docs/ONBOARDING.md`.
 
 ---
 
