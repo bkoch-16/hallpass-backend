@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-09T20:39:29.729Z — 17 files indexed_
+_Generated: 2026-07-10T16:47:41.687Z — 17 files indexed_
 
 ## File Summaries
 
@@ -34,7 +34,7 @@ Configures and exports the Express application for the user-api service, wiring 
 
 ### `apps/user-api/src/auth.ts`
 
-Configures and exports the application's authentication instance using `createAuth` from `@hallpass/auth`. It reads configuration from environment variables (`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `CORS_ORIGIN`) via the `env` module. Trusted origins are conditionally set: if `CORS_ORIGIN` is `"*"`, no trusted origins are specified (allowing all); otherwise, origins are parsed using `parseCorsOrigins` from `@hallpass/express-middleware`. Developers modifying this file should be aware of the dependency on the `env.ts` module for validated environment variables and the shared `@hallpass/auth` and `@hallpass/express-middleware` packages.
+Initializes and exports the singleton `auth` instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Configures it with the shared Prisma client, environment-driven base URL, secret, and trusted origins. CORS origins are parsed via `@hallpass/express-middleware`; a wildcard `*` disables the trusted-origins list. Developers modifying this file should ensure `env` variables (`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `CORS_ORIGIN`) are set and that downstream middleware/routes import `auth` from here.
 
 ### `apps/user-api/src/env.ts`
 
@@ -50,7 +50,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router defining CRUD endpoints for user management: GET /me, GET / (cursor-paginated list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk (bulk create), PATCH /:id (update), and DELETE /:id (soft delete via deletedAt). Uses Prisma for database access with a consistent USER_SELECT projection and a toUserResponse helper to normalize output. Enforces role-based access control via requireAuth, requireRole, requireSelfOrRole, and roleRank utilities, ensuring users cannot create/modify/delete users of equal or higher rank, and non-SUPER_ADMIN users are scoped to their schoolId. Request validation is handled by validateBody/validateParams/validateQuery with Zod schemas imported from ../schemas/user.js. Soft-deleted records (deletedAt != null) are excluded from all queries. When modifying, note the route ordering matters (/me before /:id), the 100-ID batch limit, Prisma error code handling (P2002 for unique conflicts, P2003 for FK violations), and that bulk create uses Promise.allSettled for partial-success semantics returning BulkUserResult.
+Defines the Express router for all `/users` CRUD endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (single create), POST /bulk (batched create with concurrency throttle), PATCH /:id, and DELETE /:id (soft-delete via `deletedAt`). Enforces role-based access control using `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role-rank checks preventing privilege escalation. User creation delegates to `createUserWithCredential` from `@hallpass/auth`, generating server-side temporary passwords via `randomBytes`. Key conventions: all queries filter `deletedAt: null`, non-super-admins are scoped to their `schoolId`, bulk creation is throttled to `BULK_CONCURRENCY=8` to limit scrypt load, and Prisma P2002 errors are mapped to 409 duplicate-email responses.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -66,7 +66,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm 10.30.1
 
 ### `packages/auth/src/index.ts`
 
-This file is the central authentication configuration module for the project, responsible for creating and exporting a `betterAuth` instance. It exports `createAuth`, a factory function that configures BetterAuth with a Prisma/PostgreSQL adapter (using the shared `@hallpass/db` prisma client), the `bearer` plugin, email/password authentication, serial ID generation, and session settings (7-day expiry, 1-day update age). When the `baseURL` is HTTPS, it automatically sets `sameSite: 'none'` and `secure: true` on cookies for cross-origin support. Key exports include the `Auth` and `Session` types (inferred from the auth instance), plus `toNodeHandler` and `fromNodeHeaders` re-exported from `better-auth/node` for HTTP integration. Developers modifying this file should be aware that changes here affect all authentication behavior across the monorepo, and the Prisma adapter depends on the `@hallpass/db` package's schema being in sync.
+Shared authentication package wrapping `better-auth` with a PostgreSQL/Prisma adapter, bearer token plugin, and email+password flow. Exports `createAuth` factory (configuring serial IDs, session expiry of 7 days, secure cookies for HTTPS origins, and custom `role`/`schoolId` user fields), the `Auth` and `Session` types, `toNodeHandler`/`fromNodeHeaders` re-exports, and the `EmailInUseError` class. The `createUserWithCredential` helper performs a non-atomic email-uniqueness check, hashes the password via the auth context, creates the user record with optional role/schoolId, links a credential account, and returns the user with a numeric `id`. Developers should note the email guard is not atomic—callers must also handle Prisma unique-constraint errors as a race-condition backstop.
 
 ### `packages/db/prisma/schema.prisma`
 
