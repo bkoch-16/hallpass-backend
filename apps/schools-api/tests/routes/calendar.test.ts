@@ -224,6 +224,20 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 422 when the same date appears twice in the request", async () => {
+    authenticateAs(fakeAdmin);
+
+    const res = await request(server)
+      .post(BASE)
+      .send([
+        { date: "2025-09-01", note: "First" },
+        { date: "2025-09-01", note: "Second" },
+      ]);
+
+    expect(res.status).toBe(422);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe(`PATCH ${BASE}/:id`, () => {

@@ -65,17 +65,21 @@ router.post(
     const byDate = new Map<number, { date: Date; scheduleTypeId: number | null; note: string | null }>();
     for (const e of entries) {
       const date = new Date(e.date);
+      if (byDate.has(date.getTime())) {
+        res.status(422).json({ message: `Duplicate date ${e.date} in request` });
+        return;
+      }
       byDate.set(date.getTime(), {
         date,
         scheduleTypeId: e.scheduleTypeId ?? null,
         note: e.note ?? null,
       });
     }
-    const dedupedEntries = [...byDate.values()];
+    const validatedEntries = [...byDate.values()];
 
     const scheduleTypeIds = [
       ...new Set(
-        dedupedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
+        validatedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
       ),
     ];
     if (scheduleTypeIds.length) {
@@ -97,14 +101,14 @@ router.post(
     }
 
     const existing = await prisma.schoolCalendar.findMany({
-      where: { schoolId, date: { in: dedupedEntries.map((e) => e.date) } },
+      where: { schoolId, date: { in: validatedEntries.map((e) => e.date) } },
       select: { date: true },
     });
     const existingDates = new Set(existing.map((e) => e.date.getTime()));
 
     let created = 0;
     let updated = 0;
-    for (const entry of dedupedEntries) {
+    for (const entry of validatedEntries) {
       if (existingDates.has(entry.date.getTime())) {
         updated++;
       } else {
@@ -113,7 +117,7 @@ router.post(
     }
 
     await prisma.$transaction(
-      dedupedEntries.map((entry) => {
+      validatedEntries.map((entry) => {
         const data = { scheduleTypeId: entry.scheduleTypeId, note: entry.note };
         return prisma.schoolCalendar.upsert({
           where: { schoolId_date: { schoolId, date: entry.date } },
