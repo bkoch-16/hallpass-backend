@@ -59,6 +59,16 @@ is now closed; what remains is the bounded-staleness case below.
 - **Quota check is read-then-write (TOCTOU).** `apps/passes-api/src/routes/passes.ts:180-203`:
   concurrent create/complete cycles can exceed `maxPerInterval` by one. The
   partial unique index bounds it to one extra — acceptable, but note it.
+- **Bulk calendar `created`/`updated` counts are read-then-write (TOCTOU).**
+  `apps/schools-api/src/routes/calendar.ts:103-117`: the count split is derived
+  from an `existingDates` snapshot read *outside* the `$transaction`, so a
+  concurrent insert of one of those dates makes the response report `created`
+  where the upsert actually did an update. The write stays correct and idempotent
+  — only the advisory counts can be wrong, and only under concurrent bulk writes
+  to the same school's calendar (admin-only, rare). Same class as the quota
+  TOCTOU above; both would be closed by a shared serializable-tx-with-retry
+  helper. Exact counts otherwise need raw `INSERT ... ON CONFLICT ... RETURNING
+  (xmax = 0)` (the model has no `createdAt`/`updatedAt` to compare).
 
 ---
 
