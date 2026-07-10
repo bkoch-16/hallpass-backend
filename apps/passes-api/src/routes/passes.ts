@@ -177,6 +177,12 @@ router.post(
 
     // 7. Check PassPolicy — the target student always burns their own quota;
     // only count in-flight/completed passes; denied/expired/cancelled don't burn quota
+    //
+    // TOCTOU: this count-then-create window can race, but the one_active_pass_per_student
+    // partial unique index makes two concurrent NON-TERMINAL creates impossible — the loser
+    // hits Prisma P2002 → 409 "Active pass already exists" (see the create below). So quota
+    // can be exceeded by at most one, which self-corrects once a pass reaches a terminal
+    // status. Accepted; no serializable transaction needed.
     const policy = await prisma.passPolicy.findFirst({ where: { schoolId } });
 
     if (policy && policy.interval && policy.maxPerInterval !== null) {

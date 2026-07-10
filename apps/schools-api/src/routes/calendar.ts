@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, Prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { SchoolCalendarResponse, BulkUpsertResult } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
@@ -100,32 +100,20 @@ router.post(
       }
     }
 
-    const existing = await prisma.schoolCalendar.findMany({
-      where: { schoolId, date: { in: validatedEntries.map((e) => e.date) } },
-      select: { date: true },
-    });
-    const existingDates = new Set(existing.map((e) => e.date.getTime()));
-
-    let created = 0;
-    let updated = 0;
-    for (const entry of validatedEntries) {
-      if (existingDates.has(entry.date.getTime())) {
-        updated++;
-      } else {
-        created++;
-      }
-    }
-
-    await prisma.$transaction(
-      validatedEntries.map((entry) => {
-        const data = { scheduleTypeId: entry.scheduleTypeId, note: entry.note };
-        return prisma.schoolCalendar.upsert({
-          where: { schoolId_date: { schoolId, date: entry.date } },
-          update: data,
-          create: { schoolId, date: entry.date, ...data },
-        });
-      }),
+    const values = Prisma.join(
+      validatedEntries.map(
+        (e) => Prisma.sql`(${schoolId}, ${e.date}, ${e.scheduleTypeId}, ${e.note})`,
+      ),
     );
+    const rows = await prisma.$queryRaw<{ inserted: boolean }[]>(
+      Prisma.sql`INSERT INTO "SchoolCalendar" ("schoolId", "date", "scheduleTypeId", "note")
+                 VALUES ${values}
+                 ON CONFLICT ("schoolId", "date")
+                 DO UPDATE SET "scheduleTypeId" = EXCLUDED."scheduleTypeId", "note" = EXCLUDED."note"
+                 RETURNING (xmax = 0) AS inserted`,
+    );
+    const created = rows.filter((r) => r.inserted).length;
+    const updated = rows.length - created;
 
     res.status(200).json({ created, updated } satisfies BulkUpsertResult);
   },
