@@ -25,8 +25,8 @@ See `docs/ONBOARDING.md` for the current provisioning flow.
   returns a `created`/`failed` summary, not the per-student temp passwords, so
   there's no mechanism to deliver a credential to each student. A set-password
   link or transactional-email invite is still needed before onboarding a school
-  at scale — see the "Future optimizations" options 2 and 4 in
-  `docs/ONBOARDING.md`.
+  at scale — see the "Future optimizations" (set-password link, transactional
+  email) in `docs/ONBOARDING.md`.
 
 ---
 

@@ -50,6 +50,16 @@ function provisionedToRow(u: ProvisionedUser): UserRow {
 
 const BULK_CONCURRENCY = 8;
 
+// The email guard in createUserWithCredential is not atomic; the DB unique index
+// on User.email is the backstop. On a race, the losing insert throws Prisma P2002
+// rather than EmailInUseError — treat both as "email already in use".
+function isDuplicateEmailError(err: unknown): boolean {
+  return (
+    err instanceof EmailInUseError ||
+    (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002")
+  );
+}
+
 // GET /me — must come before /:id
 router.get("/me", requireAuth, (req: Request, res: Response) => {
   res.json(toUserResponse(req.user!));
@@ -169,7 +179,7 @@ router.post(
       });
       res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
-      if (err instanceof EmailInUseError) {
+      if (isDuplicateEmailError(err)) {
         res.status(409).json({ message: "Email already in use" });
         return;
       }
@@ -219,7 +229,13 @@ router.post(
     const failed = results
       .map((r, i) => ({ result: r, index: i }))
       .filter(({ result }) => result.status === "rejected")
-      .map(({ index }) => ({ index, email: users[index].email, error: "Failed to create user" }));
+      .map(({ result, index }) => ({
+        index,
+        email: users[index].email,
+        error: isDuplicateEmailError((result as PromiseRejectedResult).reason)
+          ? "Email already in use"
+          : "Failed to create user",
+      }));
 
     res.status(failed.length === users.length ? 400 : 200).json({ created, failed } satisfies BulkUserResult);
   },

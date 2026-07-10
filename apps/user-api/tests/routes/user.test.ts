@@ -749,6 +749,19 @@ describe("POST /api/users/bulk", () => {
     expect(res.body).toEqual({ message: "Email already in use" });
   });
 
+  it("returns 409 when a concurrent insert trips the DB unique index (Prisma P2002)", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    authenticateAs(admin);
+    mockCreateUserWithCredential.mockRejectedValue({ code: "P2002" });
+
+    const res = await request(server)
+      .post("/api/users")
+      .send({ email: "race@test.com", name: "Race User" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Email already in use" });
+  });
+
   it("returns 500 when the provisioning helper throws an unexpected error", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);
