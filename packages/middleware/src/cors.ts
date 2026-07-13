@@ -10,3 +10,18 @@ export function parseCorsOrigins(env: {
     ? "*"
     : env.CORS_ORIGIN.split(",").map((o) => o.trim());
 }
+
+/**
+ * Build the cors options object shared by all three APIs. `origin` comes from
+ * parseCorsOrigins; `credentials` is enabled unless CORS_ORIGIN is the literal
+ * wildcard "*" (cors forbids credentials with a "*" origin).
+ */
+export function corsOptions(env: { CORS_ORIGIN: string }): {
+  origin: string | string[];
+  credentials: boolean;
+} {
+  return {
+    origin: parseCorsOrigins(env),
+    credentials: env.CORS_ORIGIN !== "*",
+  };
+}

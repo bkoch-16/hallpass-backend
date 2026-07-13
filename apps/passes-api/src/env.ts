@@ -2,7 +2,7 @@ import { z } from "zod";
 import { baseEnvSchema } from "@hallpass/express-middleware";
 
 const envSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().optional().default(3003),
+  PORT: z.coerce.number().optional(),
   REDIS_URL: z.string().url(),
   // Namespaces all Redis keys (slot counters, rate-limit, socket.io pub/sub) —
   // dev and prod share a single Upstash database (free tier), so each
