@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-13T19:32:31.322Z — 17 files indexed_
+_Generated: 2026-07-13T23:11:04.564Z — 17 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Configures and exports the Express application for the user-api service. Sets up security middleware (helmet, CORS), HTTP logging, JSON body parsing, health checks, and rate limiting with optional Redis-backed stores (via Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset. Mounts Better Auth handler at `/api/auth/*splat` with a stricter auth rate limiter, user routes at `/api/users`, and global error/404 handlers. Key dependencies include shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`), local `auth` and `env` modules, and `rate-limit-redis`. Developers should note that each rate limiter requires its own `RedisStore` instance, the health route is registered before rate limiting to avoid 429s on probes, and `trust proxy` is set to 1 for correct client IP detection behind a load balancer.
+Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and error handling using shared `@hallpass/express-middleware` utilities. Implements two-tier rate limiting (general and strict auth) with optional Redis-backed stores (via `rate-limit-redis` and Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset; each limiter gets its own namespaced RedisStore instance. Routes all `/api/auth/*` requests to better-auth via `toNodeHandler`, applies the strict auth limiter only to credential-sensitive POST endpoints (sign-in, sign-up, password reset/change), and mounts a user router at `/api/users`. The health route is registered before rate limiters to avoid 429s from load-balancer probes. Developers modifying this file should note the dependency on `./env.js` for environment config, `./auth.js` for the auth instance, and the trust-proxy setting for correct client IP detection behind a reverse proxy.
 
 ### `apps/user-api/src/auth.ts`
 
@@ -66,7 +66,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package wrapping `better-auth` with a PostgreSQL/Prisma adapter, bearer token plugin, and email+password flow. Exports `createAuth` factory (configuring serial IDs, session expiry of 7 days, secure cookies for HTTPS origins, and custom `role`/`schoolId` user fields), the `Auth` and `Session` types, `toNodeHandler`/`fromNodeHeaders` re-exports, and the `EmailInUseError` class. The `createUserWithCredential` helper performs a non-atomic email-uniqueness check, hashes the password via the auth context, creates the user record with optional role/schoolId, links a credential account, and returns the user with a numeric `id`. Developers should note the email guard is not atomic—callers must also handle Prisma unique-constraint errors as a race-condition backstop.
+Shared authentication package that wraps `better-auth` with a factory function `createAuth` producing a configured auth instance using Prisma (PostgreSQL) as the database adapter and the bearer plugin. Configures email/password auth with sign-up disabled, serial ID generation, 7-day sessions with daily refresh, and conditional `sameSite=none; secure` cookies for HTTPS base URLs. Supports custom user fields (`role`, `schoolId`) that are not user-settable (`input: false`). Exports the `Auth` and `Session` types (inferred from the auth instance), re-exports `toNodeHandler` and `fromNodeHeaders` for Express integration, and provides `createUserWithCredential` for programmatic user creation with email uniqueness checking, password hashing, and credential account linking. The `EmailInUseError` custom error class is exported for callers to handle duplicate-email scenarios. Developers should note that `disableSignUp: true` means public sign-up is blocked—users must be created via `createUserWithCredential`.
 
 ### `packages/db/prisma/schema.prisma`
 
