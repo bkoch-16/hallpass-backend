@@ -55,10 +55,3 @@ The three apps are copy-paste siblings diverging; converge in
   warns every `prisma migrate dev` regenerates a `DROP INDEX` that must be
   hand-deleted. passes-api's 409 duplicate-pass contract silently degrades if
   applied. Add a CI grep / post-migrate assertion so the failure is loud.
-- **Integration suites collide on one shared Postgres.** Each app pins
-  `fileParallelism: false` (`apps/*/vitest.integration.config.ts`), so a suite is
-  serial *within itself* — but `pnpm turbo test:integration` runs all three apps'
-  vitest processes concurrently against the same DB, and their `deleteMany`
-  teardowns trip FK/contention errors. Every suite passes in isolation; the
-  combined run flakes. Give each app its own database/schema, run the turbo task
-  with `--concurrency=1`, or isolate teardown per-suite.

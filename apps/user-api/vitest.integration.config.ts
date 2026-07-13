@@ -9,7 +9,7 @@ export default defineConfig({
     include: ["tests/integration/**/*.test.ts"],
     globalSetup: ["./tests/setup/integration-global.ts"],
     env: {
-      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/hallpass_test",
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/hallpass_test_user",
       BETTER_AUTH_URL: "http://localhost:3001",
       BETTER_AUTH_SECRET: "test-secret",
       CORS_ORIGIN: "http://localhost:3000",
