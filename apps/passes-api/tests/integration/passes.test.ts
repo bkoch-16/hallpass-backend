@@ -280,7 +280,7 @@ describe("POST /api/passes (integration)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("422 student has no schoolId", async () => {
+  it("403 student has no schoolId", async () => {
     const student = await seedUser({ role: "STUDENT", schoolId: null });
     authenticateAs(student);
 
@@ -288,7 +288,8 @@ describe("POST /api/passes (integration)", () => {
       .post("/api/passes")
       .send({ destinationId: 1 });
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe("User is not associated with a school");
   });
 
   it("422 no active period when no calendar entry exists for today", async () => {

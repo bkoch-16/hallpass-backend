@@ -40,9 +40,9 @@ is now closed; what remains is the bounded-staleness case below.
 The three apps are copy-paste siblings diverging; converge in
 `@hallpass/express-middleware`.
 
-- Status-code conventions drift: school-not-found is 404 in policy PUT but 422 in
-  pass create; `requireSchool` uses 422 where 403 is arguable. Pick one
-  convention, document it.
+- 🟡 `POST /passes` returns 422 (not 404) for missing `studentId` and
+  `destinationId` — both are user-supplied body references, treated as validation
+  failures per docs/API_CONVENTIONS.md. Intentional; documented, not deferred.
 - **Integration suites collide on one shared Postgres.** Each app pins
   `fileParallelism: false` (`apps/*/vitest.integration.config.ts`), so a suite is
   serial *within itself* — but `pnpm turbo test:integration` runs all three apps'
