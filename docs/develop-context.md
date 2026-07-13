@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-10T16:47:41.687Z — 17 files indexed_
+_Generated: 2026-07-13T19:16:41.654Z — 17 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-CI/CD workflow for the HallPass backend monorepo that validates (lint, build, test) on every push/PR, then deploys to dev or prod environments on Google Cloud Run. Triggered by pushes to `main` (prod) or `develop` (dev), PRs (validate only), or manual `workflow_dispatch` with an environment selector. Uses a matrix strategy to deploy three microservices (`user-api`, `schools-api`, `passes-api`) as separate Cloud Run services, with Docker images pushed to GCP Artifact Registry and cached via GitHub Actions cache. Database migrations run via `prisma migrate deploy` against Neon databases, with connection strings fetched securely from GCP Secret Manager at runtime to avoid log exposure. The validate job uses dummy env vars since tests mock `@hallpass/db` but env validation still requires them. Developers modifying this file should note: env vars/secrets on Cloud Run are managed in GCP directly (not in the workflow), the pnpm monorepo filter `@hallpass/db` targets the shared Prisma package, and prod deploys additionally require the workflow to run from `main`.
+CI/CD workflow that validates (lint, build, test), runs Prisma DB migrations, and deploys three microservices (user-api, schools-api, passes-api) to Google Cloud Run. It triggers on pushes to `main` (prod) and `develop` (dev), on PRs (validate only), and via manual workflow_dispatch with environment selection. The `validate` job uses dummy env vars since tests mock the DB, generates the Prisma client, runs the pass-index guard, then lints/builds/tests. Migration jobs securely fetch DATABASE_URL from GCP Secret Manager within a single shell to avoid secret leakage, then run `prisma migrate deploy`. Deploy jobs use a matrix strategy with Docker Buildx and GHA caching to build/push images to Artifact Registry and deploy via `google-github-actions/deploy-cloudrun@v3`; runtime env vars and secrets are managed directly on Cloud Run services, not in this workflow. Developers should note that prod deploys require the `main` branch, and the workflow depends on `GCP_SA_KEY` and `GCP_PROJECT_ID` repository secrets.
 
 ### `.github/workflows/index-codebase.yml`
 
@@ -62,7 +62,7 @@ Defines the local development stack for the Hallpass platform with four services
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm 10.30.1 and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across workspaces. Scripts include demo generation (via tsx), formatting (Prettier), and git hooks (Husky). The pnpm config pins ioredis to 5.10.0 via overrides and restricts native builds to Prisma engines, esbuild, and prisma. Dev dependencies cover linting (ESLint + typescript-eslint + prettier), build tooling (TypeScript, tsx, turbo), and scripting utilities (fast-glob, micromatch, yaml). The only runtime dependency at root level is @anthropic-ai/sdk.
+Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating builds, linting, testing, and development across workspace packages. Key scripts include `build`, `dev`, `lint`, `test`, and `test:integration` (run serially), plus utility scripts for demo generation, formatting (Prettier), and a pass-index guard check. Uses Husky for git hooks, overrides ioredis to v5.10.0, and restricts native builds to @prisma/engines, esbuild, and prisma. The only production dependency at the root level is `@anthropic-ai/sdk`; all other tooling (ESLint, TypeScript, tsx, Turbo, etc.) is in devDependencies. Developers modifying this file should be aware of the pnpm overrides and onlyBuiltDependencies constraints that affect the entire workspace.
 
 ### `packages/auth/src/index.ts`
 

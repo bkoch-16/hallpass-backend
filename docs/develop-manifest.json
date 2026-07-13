@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-10T16:47:41.687Z",
+  "generatedAt": "2026-07-13T19:16:41.654Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "f769e2c62cab3f8a4557be0df17a985e11c6bb87",
@@ -47,8 +47,8 @@
       "summary": "Defines the local development stack for the Hallpass platform with four services: PostgreSQL 16 (database), Redis 7 (rate-limit/caching store), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy Postgres and Redis containers and share a common database URL pattern. Environment variables like BETTER_AUTH_SECRET and CORS_ORIGIN can be overridden via a .env file or shell environment. A named volume `postgres_data` persists database data across container restarts. Developers should note that both APIs share the same Postgres database and Redis instance, and the build context for both is the repo root (monorepo pattern with per-app Dockerfiles)."
     },
     ".github/workflows/deploy.yml": {
-      "blobSha": "be0b6e5682b0c486becd8efd5ccf9e202407d996",
-      "summary": "CI/CD workflow for the HallPass backend monorepo that validates (lint, build, test) on every push/PR, then deploys to dev or prod environments on Google Cloud Run. Triggered by pushes to `main` (prod) or `develop` (dev), PRs (validate only), or manual `workflow_dispatch` with an environment selector. Uses a matrix strategy to deploy three microservices (`user-api`, `schools-api`, `passes-api`) as separate Cloud Run services, with Docker images pushed to GCP Artifact Registry and cached via GitHub Actions cache. Database migrations run via `prisma migrate deploy` against Neon databases, with connection strings fetched securely from GCP Secret Manager at runtime to avoid log exposure. The validate job uses dummy env vars since tests mock `@hallpass/db` but env validation still requires them. Developers modifying this file should note: env vars/secrets on Cloud Run are managed in GCP directly (not in the workflow), the pnpm monorepo filter `@hallpass/db` targets the shared Prisma package, and prod deploys additionally require the workflow to run from `main`."
+      "blobSha": "b9833493f379f8dab555c9909e251fb450028637",
+      "summary": "CI/CD workflow that validates (lint, build, test), runs Prisma DB migrations, and deploys three microservices (user-api, schools-api, passes-api) to Google Cloud Run. It triggers on pushes to `main` (prod) and `develop` (dev), on PRs (validate only), and via manual workflow_dispatch with environment selection. The `validate` job uses dummy env vars since tests mock the DB, generates the Prisma client, runs the pass-index guard, then lints/builds/tests. Migration jobs securely fetch DATABASE_URL from GCP Secret Manager within a single shell to avoid secret leakage, then run `prisma migrate deploy`. Deploy jobs use a matrix strategy with Docker Buildx and GHA caching to build/push images to Artifact Registry and deploy via `google-github-actions/deploy-cloudrun@v3`; runtime env vars and secrets are managed directly on Cloud Run services, not in this workflow. Developers should note that prod deploys require the `main` branch, and the workflow depends on `GCP_SA_KEY` and `GCP_PROJECT_ID` repository secrets."
     },
     ".github/workflows/index-codebase.yml": {
       "blobSha": "821b594ddd6a7fe908bbeb77e608826f11bae017",
@@ -63,8 +63,8 @@
       "summary": "Automation workflow that keeps the `develop` branch in sync with `main` by creating a merge PR after each push to `main`. First checks if `develop` already contains all `main` commits (early exit if so), then creates/updates a `sync/main-to-develop` branch with a no-ff merge. On merge conflicts, it aborts and posts a conflict notification as a comment on the originating PR or commit. Uses `--force-with-lease` for safe pushes and avoids creating duplicate PRs by checking for existing open sync PRs. Requires both `contents: write` and `pull-requests: write` permissions."
     },
     "package.json": {
-      "blobSha": "2518dc5ca7a4df347f9e78846a24802d0fdc85e3",
-      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm 10.30.1 and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across workspaces. Scripts include demo generation (via tsx), formatting (Prettier), and git hooks (Husky). The pnpm config pins ioredis to 5.10.0 via overrides and restricts native builds to Prisma engines, esbuild, and prisma. Dev dependencies cover linting (ESLint + typescript-eslint + prettier), build tooling (TypeScript, tsx, turbo), and scripting utilities (fast-glob, micromatch, yaml). The only runtime dependency at root level is @anthropic-ai/sdk."
+      "blobSha": "8426c1f9b90f86555fb4cdfa6e80b5ef1834d82a",
+      "summary": "Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating builds, linting, testing, and development across workspace packages. Key scripts include `build`, `dev`, `lint`, `test`, and `test:integration` (run serially), plus utility scripts for demo generation, formatting (Prettier), and a pass-index guard check. Uses Husky for git hooks, overrides ioredis to v5.10.0, and restricts native builds to @prisma/engines, esbuild, and prisma. The only production dependency at the root level is `@anthropic-ai/sdk`; all other tooling (ESLint, TypeScript, tsx, Turbo, etc.) is in devDependencies. Developers modifying this file should be aware of the pnpm overrides and onlyBuiltDependencies constraints that affect the entire workspace."
     },
     ".github/workflows/demo.yml": {
       "blobSha": "c3533ff9d09af77146465207164d6f776a50cda8",
