@@ -98,6 +98,43 @@ describe("Global error handler", () => {
   });
 });
 
+describe("auth limiter scope", () => {
+  it("does not 429 GET /api/auth/get-session under the strict auth limit (>10 requests from one IP)", async () => {
+    for (let i = 0; i < 15; i++) {
+      const res = await request(server).get("/api/auth/get-session");
+      expect(res.status).not.toBe(429);
+    }
+  });
+
+  it("still strictly limits POST /api/auth/sign-in/email (429 after 10 requests)", async () => {
+    for (let i = 0; i < 10; i++) {
+      const res = await request(server)
+        .post("/api/auth/sign-in/email")
+        .send({ email: "signin-limit@test.com", password: "password123" });
+      expect(res.status).not.toBe(429);
+    }
+
+    const limited = await request(server)
+      .post("/api/auth/sign-in/email")
+      .send({ email: "signin-limit@test.com", password: "password123" });
+    expect(limited.status).toBe(429);
+  });
+
+  it("still strictly limits POST /api/auth/sign-up/email (429 after 10 requests)", async () => {
+    for (let i = 0; i < 10; i++) {
+      const res = await request(server)
+        .post("/api/auth/sign-up/email")
+        .send({ email: "signup-limit@test.com", password: "password123" });
+      expect(res.status).not.toBe(429);
+    }
+
+    const limited = await request(server)
+      .post("/api/auth/sign-up/email")
+      .send({ email: "signup-limit@test.com", password: "password123" });
+    expect(limited.status).toBe(429);
+  });
+});
+
 describe("app rate-limit store wiring", () => {
   beforeEach(() => {
     vi.resetModules();

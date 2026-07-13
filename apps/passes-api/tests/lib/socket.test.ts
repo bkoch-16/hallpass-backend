@@ -198,6 +198,122 @@ describe('socket auth middleware', () => {
     ioServer.close();
     httpServer.close();
   });
+
+  it('authenticates using a token supplied via handshake.auth.token, adding it as a Bearer header', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    const user = { id: 1, schoolId: 5, role: 'STUDENT' };
+    mockResolveSessionUser.mockResolvedValue(user);
+
+    const next = vi.fn();
+    const socket = { data: {}, handshake: { headers: {}, auth: { token: 'my-session-token' } } };
+    await authMiddleware(ioServer)(socket, next);
+
+    expect(mockResolveSessionUser).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ authorization: 'Bearer my-session-token' }),
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeUndefined();
+    expect((socket.data as { user?: unknown }).user).toBe(user);
+
+    ioServer.close();
+    httpServer.close();
+  });
+
+  it('rejects with Unauthorized when handshake.auth.token is present but invalid', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    mockResolveSessionUser.mockResolvedValue(null);
+
+    const next = vi.fn();
+    const socket = { data: {}, handshake: { headers: {}, auth: { token: 'bad-token' } } };
+    await authMiddleware(ioServer)(socket, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect((next.mock.calls[0][0] as Error).message).toBe('Unauthorized');
+
+    ioServer.close();
+    httpServer.close();
+  });
+
+  it('rejects with Unauthorized when handshake.auth.token is missing and there are no headers', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    mockResolveSessionUser.mockResolvedValue(null);
+
+    const next = vi.fn();
+    const socket = { data: {}, handshake: { headers: {}, auth: {} } };
+    await authMiddleware(ioServer)(socket, next);
+
+    expect(mockResolveSessionUser).toHaveBeenCalledWith(expect.anything(), {});
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect((next.mock.calls[0][0] as Error).message).toBe('Unauthorized');
+
+    ioServer.close();
+    httpServer.close();
+  });
+
+  it('authenticates using handshake.headers unchanged when no auth.token is supplied', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    const user = { id: 2, schoolId: 5, role: 'TEACHER' };
+    mockResolveSessionUser.mockResolvedValue(user);
+
+    const next = vi.fn();
+    const headers = { cookie: 'better-auth.session_token=abc123' };
+    const socket = { data: {}, handshake: { headers } };
+    await authMiddleware(ioServer)(socket, next);
+
+    expect(mockResolveSessionUser).toHaveBeenCalledWith(expect.anything(), headers);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeUndefined();
+
+    ioServer.close();
+    httpServer.close();
+  });
+
+  it('prefers an existing authorization header over handshake.auth.token', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    const user = { id: 3, schoolId: 5, role: 'TEACHER' };
+    mockResolveSessionUser.mockResolvedValue(user);
+
+    const next = vi.fn();
+    const headers = { authorization: 'Bearer header-token' };
+    const socket = {
+      data: {},
+      handshake: { headers, auth: { token: 'auth-token' } },
+    };
+    await authMiddleware(ioServer)(socket, next);
+
+    expect(mockResolveSessionUser).toHaveBeenCalledWith(expect.anything(), headers);
+
+    ioServer.close();
+    httpServer.close();
+  });
 });
 
 describe('connection room membership', () => {
