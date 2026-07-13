@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { logger } from "@hallpass/logger";
 import { env } from "./env.js";
 import app from "./app.js";
 
@@ -15,5 +16,5 @@ process.on("uncaughtException", (err) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`schools-api running on port ${PORT}`);
+  logger.info(`schools-api running on port ${PORT}`);
 });
