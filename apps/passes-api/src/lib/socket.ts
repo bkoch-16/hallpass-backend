@@ -31,17 +31,22 @@ export function initSocket(
   io.adapter(createAdapter(pubClient, subClient, { key: `${env.REDIS_PREFIX}:socket.io` }));
 
   io.use(async (socket, next) => {
+    let user;
     try {
-      const user = await resolveSessionUser(auth, socket.handshake.headers);
-      if (!user) {
-        next(new Error("Unauthorized"));
-        return;
-      }
-      socket.data.user = user;
-      next();
-    } catch {
-      next(new Error("Unauthorized"));
+      user = await resolveSessionUser(auth, socket.handshake.headers);
+    } catch (err) {
+      // resolveSessionUser returns null for missing/invalid sessions and only
+      // throws on unexpected/DB errors — surface those as connect_error rather
+      // than masking them as a false "Unauthorized".
+      next(err as Error);
+      return;
     }
+    if (!user) {
+      next(new Error("Unauthorized"));
+      return;
+    }
+    socket.data.user = user;
+    next();
   });
 
   io.on("connection", (socket: Socket) => {
