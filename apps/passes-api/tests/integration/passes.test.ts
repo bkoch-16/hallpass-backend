@@ -289,6 +289,7 @@ describe("POST /api/passes (integration)", () => {
       .send({ destinationId: 1 });
 
     expect(res.status).toBe(403);
+    expect(res.body.message).toBe("User is not associated with a school");
   });
 
   it("422 no active period when no calendar entry exists for today", async () => {
