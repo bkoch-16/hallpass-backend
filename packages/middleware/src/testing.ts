@@ -12,7 +12,7 @@ export interface TestServerHandle {
  * One shared server bound explicitly to 127.0.0.1 — supertest's default
  * request(app) spawns a wildcard-bound server per request, whose port a
  * foreign local process can shadow with a specific 127.0.0.1 bind (flaky
- * hangs/ECONNRESET/wrong statuses; tech-debt item 12). Register start with
+ * hangs/ECONNRESET/wrong statuses). Register start with
  * beforeAll and stop with afterAll, and pass the returned server to
  * request(server) at call sites.
  */
