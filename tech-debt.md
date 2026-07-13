@@ -43,10 +43,3 @@ The three apps are copy-paste siblings diverging; converge in
 - 🟡 `POST /passes` returns 422 (not 404) for missing `studentId` and
   `destinationId` — both are user-supplied body references, treated as validation
   failures per docs/API_CONVENTIONS.md. Intentional; documented, not deferred.
-- **Integration suites collide on one shared Postgres.** Each app pins
-  `fileParallelism: false` (`apps/*/vitest.integration.config.ts`), so a suite is
-  serial *within itself* — but `pnpm turbo test:integration` runs all three apps'
-  vitest processes concurrently against the same DB, and their `deleteMany`
-  teardowns trip FK/contention errors. Every suite passes in isolation; the
-  combined run flakes. Give each app its own database/schema, run the turbo task
-  with `--concurrency=1`, or isolate teardown per-suite.
