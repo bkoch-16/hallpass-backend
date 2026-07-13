@@ -8,11 +8,6 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🔴 Cross-origin cookie auth can't work on the current deployment
-The three services live on separate `*.run.app` hosts; `run.app` is on the Public Suffix List, so one cookie can never cover all three. A web app is forced into the Bearer flow (the `bearer()` plugin is enabled): capture `set-auth-token` at sign-in, attach `Authorization` everywhere. Undocumented, and forfeits httpOnly protection (token is XSS-stealable from JS storage).
-
-**Fix:** document the intended Bearer flow explicitly, or front all three services with one custom domain so cookies work.
-
 ### 🟠 Non-SUPER_ADMIN users cannot read their own school
 `GET /api/schools/:id` is `requireRole(SUPER_ADMIN)` (`apps/schools-api/src/routes/school.ts:65-68`). A student/teacher/admin client can't fetch the school's name or `timezone` — needed to render period times and pass expiry. Sub-resources are readable via `requireSchoolAccess`; the school entity itself isn't.
 
@@ -104,9 +99,8 @@ users, districts, schools, passes — `take + 1`, slice, `nextCursor`. Extract a
 
 ## Suggested priority
 
-1. Decide and document the browser auth story (Bearer flow or shared custom domain).
-2. Expose school (or embed in `/me`), cap calendar bulk, handle `districtId` P2003, align the ADMIN-peer-creation policy.
-3. DRY items opportunistically — `z.infer`-derived body types first (prevents real client bugs).
+1. Expose school (or embed in `/me`), cap calendar bulk, handle `districtId` P2003, align the ADMIN-peer-creation policy.
+2. DRY items opportunistically — `z.infer`-derived body types first (prevents real client bugs).
 
 ---
 
