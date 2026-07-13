@@ -8,16 +8,6 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🔴 Auth rate limiter throttles `get-session` per IP
-`app.all("/api/auth/*splat", authLimiter, ...)` (`apps/user-api/src/app.ts:65`) applies the strict auth limiter to every better-auth route, all methods. The limiter keys by `req.body.email` with IP fallback (`packages/middleware/src/rateLimit.ts:104-118`). `GET /api/auth/get-session` has no body, so an entire school behind one NAT IP shares a 10-per-15-min bucket — a SPA that checks the session on page load 429s almost immediately.
-
-**Fix:** apply the auth limiter only to `sign-in`/`sign-up`/password endpoints; everything else rides the general limiter.
-
-### 🔴 Browser Socket.io clients cannot authenticate
-`initSocket` resolves the session only from `socket.handshake.headers` (`apps/passes-api/src/lib/socket.ts:36`). Browsers can't set `Authorization` on a WebSocket upgrade, and the better-auth cookie belongs to user-api's origin, not passes-api's — neither auth path works from a browser.
-
-**Fix:** also accept the token via `socket.handshake.auth.token` (socket.io-client `auth` option, works on all transports) and feed it through session resolution.
-
 ### 🔴 Cross-origin cookie auth can't work on the current deployment
 The three services live on separate `*.run.app` hosts; `run.app` is on the Public Suffix List, so one cookie can never cover all three. A web app is forced into the Bearer flow (the `bearer()` plugin is enabled): capture `set-auth-token` at sign-in, attach `Authorization` everywhere. Undocumented, and forfeits httpOnly protection (token is XSS-stealable from JS storage).
 
@@ -45,11 +35,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 ---
 
 ## 2. Security
-
-### 🔴 Public self-signup is open
-`emailAndPassword: { enabled: true }` with no `disableSignUp` (`packages/auth/src/index.ts:28`) — anyone can `POST /api/auth/sign-up/email` on the deployed API. `role`/`schoolId` are `input: false` so no escalation, but provisioning is admin-driven (`POST /api/users`); open signup invites junk rows and abuse.
-
-**Fix:** `disableSignUp: true`. (Email verification is never required either; matters less once signup is closed.)
 
 ### 🟠 Account-lockout griefing via the auth limiter
 Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-in indefinitely (10 junk attempts per window from anywhere).
@@ -119,10 +104,9 @@ users, districts, schools, passes — `take + 1`, slice, `nextCursor`. Extract a
 
 ## Suggested priority
 
-1. Auth-limiter scope (get-session), close public signup, accept socket token via `handshake.auth` — small diffs that unblock any real web client.
-2. Decide and document the browser auth story (Bearer flow or shared custom domain).
-3. Expose school (or embed in `/me`), cap calendar bulk, handle `districtId` P2003, align the ADMIN-peer-creation policy.
-4. DRY items opportunistically — `z.infer`-derived body types first (prevents real client bugs).
+1. Decide and document the browser auth story (Bearer flow or shared custom domain).
+2. Expose school (or embed in `/me`), cap calendar bulk, handle `districtId` P2003, align the ADMIN-peer-creation policy.
+3. DRY items opportunistically — `z.infer`-derived body types first (prevents real client bugs).
 
 ---
 

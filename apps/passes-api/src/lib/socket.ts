@@ -31,9 +31,18 @@ export function initSocket(
   io.adapter(createAdapter(pubClient, subClient, { key: `${env.REDIS_PREFIX}:socket.io` }));
 
   io.use(async (socket, next) => {
+    // Browsers can't set an Authorization header on a WebSocket upgrade, so
+    // socket.io-client's `auth` option carries the session token instead.
+    // Only used when no authorization header is already present.
+    const token = socket.handshake.auth?.token;
+    const headers =
+      typeof token === "string" && token && !socket.handshake.headers.authorization
+        ? { ...socket.handshake.headers, authorization: `Bearer ${token}` }
+        : socket.handshake.headers;
+
     let user;
     try {
-      user = await resolveSessionUser(auth, socket.handshake.headers);
+      user = await resolveSessionUser(auth, headers);
     } catch (err) {
       // resolveSessionUser returns null for missing/invalid sessions and only
       // throws on unexpected/DB errors — surface those as connect_error rather

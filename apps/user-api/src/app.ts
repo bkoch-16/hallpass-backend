@@ -62,7 +62,20 @@ const authLimiter = createAuthLimiter(
 logger.info(`rate-limit store: ${useRedisStore ? "redis" : "in-memory"}`);
 
 app.use(limiter);
-app.all("/api/auth/*splat", authLimiter, toNodeHandler(auth));
+// Strict auth limiter applies only to credential-sensitive better-auth
+// endpoints; GET /api/auth/get-session and everything else ride the general
+// limiter above, keyed per session rather than a shared-NAT IP bucket.
+app.post(
+  [
+    "/api/auth/sign-in/email",
+    "/api/auth/sign-up/email",
+    "/api/auth/request-password-reset",
+    "/api/auth/reset-password",
+    "/api/auth/change-password",
+  ],
+  authLimiter,
+);
+app.all("/api/auth/*splat", toNodeHandler(auth));
 
 app.use("/api/users", userRouter);
 

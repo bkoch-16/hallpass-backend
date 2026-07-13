@@ -26,14 +26,19 @@ afterAll(async () => {
 });
 
 describe("Real auth flow (integration)", () => {
-  it("sign up then GET /api/users/me returns integer id > 0", async () => {
+  it("provisioned user then GET /api/users/me returns integer id > 0", async () => {
+    await createUserWithCredential(auth, {
+      email: "signup@test.com",
+      password: "password123",
+      name: "Sign Up User",
+    });
+
     const agent = request.agent(app);
 
-    const signUp = await agent
-      .post("/api/auth/sign-up/email")
-      .send({ email: "signup@test.com", password: "password123", name: "Sign Up User" });
-
-    expect(signUp.status).toBe(200);
+    const signIn = await agent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "signup@test.com", password: "password123" });
+    expect(signIn.status).toBe(200);
 
     const me = await agent.get("/api/users/me");
 
@@ -43,12 +48,12 @@ describe("Real auth flow (integration)", () => {
   });
 
   it("GET /api/users/me without session returns 401", async () => {
-    const agent = request.agent(app);
-
-    // Sign up to create a user, but use a fresh agent (no cookies) for the GET.
-    await agent
-      .post("/api/auth/sign-up/email")
-      .send({ email: "nosession@test.com", password: "password123", name: "No Session" });
+    // Provision a user, but use a fresh agent (no cookies) for the GET.
+    await createUserWithCredential(auth, {
+      email: "nosession@test.com",
+      password: "password123",
+      name: "No Session",
+    });
 
     const freshAgent = request.agent(app);
     const res = await freshAgent.get("/api/users/me");
@@ -56,18 +61,23 @@ describe("Real auth flow (integration)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("sign up then sign in returns same user id", async () => {
-    const signUpAgent = request.agent(app);
+  it("provisioned user can sign in twice and gets the same user id", async () => {
+    await createUserWithCredential(auth, {
+      email: "roundtrip@test.com",
+      password: "password123",
+      name: "Round Trip",
+    });
 
-    const signUp = await signUpAgent
-      .post("/api/auth/sign-up/email")
-      .send({ email: "roundtrip@test.com", password: "password123", name: "Round Trip" });
+    const firstAgent = request.agent(app);
 
-    expect(signUp.status).toBe(200);
+    const firstSignIn = await firstAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "roundtrip@test.com", password: "password123" });
+    expect(firstSignIn.status).toBe(200);
 
-    const meAfterSignUp = await signUpAgent.get("/api/users/me");
-    expect(meAfterSignUp.status).toBe(200);
-    const originalId = meAfterSignUp.body.id;
+    const meAfterFirstSignIn = await firstAgent.get("/api/users/me");
+    expect(meAfterFirstSignIn.status).toBe(200);
+    const originalId = meAfterFirstSignIn.body.id;
 
     const signInAgent = request.agent(app);
 
@@ -128,48 +138,26 @@ describe("Real auth flow (integration)", () => {
     expect(me.body.schoolId).toBe(school.id);
   });
 
-  it("public sign-up CANNOT escalate role/schoolId via the request body", async () => {
-    const school = await prisma.school.create({ data: { name: "Escalation High" } });
-
+  it("public sign-up is disabled: POST /api/auth/sign-up/email is rejected and creates no user", async () => {
     const agent = request.agent(app);
 
-    // Attempt to self-provision as SUPER_ADMIN with an injected schoolId.
-    const signUp = await agent.post("/api/auth/sign-up/email").send({
-      email: "attacker@test.com",
-      password: "password123",
-      name: "Attacker",
-      role: "SUPER_ADMIN",
-      schoolId: school.id,
-    });
+    const signUp = await agent
+      .post("/api/auth/sign-up/email")
+      .send({ email: "attacker@test.com", password: "password123", name: "Attacker" });
 
-    // input:false makes better-auth reject the privileged fields outright; no
-    // escalated user is created.
+    // disableSignUp: true closes public self-signup; provisioning is admin-driven
+    // (POST /api/users) via createUserWithCredential instead.
     expect(signUp.status).toBe(400);
     const dbUser = await prisma.user.findUnique({ where: { email: "attacker@test.com" } });
     expect(dbUser).toBeNull();
   });
 
-  it("public sign-up without privileged fields succeeds as a default STUDENT", async () => {
-    const agent = request.agent(app);
-
-    const signUp = await agent
-      .post("/api/auth/sign-up/email")
-      .send({ email: "cleansignup@test.com", password: "password123", name: "Clean" });
-
-    expect(signUp.status).toBe(200);
-
-    const dbUser = await prisma.user.findUnique({ where: { email: "cleansignup@test.com" } });
-    expect(dbUser).not.toBeNull();
-    expect(dbUser!.role).toBe("STUDENT");
-    expect(dbUser!.schoolId).toBeNull();
-  });
-
   it("sign in with wrong password returns 401", async () => {
-    const signUpAgent = request.agent(app);
-
-    await signUpAgent
-      .post("/api/auth/sign-up/email")
-      .send({ email: "wrongpass@test.com", password: "password123", name: "Wrong Pass" });
+    await createUserWithCredential(auth, {
+      email: "wrongpass@test.com",
+      password: "password123",
+      name: "Wrong Pass",
+    });
 
     const signInAgent = request.agent(app);
 

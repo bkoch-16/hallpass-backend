@@ -27,6 +27,7 @@ export function createAuth(config: {
     },
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
     },
     advanced: {
       database: {
