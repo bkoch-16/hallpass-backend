@@ -197,7 +197,7 @@ so containers no longer migrate on boot. The CI service account
 - **Neon Postgres** (`DATABASE_URL`) — primary data store via Prisma
 - **Upstash Redis** (`REDIS_URL`) — Socket.io adapter (pub/sub across instances), slot counters, and the rate-limit store
 - **Socket.io** — WebSocket upgrade handled on the same HTTP server; real-time pass status events
-- **Pass expiry** — an in-process `setTimeout` per pass fires at the period end while the instance is warm (which it is whenever a staff board is connected). No polling worker. The `passes-reconcile-expiry` Cloud Scheduler job (`*/10`) is the cold-path backstop: it expires any pass that came due while no instance was warm and re-arms timers on a freshly-woken instance. Worst-case expiry lag = the scheduler interval.
+- **Pass expiry** — an in-process `setTimeout` per pass fires at the period end while the instance is warm (which it is whenever a staff board is connected). No polling worker. The `passes-reconcile-expiry` Cloud Scheduler job (`*/10`) is the cold-path backstop: it expires any pass that came due while no instance was warm and re-arms timers on a freshly-woken instance. Worst-case expiry lag = the scheduler interval. Config edits are applied lazily by the same path: `maxOccupancy` shrinks and period `endTime` edits do **not** immediately update the Redis slot counters or already-armed timers — those reflect the old values until the reconcile sweep catches up, so worst-case staleness is likewise the scheduler interval.
 
 ### Required Environment Variables
 | Variable             | Description                                              |
