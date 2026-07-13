@@ -256,13 +256,13 @@ describe("POST /api/passes", () => {
     expect(res.body.message).toBe("Destination not found");
   });
 
-  it("returns 422 when the user's school does not exist", async () => {
+  it("returns 404 when the user's school does not exist", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
     const res = await request(server).post(BASE).send({ destinationId: 1 });
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(404);
     expect(res.body.message).toBe("School not found");
   });
 

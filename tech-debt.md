@@ -47,9 +47,8 @@ The three apps are copy-paste siblings diverging; converge in
 - Socket auth swallows DB errors as "Unauthorized" (`apps/passes-api/src/lib/socket.ts:42-44`)
   while the HTTP path surfaces them as 500 — same inconsistency the HTTP auth fix
   already removed.
-- Status-code conventions drift: school-not-found is 404 in policy PUT but 422 in
-  pass create; `requireSchool` uses 422 where 403 is arguable. Pick one
-  convention, document it.
+- 🟡 Student not found returns 422 where 404 fits the new convention
+  (docs/API_CONVENTIONS.md) — deferred.
 - **Partial unique index landmine.** `one_active_pass_per_student` exists only in
   a migration; the schema comment (`packages/db/prisma/schema.prisma:188-197`)
   warns every `prisma migrate dev` regenerates a `DROP INDEX` that must be
