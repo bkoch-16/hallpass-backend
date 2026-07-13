@@ -8,7 +8,7 @@ import { initSocket } from "./lib/socket.js";
 import { redis } from "./lib/redis.js";
 import { clearAllExpiryTimers } from "./lib/expiry.js";
 
-const PORT = env.PORT;
+const PORT = env.PORT ?? 3003;
 
 process.on("unhandledRejection", (reason) => {
   logger.error(reason, "Unhandled Rejection");

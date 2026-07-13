@@ -10,7 +10,8 @@ export async function setup() {
     stdio: "inherit",
     env: {
       ...process.env,
-      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/hallpass_test",
+      DATABASE_URL:
+        "postgresql://postgres:postgres@localhost:5432/hallpass_test",
     },
     cwd: resolve(__dirname, "../../../.."),
   });

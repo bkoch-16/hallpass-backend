@@ -40,16 +40,9 @@ is now closed; what remains is the bounded-staleness case below.
 The three apps are copy-paste siblings diverging; converge in
 `@hallpass/express-middleware`.
 
-- `passes-api/app.ts` lacks the explicit `app.options` preflight handler the
-  other two register; PORT env schemas differ across apps.
 - Status-code conventions drift: school-not-found is 404 in policy PUT but 422 in
   pass create; `requireSchool` uses 422 where 403 is arguable. Pick one
   convention, document it.
-- **Partial unique index landmine.** `one_active_pass_per_student` exists only in
-  a migration; the schema comment (`packages/db/prisma/schema.prisma:188-197`)
-  warns every `prisma migrate dev` regenerates a `DROP INDEX` that must be
-  hand-deleted. passes-api's 409 duplicate-pass contract silently degrades if
-  applied. Add a CI grep / post-migrate assertion so the failure is loud.
 - **Integration suites collide on one shared Postgres.** Each app pins
   `fileParallelism: false` (`apps/*/vitest.integration.config.ts`), so a suite is
   serial *within itself* — but `pnpm turbo test:integration` runs all three apps'
