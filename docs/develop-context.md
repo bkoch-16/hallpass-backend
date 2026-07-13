@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-13T19:16:41.654Z — 17 files indexed_
+_Generated: 2026-07-13T19:32:31.322Z — 17 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Configures and exports the Express application for the user-api service, wiring up middleware in a specific order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), rate limiters, auth routes, user routes, 404 handler, and error handler. Rate limiting uses Redis-backed stores (via rate-limit-redis/RedisStore) in production and falls back to in-memory stores during tests or when REDIS_URL is unset; each limiter gets its own RedisStore instance with namespaced keys. Auth routes are handled by `@hallpass/auth`'s `toNodeHandler` adapter with a stricter auth-specific rate limiter. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. The `trust proxy` setting is enabled for running behind load balancers (e.g., Cloud Run). Developers modifying this file should preserve middleware ordering, especially keeping the health route before rate limiters.
+Configures and exports the Express application for the user-api service. Sets up security middleware (helmet, CORS), HTTP logging, JSON body parsing, health checks, and rate limiting with optional Redis-backed stores (via Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset. Mounts Better Auth handler at `/api/auth/*splat` with a stricter auth rate limiter, user routes at `/api/users`, and global error/404 handlers. Key dependencies include shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`), local `auth` and `env` modules, and `rate-limit-redis`. Developers should note that each rate limiter requires its own `RedisStore` instance, the health route is registered before rate limiting to avoid 429s on probes, and `trust proxy` is set to 1 for correct client IP detection behind a load balancer.
 
 ### `apps/user-api/src/auth.ts`
 
@@ -42,7 +42,7 @@ Validates and exports the environment configuration for the user-api service usi
 
 ### `apps/user-api/src/index.ts`
 
-Entry point for the user-api service that loads dotenv, validates environment variables (via env.ts import), and starts the Express server on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure clean restarts in containerized environments.
+Entry point for the user-api service that loads environment variables via dotenv, imports the Express app, and starts the HTTP server on the configured PORT (default 3001). Registers global handlers for `unhandledRejection` and `uncaughtException` that log the error and force a process exit to prevent running in an undefined state. Depends on the shared `@hallpass/logger` package and the local `env` module for configuration.
 
 ### `apps/user-api/src/middleware/auth.ts`
 

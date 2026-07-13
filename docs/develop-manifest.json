@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-13T19:16:41.654Z",
+  "generatedAt": "2026-07-13T19:32:31.322Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "f769e2c62cab3f8a4557be0df17a985e11c6bb87",
       "summary": "Defines the full PostgreSQL data model for the HallPass system using Prisma ORM, covering districts, schools, users (with Role enum), sessions, accounts, schedule types, periods, school calendars, destinations, pass policies, and passes (with PassStatus enum lifecycle). Key relationships include school-scoped users, multi-relation user-to-pass links (student, requester, approver, denier, canceller), and a one-to-one PassPolicy per school. The Pass model has a critical WARNING comment: a partial unique index (one_active_pass_per_student) exists only in a migration and not in the schema, so developers must manually remove any auto-generated DROP INDEX statements in new migrations. Passes intentionally lack a deletedAt field—they use terminal statuses instead of soft deletion. Indexes are defined on frequently queried foreign keys and status fields for pass lookups."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "8228b59a02170f99e0906a89eba341c5e958dac3",
-      "summary": "Configures and exports the Express application for the user-api service, wiring up middleware in a specific order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), rate limiters, auth routes, user routes, 404 handler, and error handler. Rate limiting uses Redis-backed stores (via rate-limit-redis/RedisStore) in production and falls back to in-memory stores during tests or when REDIS_URL is unset; each limiter gets its own RedisStore instance with namespaced keys. Auth routes are handled by `@hallpass/auth`'s `toNodeHandler` adapter with a stricter auth-specific rate limiter. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. The `trust proxy` setting is enabled for running behind load balancers (e.g., Cloud Run). Developers modifying this file should preserve middleware ordering, especially keeping the health route before rate limiters."
+      "blobSha": "dd1d02d5ad12785c6f7f92cbcd79d16ee205fc63",
+      "summary": "Configures and exports the Express application for the user-api service. Sets up security middleware (helmet, CORS), HTTP logging, JSON body parsing, health checks, and rate limiting with optional Redis-backed stores (via Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset. Mounts Better Auth handler at `/api/auth/*splat` with a stricter auth rate limiter, user routes at `/api/users`, and global error/404 handlers. Key dependencies include shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`), local `auth` and `env` modules, and `rate-limit-redis`. Developers should note that each rate limiter requires its own `RedisStore` instance, the health route is registered before rate limiting to avoid 429s on probes, and `trust proxy` is set to 1 for correct client IP detection behind a load balancer."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "f451e42bf583bd59b082ed6574c64d8d12d5284d",
@@ -19,8 +19,8 @@
       "summary": "Validates and exports the environment configuration for the user-api service using Zod schemas from `@hallpass/express-middleware`. Extends `baseEnvSchema` with optional Redis environment variables (REDIS_URL, REDIS_PREFIX) and applies a refinement ensuring REDIS_PREFIX is provided whenever REDIS_URL is set. The parsed `env` object is used throughout the app for type-safe environment access. When modifying, ensure any new required environment variables are added to the schema and reflected in docker-compose.yml and deployment configs."
     },
     "apps/user-api/src/index.ts": {
-      "blobSha": "69bdac0f8a51bbb76d6fe8ff75dd956e2e68b150",
-      "summary": "Entry point for the user-api service that loads dotenv, validates environment variables (via env.ts import), and starts the Express server on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure clean restarts in containerized environments."
+      "blobSha": "c4e0fcb6b67a339a5e32acb8a68967d401e40747",
+      "summary": "Entry point for the user-api service that loads environment variables via dotenv, imports the Express app, and starts the HTTP server on the configured PORT (default 3001). Registers global handlers for `unhandledRejection` and `uncaughtException` that log the error and force a process exit to prevent running in an undefined state. Depends on the shared `@hallpass/logger` package and the local `env` module for configuration."
     },
     "apps/user-api/src/middleware/auth.ts": {
       "blobSha": "976226990a8b4ea14dd1fa60e97995f0ee5504c9",
