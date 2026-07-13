@@ -12,5 +12,5 @@ export {
   REDIS_PREFIX_REFINE_MESSAGE,
 } from "./env.js";
 export { createRateLimitRedis } from "./redis.js";
-export { parseCorsOrigins } from "./cors.js";
+export { parseCorsOrigins, corsOptions } from "./cors.js";
 export { createTestServer, type TestServerHandle } from "./testing.js";
