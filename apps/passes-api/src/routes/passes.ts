@@ -97,7 +97,7 @@ router.post(
       select: { timezone: true },
     });
     if (!school) {
-      res.status(422).json({ message: "School not found" });
+      res.status(404).json({ message: "School not found" });
       return;
     }
     const timezone = school.timezone;
@@ -328,7 +328,7 @@ router.get(
       where,
       take: take + 1,
       ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
-      orderBy: { id: "asc" },
+      orderBy: { id: "desc" },
       select: PASS_SELECT,
     });
 

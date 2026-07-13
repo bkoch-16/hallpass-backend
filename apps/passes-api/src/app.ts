@@ -7,7 +7,7 @@ import {
   notFound,
   createErrorHandler,
   createGeneralLimiter,
-  parseCorsOrigins,
+  corsOptions,
 } from "@hallpass/express-middleware";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
@@ -21,13 +21,8 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 
-const corsOrigins = parseCorsOrigins(env);
-app.use(
-  cors({
-    origin: corsOrigins,
-    credentials: env.CORS_ORIGIN !== "*",
-  }),
-);
+app.use(cors(corsOptions(env)));
+app.options("/*splat", cors(corsOptions(env)));
 
 app.use(httpLogger);
 app.use(express.json());

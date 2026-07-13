@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCorsOrigins } from "../src/cors";
+import { parseCorsOrigins, corsOptions } from "../src/cors";
 
 /**
  * Pins the exact semantics of apps/passes-api/src/lib/cors.ts:
@@ -51,5 +51,35 @@ describe("parseCorsOrigins", () => {
     expect(() =>
       parseCorsOrigins({ CORS_ORIGIN: undefined as unknown as string }),
     ).toThrow();
+  });
+});
+
+describe("corsOptions", () => {
+  it('sets credentials to false when CORS_ORIGIN is the wildcard "*"', () => {
+    expect(corsOptions({ CORS_ORIGIN: "*" }).credentials).toBe(false);
+  });
+
+  it("sets credentials to true for a concrete origin", () => {
+    expect(
+      corsOptions({ CORS_ORIGIN: "http://localhost:5173" }).credentials,
+    ).toBe(true);
+  });
+
+  it("sets credentials to true for a comma-separated origin list", () => {
+    expect(
+      corsOptions({
+        CORS_ORIGIN: "http://localhost:5173,https://app.example.com",
+      }).credentials,
+    ).toBe(true);
+  });
+
+  it('passes origin straight through from parseCorsOrigins (wildcard "*")', () => {
+    const env = { CORS_ORIGIN: "*" };
+    expect(corsOptions(env).origin).toEqual(parseCorsOrigins(env));
+  });
+
+  it("passes origin straight through from parseCorsOrigins (list)", () => {
+    const env = { CORS_ORIGIN: "http://localhost:5173,https://app.example.com" };
+    expect(corsOptions(env).origin).toEqual(parseCorsOrigins(env));
   });
 });

@@ -37,6 +37,15 @@ vi.mock('@hallpass/db', () => ({
   },
 }));
 
+const { mockResolveSessionUser } = vi.hoisted(() => ({
+  mockResolveSessionUser: vi.fn(),
+}));
+
+vi.mock('@hallpass/express-middleware', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@hallpass/express-middleware')>();
+  return { ...actual, resolveSessionUser: mockResolveSessionUser };
+});
+
 vi.mock('../../src/env.js', () => ({
   env: {
     CORS_ORIGIN: 'http://localhost:3000',
@@ -54,6 +63,15 @@ function fakeSocket(user: Record<string, unknown>) {
 
 function connectionHandler(ioServer: Server) {
   return ioServer.sockets.listeners('connection')[0] as (socket: unknown) => void;
+}
+
+// The auth middleware registered via io.use() lives on the main namespace's
+// internal _fns array.
+function authMiddleware(ioServer: Server) {
+  const fns = (ioServer.sockets as unknown as {
+    _fns: Array<(socket: unknown, next: (err?: Error) => void) => void>;
+  })._fns;
+  return fns[0];
 }
 
 describe('emitPassEvent', () => {
@@ -128,6 +146,54 @@ describe('emitPassEvent', () => {
     expect(toSpy).toHaveBeenCalledWith('school:5');
     expect(toSpy).not.toHaveBeenCalledWith('user:42');
     expect(emitMock).toHaveBeenCalledTimes(1);
+
+    ioServer.close();
+    httpServer.close();
+  });
+});
+
+describe('socket auth middleware', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockResolveSessionUser.mockReset();
+  });
+
+  it('rejects with Unauthorized when there is no session user', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    mockResolveSessionUser.mockResolvedValue(null);
+
+    const next = vi.fn();
+    await authMiddleware(ioServer)({ data: {}, handshake: { headers: {} } }, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect((next.mock.calls[0][0] as Error).message).toBe('Unauthorized');
+
+    ioServer.close();
+    httpServer.close();
+  });
+
+  it('propagates an unexpected DB error instead of masking it as Unauthorized', async () => {
+    const { createServer } = await import('node:http');
+    const { initSocket } = await import('../../src/lib/socket.js');
+
+    const httpServer = createServer();
+    const { io: ioServer } = initSocket(httpServer);
+
+    const dbError = new Error('connection reset by peer');
+    mockResolveSessionUser.mockRejectedValue(dbError);
+
+    const next = vi.fn();
+    await authMiddleware(ioServer)({ data: {}, handshake: { headers: {} } }, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBe(dbError);
+    expect((next.mock.calls[0][0] as Error).message).not.toBe('Unauthorized');
 
     ioServer.close();
     httpServer.close();

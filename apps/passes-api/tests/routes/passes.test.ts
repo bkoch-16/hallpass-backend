@@ -256,13 +256,13 @@ describe("POST /api/passes", () => {
     expect(res.body.message).toBe("Destination not found");
   });
 
-  it("returns 422 when the user's school does not exist", async () => {
+  it("returns 404 when the user's school does not exist", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
     const res = await request(server).post(BASE).send({ destinationId: 1 });
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(404);
     expect(res.body.message).toBe("School not found");
   });
 
@@ -633,32 +633,53 @@ describe("GET /api/passes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns nextCursor when more results exist", async () => {
+  it("orders newest-first (id desc)", async () => {
     authenticateAs(fakeTeacher);
-    // limit=2 with take: 3 — prisma returns 3 rows, so there is a next page
-    const passes = [fakePass, { ...fakePass, id: 101 }, { ...fakePass, id: 102 }];
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
+
+    const res = await request(server).get(BASE);
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { id: "desc" } }),
+    );
+  });
+
+  it("returns nextCursor (the lowest returned id) when more results exist", async () => {
+    authenticateAs(fakeTeacher);
+    // limit=2 with take: 3 — prisma returns 3 rows (newest-first), so there is
+    // a next page. The cursor is the last (lowest) returned id.
+    const passes = [{ ...fakePass, id: 102 }, { ...fakePass, id: 101 }, fakePass];
     mockPrisma.pass.findMany.mockResolvedValue(passes);
 
     const res = await request(server).get(`${BASE}?limit=2`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
+    expect(res.body.data[0].id).toBe(102);
+    expect(res.body.data[1].id).toBe(101);
     expect(res.body.nextCursor).toBe("101");
     expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 3, orderBy: { id: "asc" } }),
+      expect.objectContaining({ take: 3, orderBy: { id: "desc" } }),
     );
   });
 
-  it("continues from the cursor", async () => {
+  it("continues from the cursor walking ids descending", async () => {
     authenticateAs(fakeTeacher);
-    mockPrisma.pass.findMany.mockResolvedValue([{ ...fakePass, id: 102 }]);
+    // Second page: ids below the cursor, still newest-first.
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
 
     const res = await request(server).get(`${BASE}?cursor=101`);
 
     expect(res.status).toBe(200);
+    expect(res.body.data[0].id).toBe(100);
     expect(res.body.nextCursor).toBeNull();
     expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ cursor: { id: 101 }, skip: 1 }),
+      expect.objectContaining({
+        cursor: { id: 101 },
+        skip: 1,
+        orderBy: { id: "desc" },
+      }),
     );
   });
 
