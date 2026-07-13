@@ -43,6 +43,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @hallpass/db exec prisma generate
 
+      - name: Check pass index guard
+        run: pnpm check:pass-index
+
       - name: Lint
         run: pnpm lint
 
