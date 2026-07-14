@@ -28,7 +28,38 @@ export function initSocket(
     logger.error(err, "[socket-adapter] sub error"),
   );
 
+  // createAdapter() issues subClient.subscribe()/.psubscribe() but never awaits
+  // their promises. On a Redis connect/auth failure those promises reject and,
+  // being un-awaited, surface as unhandled rejections that the global handler in
+  // index.ts turns into a process exit — taking the whole API down over a Redis
+  // hiccup. Attach a catch so real-time degrades gracefully like redis.ts does.
+  const subClientRaw = subClient as unknown as Record<
+    "subscribe" | "psubscribe",
+    (...args: unknown[]) => unknown
+  >;
+  for (const method of ["subscribe", "psubscribe"] as const) {
+    const original = subClientRaw[method].bind(subClient);
+    subClientRaw[method] = (...args: unknown[]) => {
+      const result = original(...args);
+      if (result instanceof Promise) {
+        result.catch((err: unknown) =>
+          logger.error(err, `[socket-adapter] sub ${method} error`),
+        );
+      }
+      return result;
+    };
+  }
+
   io.adapter(createAdapter(pubClient, subClient, { key: `${env.REDIS_PREFIX}:socket.io` }));
+
+  // lazyConnect defers connection until now; catch the initial connect failure
+  // here so it never leaks as an unhandled rejection either.
+  void pubClient.connect().catch((err) =>
+    logger.error(err, "[socket-adapter] pub connect error"),
+  );
+  void subClient.connect().catch((err) =>
+    logger.error(err, "[socket-adapter] sub connect error"),
+  );
 
   io.use(async (socket, next) => {
     // Browsers can't set an Authorization header on a WebSocket upgrade, so

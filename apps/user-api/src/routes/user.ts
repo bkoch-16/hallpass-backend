@@ -8,6 +8,7 @@ import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
+import { createUserWithPin } from "../lib/pin.js";
 import {
   bulkCreateSchema,
   createUserSchema,
@@ -30,6 +31,17 @@ function toUserResponse(u: UserRow): UserResponse {
 // above better-auth's 8-char minimum. Never logged; returned to the caller once.
 function generateTempPassword(): string {
   return randomBytes(18).toString("base64url");
+}
+
+// Students need a unique pinCode for the parent voice tool, but
+// createUserWithCredential can't set it (better-auth additionalFields cover only
+// role/schoolId). Assign the pin right after creation; a collision retries only
+// this update, never the user creation itself.
+async function assignPin(userId: number, role: UserRole): Promise<void> {
+  await createUserWithPin(role, async (pinCode) => {
+    if (!pinCode) return;
+    await prisma.user.update({ where: { id: userId }, data: { pinCode } });
+  });
 }
 
 // role/schoolId are better-auth additionalFields — present at runtime (the helper
@@ -177,6 +189,7 @@ router.post(
         role: targetRole,
         ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
       });
+      await assignPin(user.id, targetRole);
       res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
       if (isDuplicateEmailError(err)) {
@@ -212,15 +225,18 @@ router.post(
     for (let start = 0; start < users.length; start += BULK_CONCURRENCY) {
       const batch = users.slice(start, start + BULK_CONCURRENCY);
       const settled = await Promise.allSettled(
-        batch.map((u) =>
-          createUserWithCredential(auth, {
+        batch.map(async (u) => {
+          const role = u.role ?? UserRole.STUDENT;
+          const user = await createUserWithCredential(auth, {
             email: u.email,
             name: u.name,
             password: generateTempPassword(),
-            role: u.role ?? UserRole.STUDENT,
+            role,
             ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
-          }),
-        ),
+          });
+          await assignPin(user.id, role);
+          return user;
+        }),
       );
       for (let i = 0; i < settled.length; i += 1) results[start + i] = settled[i];
     }

@@ -505,7 +505,8 @@ describe("GET /api/passes (integration)", () => {
     expect(page2.status).toBe(200);
     expect(page2.body.data).toHaveLength(1);
     expect(page2.body.nextCursor).toBeNull();
-    expect(page2.body.data[0].id).toBeGreaterThan(page1.body.data[1].id);
+    // Passes are ordered newest-first, so page 2 holds older (lower) ids.
+    expect(page2.body.data[0].id).toBeLessThan(page1.body.data[1].id);
   });
 
   it("401 unauthenticated", async () => {

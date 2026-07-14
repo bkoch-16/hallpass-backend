@@ -6,3 +6,6 @@ values:
   - key: InternalSecret
     value: ''
     enabled: true
+  - key: ParentToolApiKey
+    value: ''
+    enabled: true
