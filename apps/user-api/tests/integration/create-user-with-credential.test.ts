@@ -121,6 +121,27 @@ describe("createUserWithCredential (integration)", () => {
     expect(count).toBe(1);
   });
 
+  it("throws EmailInUseError (not a raw Prisma error) when two calls race on the same email", async () => {
+    const attempt = (name: string) =>
+      createUserWithCredential(auth, {
+        email: "racing@test.com",
+        password: "password123",
+        name,
+      });
+
+    const results = await Promise.allSettled([attempt("First"), attempt("Second")]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(EmailInUseError);
+
+    const count = await prisma.user.count({ where: { email: "racing@test.com" } });
+    expect(count).toBe(1);
+  });
+
   it("does NOT create a Session row (provisioning has no session side-effect)", async () => {
     const user = await createUserWithCredential(auth, {
       email: "nosession@test.com",

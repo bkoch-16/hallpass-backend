@@ -63,9 +63,9 @@ function provisionedToRow(u: ProvisionedUser): UserRow {
 
 const BULK_CONCURRENCY = 8;
 
-// The email guard in createUserWithCredential is not atomic; the DB unique index
-// on User.email is the backstop. On a race, the losing insert throws Prisma P2002
-// rather than EmailInUseError — treat both as "email already in use".
+// createUserWithCredential translates a racing insert's Prisma P2002 into
+// EmailInUseError internally, but keep the raw P2002 check here too as a
+// defense-in-depth backstop in case that translation is ever bypassed.
 function isDuplicateEmailError(err: unknown): boolean {
   return (
     err instanceof EmailInUseError ||
