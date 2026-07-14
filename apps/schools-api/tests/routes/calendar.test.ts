@@ -2,13 +2,8 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vites
 import request from "supertest";
 import { createTestServer } from "@hallpass/express-middleware";
 
-const { mockGetSession, mockRedisCall } = vi.hoisted(() => ({
+const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockRedisCall: vi.fn((command: string) => {
-    if (command === "SCRIPT") return Promise.resolve("fakesha");
-    if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
-    return Promise.resolve(undefined);
-  }),
 }));
 
 // The public GET routes (calendar, schedule-types) run behind
@@ -16,9 +11,10 @@ const { mockGetSession, mockRedisCall } = vi.hoisted(() => ({
 // commands via redis.call. Mock the ioredis client so route tests don't
 // depend on a live Redis (CI has none); an unmocked call rejects and the
 // limiter fails closed with a 500. See publicSchoolDataLimiter.test.ts.
-vi.mock("../../src/lib/redis.js", () => ({
-  redis: { call: mockRedisCall },
-}));
+vi.mock("../../src/lib/redis.js", async () => {
+  const { createMockRedisCall } = await import("../utils/redisMock.js");
+  return { redis: { call: createMockRedisCall() } };
+});
 
 vi.mock("@hallpass/db", () => ({
   prisma: {
