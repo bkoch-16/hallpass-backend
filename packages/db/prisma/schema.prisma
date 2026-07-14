@@ -66,6 +66,7 @@ model User {
   emailVerified Boolean   @default(false)
   role          Role      @default(STUDENT)
   schoolId      Int?
+  pinCode       String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?

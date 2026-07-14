@@ -25,7 +25,7 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 const seedUsers = [
-  { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const, assignSchool: true },
+  { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const, assignSchool: true, pinCode: "482913" },
   { email: "teacher@hallpass.dev", name: "Sample Teacher", role: "TEACHER" as const, assignSchool: true },
   { email: "admin@hallpass.dev", name: "Sample Admin", role: "ADMIN" as const, assignSchool: true },
   { email: "superadmin@hallpass.dev", name: "Sample Super Admin", role: "SUPER_ADMIN" as const, assignSchool: false },
@@ -59,6 +59,7 @@ async function main() {
           role: userData.role,
           emailVerified: true,
           schoolId: userData.assignSchool ? school.id : null,
+          pinCode: userData.pinCode ?? null,
         },
       });
 

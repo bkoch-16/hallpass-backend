@@ -16,6 +16,7 @@ export default defineConfig({
       REDIS_URL: "redis://localhost:6379",
       REDIS_PREFIX: "test",
       INTERNAL_SECRET: "test-internal-secret",
+      PARENT_TOOL_API_KEY: "test-parent-tool-api-key",
     },
   },
 });

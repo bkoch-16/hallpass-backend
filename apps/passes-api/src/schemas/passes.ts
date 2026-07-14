@@ -25,3 +25,11 @@ export const listPassesQuery = z.object({
   cursor: z.preprocess(v => v === "" ? undefined : v, z.string().regex(/^[1-9]\d*$/, "cursor must be a positive integer").optional()),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+// Deliberately loose — NO format regex. A wrong-format PIN must be
+// indistinguishable from a non-matching one (no enumeration signal).
+export const parentLookupQuery = z.object({
+  pin: z.string().trim().min(1).max(64),
+  cursor: z.preprocess(v => v === "" ? undefined : v, z.string().regex(/^[1-9]\d*$/, "cursor must be a positive integer").optional()),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});

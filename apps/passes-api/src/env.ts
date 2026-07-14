@@ -14,6 +14,7 @@ const envSchema = z.object({
   // silently colliding with another environment's keys.
   REDIS_PREFIX: z.string().min(1),
   INTERNAL_SECRET: z.string().min(1),
+  PARENT_TOOL_API_KEY: z.string().min(1),
 });
 
 export const env = envSchema.parse(process.env);
