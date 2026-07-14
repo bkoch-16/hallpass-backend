@@ -36,6 +36,10 @@ vi.mock("../../src/lib/expiry.js", () => ({
   expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../src/lib/redis.js", () => ({
+  redis: { call: vi.fn().mockResolvedValue("fakesha") },
+}));
+
 vi.mock("@hallpass/auth", () => ({
   createAuth: vi.fn(() => ({
     api: { getSession: mockGetSession },

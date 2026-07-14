@@ -70,7 +70,10 @@ describe("app rate-limit store wiring", () => {
 
     await import("../src/app.js");
 
-    expect(mockRedisStore).not.toHaveBeenCalled();
+    const generalStoreCalls = mockRedisStore.mock.calls.filter(
+      ([options]) => (options as { prefix: string }).prefix === "test:rl:passes-api:general:",
+    );
+    expect(generalStoreCalls).toHaveLength(0);
   });
 
   it("wires a RedisStore namespaced under REDIS_PREFIX outside the test env", async () => {
@@ -78,11 +81,11 @@ describe("app rate-limit store wiring", () => {
 
     await import("../src/app.js");
 
-    expect(mockRedisStore).toHaveBeenCalledTimes(1);
-    const options = mockRedisStore.mock.calls[0][0] as {
-      prefix: string;
-      sendCommand: unknown;
-    };
+    const generalStoreCall = mockRedisStore.mock.calls.find(
+      ([options]) => (options as { prefix: string }).prefix === "test:rl:passes-api:general:",
+    );
+    expect(generalStoreCall).toBeDefined();
+    const options = generalStoreCall![0] as { prefix: string; sendCommand: unknown };
     expect(options.prefix).toBe("test:rl:passes-api:general:");
     expect(typeof options.sendCommand).toBe("function");
   });

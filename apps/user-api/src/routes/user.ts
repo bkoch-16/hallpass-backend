@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { randomBytes } from "node:crypto";
+import { logger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
 import { createUserWithCredential, EmailInUseError } from "@hallpass/auth";
 import { UserRole } from "@hallpass/types";
@@ -189,7 +190,15 @@ router.post(
         role: targetRole,
         ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
       });
-      await assignPin(user.id, targetRole);
+      try {
+        await assignPin(user.id, targetRole);
+      } catch (pinErr: unknown) {
+        // The user row is already committed here; a pin failure (transient DB
+        // error, or exhausting MAX_PIN_ATTEMPTS) must not turn an
+        // already-created account into an unrecoverable 500 behind the
+        // duplicate-email guard below — log and continue without a pin.
+        logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
+      }
       res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
       if (isDuplicateEmailError(err)) {
@@ -234,7 +243,14 @@ router.post(
             role,
             ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
           });
-          await assignPin(user.id, role);
+          try {
+            await assignPin(user.id, role);
+          } catch (pinErr: unknown) {
+            // Same non-fatal handling as the single-create path: the user is
+            // already committed, so a pin failure must not report an
+            // otherwise-successful creation as a failed PromiseSettledResult.
+            logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
+          }
           return user;
         }),
       );

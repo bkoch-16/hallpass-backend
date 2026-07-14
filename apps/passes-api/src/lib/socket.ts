@@ -57,9 +57,6 @@ export function initSocket(
   void pubClient.connect().catch((err) =>
     logger.error(err, "[socket-adapter] pub connect error"),
   );
-  void subClient.connect().catch((err) =>
-    logger.error(err, "[socket-adapter] sub connect error"),
-  );
 
   io.use(async (socket, next) => {
     // Browsers can't set an Authorization header on a WebSocket upgrade, so
