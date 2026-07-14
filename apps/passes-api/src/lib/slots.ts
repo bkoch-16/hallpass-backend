@@ -195,7 +195,7 @@ export async function promoteFromQueue(
 
   while (true) {
     const waiting = await prisma.pass.findMany({
-      where: { schoolId, status: PassStatus.WAITING },
+      where: { schoolId, status: PassStatus.WAITING, destination: { deletedAt: null } },
       orderBy: [{ requestedAt: "asc" }, { id: "asc" }],
       include: { destination: { select: { maxOccupancy: true } } },
       take: PROMOTE_BATCH_SIZE,

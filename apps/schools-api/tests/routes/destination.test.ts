@@ -1,11 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { passStatusMock } from "../utils/passStatusMock.js";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
   prisma: {
     user: { findFirst: vi.fn() },
     school: { findFirst: vi.fn() },
@@ -14,6 +17,9 @@ vi.mock("@hallpass/db", () => ({
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+    },
+    pass: {
+      findFirst: vi.fn(),
     },
     $queryRaw: vi.fn(),
   },
@@ -39,6 +45,7 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  pass: { findFirst: ReturnType<typeof vi.fn> };
 };
 
 interface FakeUser {
@@ -125,11 +132,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe(`GET ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
   });
@@ -138,7 +149,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeTeacher);
     mockPrisma.destination.findMany.mockResolvedValue([fakeDestination]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -149,7 +160,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeStudent);
     mockPrisma.destination.findMany.mockResolvedValue([fakeDestination]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
   });
@@ -157,7 +168,7 @@ describe(`GET ${BASE}`, () => {
   it("returns 403 when user is from a different school", async () => {
     authenticateAs(fakeWrongSchool);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(403);
   });
@@ -167,7 +178,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ name: "Gym" });
+    const res = await request(server).post(BASE).send({ name: "Gym" });
 
     expect(res.status).toBe(401);
   });
@@ -175,7 +186,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 403 when TEACHER attempts create", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app).post(BASE).send({ name: "Gym" });
+    const res = await request(server).post(BASE).send({ name: "Gym" });
 
     expect(res.status).toBe(403);
   });
@@ -183,7 +194,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 403 when STUDENT attempts create", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).post(BASE).send({ name: "Gym" });
+    const res = await request(server).post(BASE).send({ name: "Gym" });
 
     expect(res.status).toBe(403);
   });
@@ -193,7 +204,7 @@ describe(`POST ${BASE}`, () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });
     mockPrisma.destination.create.mockResolvedValue(fakeDestination);
 
-    const res = await request(app).post(BASE).send({ name: "Library", maxOccupancy: 30 });
+    const res = await request(server).post(BASE).send({ name: "Library", maxOccupancy: 30 });
 
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("Library");
@@ -204,7 +215,7 @@ describe(`POST ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.school.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).post(BASE).send({ name: "Gym" });
+    const res = await request(server).post(BASE).send({ name: "Gym" });
 
     expect(res.status).toBe(404);
     expect(mockPrisma.destination.create).not.toHaveBeenCalled();
@@ -213,7 +224,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 400 for missing name", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post(BASE).send({});
+    const res = await request(server).post(BASE).send({});
 
     expect(res.status).toBe(400);
   });
@@ -221,7 +232,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 400 for invalid maxOccupancy", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post(BASE).send({ name: "Gym", maxOccupancy: 0 });
+    const res = await request(server).post(BASE).send({ name: "Gym", maxOccupancy: 0 });
 
     expect(res.status).toBe(400);
   });
@@ -232,7 +243,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/99999`)
       .send({ name: "Updated" });
 
@@ -245,7 +256,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
     mockPrisma.destination.update.mockResolvedValue(updated);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/1`)
       .send({ name: "Updated Library" });
 
@@ -256,7 +267,7 @@ describe(`PATCH ${BASE}/:id`, () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch(`${BASE}/1`).send({});
+    const res = await request(server).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -266,9 +277,10 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("soft deletes destination and returns 204", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
     expect(mockPrisma.destination.update).toHaveBeenCalledWith({
@@ -277,11 +289,22 @@ describe(`DELETE ${BASE}/:id`, () => {
     });
   });
 
+  it("returns 409 and does not soft-delete when a non-terminal pass references the destination", async () => {
+    authenticateAs(fakeAdmin);
+    mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue({ id: 99, destinationId: 1, status: "ACTIVE" });
+
+    const res = await request(server).delete(`${BASE}/1`);
+
+    expect(res.status).toBe(409);
+    expect(mockPrisma.destination.update).not.toHaveBeenCalled();
+  });
+
   it("returns 404 when destination not found", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete(`${BASE}/999`);
+    const res = await request(server).delete(`${BASE}/999`);
 
     expect(res.status).toBe(404);
     expect(mockPrisma.destination.update).not.toHaveBeenCalled();
@@ -290,7 +313,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("returns 403 when STUDENT attempts delete", async () => {
     authenticateAs(fakeStudent);
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(403);
   });
@@ -302,7 +325,7 @@ describe("SUPER_ADMIN write access", () => {
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });
     mockPrisma.destination.create.mockResolvedValue(fakeDestination);
 
-    const res = await request(app).post(BASE).send({ name: "Library", maxOccupancy: 30 });
+    const res = await request(server).post(BASE).send({ name: "Library", maxOccupancy: 30 });
 
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("Library");
@@ -314,7 +337,7 @@ describe("SUPER_ADMIN write access", () => {
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
     mockPrisma.destination.update.mockResolvedValue(updated);
 
-    const res = await request(app).patch(`${BASE}/1`).send({ name: "Updated Library" });
+    const res = await request(server).patch(`${BASE}/1`).send({ name: "Updated Library" });
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Updated Library");
@@ -323,9 +346,10 @@ describe("SUPER_ADMIN write access", () => {
   it("SUPER_ADMIN can delete a destination", async () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.destination.findFirst.mockResolvedValue(fakeDestination);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.destination.update.mockResolvedValue({ ...fakeDestination, deletedAt: new Date() });
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
   });

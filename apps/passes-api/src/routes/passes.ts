@@ -4,14 +4,14 @@ import { UserRole, type CursorPage, type PassResponse, type ParentLookupPass, ty
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
-import { requireMinRole, roleRank } from "../middleware/roleGuard.js";
+import { requireMinRole, roleRank } from "@hallpass/express-middleware";
 import { createRequireApiKey } from "../middleware/apiKey.js";
 import { createPinLookupLimiter } from "../middleware/pinLookupLimiter.js";
 import {
   validateBody,
   validateParams,
   validateQuery,
-} from "../middleware/validate.js";
+} from "@hallpass/express-middleware";
 import {
   createPassBody,
   approvePassBody,
@@ -27,14 +27,16 @@ import {
   getMaxActivePasses,
 } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
+import { scheduleLocalExpiry } from "../lib/expiry.js";
 import { paginate } from "../lib/pagination.js";
-import { schedulePassExpiry } from "../lib/queue.js";
 import {
   periodEndDate,
   getTodayInTimezone,
   getCurrentTimeInTimezone,
   getIntervalStart,
   addMinutesToTime,
+  addMinutesToTimeClamped,
+  calendarDate,
 } from "../lib/time.js";
 import { env } from "../env.js";
 
@@ -100,14 +102,14 @@ router.post(
       select: { timezone: true },
     });
     if (!school) {
-      res.status(422).json({ message: "School not found" });
+      res.status(404).json({ message: "School not found" });
       return;
     }
     const timezone = school.timezone;
 
     // 2. Get today's date in school timezone
     const today = getTodayInTimezone(timezone);
-    const todayDate = new Date(today + "T00:00:00Z");
+    const todayDate = calendarDate(today);
 
     // 3. Query SchoolCalendar for today
     const calendar = await prisma.schoolCalendar.findFirst({
@@ -135,7 +137,9 @@ router.post(
     });
 
     const activePeriod = periods.find((p) => {
-      const windowStart = addMinutesToTime(
+      // Clamped, not wrapped: a period starting just after midnight must yield
+      // a "00:00" window start, not wrap to "23:xx" and never match
+      const windowStart = addMinutesToTimeClamped(
         p.startTime,
         -(p.scheduleType?.startBuffer ?? 0),
       );
@@ -170,7 +174,7 @@ router.post(
         },
       });
       if (!student) {
-        res.status(422).json({ message: "Student not found" });
+        res.status(404).json({ message: "Student not found" });
         return;
       }
       studentId = student.id;
@@ -178,6 +182,12 @@ router.post(
 
     // 7. Check PassPolicy — the target student always burns their own quota;
     // only count in-flight/completed passes; denied/expired/cancelled don't burn quota
+    //
+    // TOCTOU: this count-then-create window can race, but the one_active_pass_per_student
+    // partial unique index makes two concurrent NON-TERMINAL creates impossible — the loser
+    // hits Prisma P2002 → 409 "Active pass already exists" (see the create below). So quota
+    // can be exceeded by at most one, which self-corrects once a pass reaches a terminal
+    // status. Accepted; no serializable transaction needed.
     const policy = await prisma.passPolicy.findFirst({ where: { schoolId } });
 
     if (policy && policy.interval && policy.maxPerInterval !== null) {
@@ -208,7 +218,7 @@ router.post(
       where: { id: req.body.destinationId, schoolId, deletedAt: null },
     });
     if (!destination) {
-      res.status(422).json({ message: "Destination not found" });
+      res.status(404).json({ message: "Destination not found" });
       return;
     }
 
@@ -285,14 +295,14 @@ router.post(
       emitPassEvent(pass, slotClaimed ? "pass:approved" : "pass:waiting");
     }
 
-    void schedulePassExpiry(
+    scheduleLocalExpiry(
       pass.id,
       periodEndDate(
         activePeriod.endTime,
         activePeriod.scheduleType?.endBuffer ?? 0,
         timezone,
       ),
-    ).catch((err) => logger.warn(err, "Failed to schedule pass expiry — will be recovered by reconcile"));
+    );
 
     res.status(201).json(toPassResponse(pass));
   },
@@ -323,7 +333,7 @@ router.get(
       where,
       take: take + 1,
       ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
-      orderBy: { id: "asc" },
+      orderBy: { id: "desc" },
       select: PASS_SELECT,
     });
 

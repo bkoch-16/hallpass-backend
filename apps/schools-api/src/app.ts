@@ -1,9 +1,16 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { logger, httpLogger } from "@hallpass/logger";
-import { prisma } from "@hallpass/db";
+import {
+  createHealthRoute,
+  notFound,
+  createErrorHandler,
+  createGeneralLimiter,
+  corsOptions,
+  createRateLimitRedis,
+  createRedisRateLimitStore,
+} from "@hallpass/express-middleware";
 import { env } from "./env.js";
 import districtRouter from "./routes/district.js";
 import schoolRouter from "./routes/school.js";
@@ -13,45 +20,39 @@ import calendarRouter from "./routes/calendar.js";
 import destinationRouter from "./routes/destination.js";
 import policyRouter from "./routes/policy.js";
 
+const redis = createRateLimitRedis(env);
+
 const app = express();
 
 app.set("trust proxy", 1);
 
 app.use(helmet());
 
-const corsOrigins =
-  env.CORS_ORIGIN === "*"
-    ? "*"
-    : env.CORS_ORIGIN.split(",").map((o) => o.trim());
-app.use(
-  cors({
-    origin: corsOrigins,
-    credentials: corsOrigins !== "*",
-  }),
-);
-app.options("/*splat", cors({ origin: corsOrigins, credentials: corsOrigins !== "*" }));
+app.use(cors(corsOptions(env)));
+app.options("/*splat", cors(corsOptions(env)));
 
 app.use(httpLogger);
 app.use(express.json());
 
 // Registered before the rate limiter so LB/uptime probes are never 429'd
-app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", service: "schools-api" });
-  } catch (err) {
-    logger.error(err, "Health check failed");
-    res.status(503).json({ status: "error", service: "schools-api" });
-  }
-});
+app.get("/health", createHealthRoute("schools-api"));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many requests" },
-});
+// Redis-backed store so limits aggregate across instances and survive cold
+// starts; keys are namespaced by REDIS_PREFIX + service (shared Upstash DB).
+// Skipped under test and when REDIS_URL is unset, falling back to
+// express-rate-limit's in-memory store.
+const useRedisStore = redis !== null && process.env.NODE_ENV !== "test";
+
+const limiter = createGeneralLimiter(
+  useRedisStore
+    ? {
+        store: createRedisRateLimitStore(redis!, `${env.REDIS_PREFIX}:rl:schools-api:general:`),
+        passOnStoreError: true,
+      }
+    : {},
+);
+
+logger.info(`rate-limit store: ${useRedisStore ? "redis" : "in-memory"}`);
 
 app.use(limiter);
 
@@ -67,20 +68,8 @@ schoolRouter.use("/:schoolId/policy", policyRouter);
 app.use("/api/districts", districtRouter);
 app.use("/api/schools", schoolRouter);
 
-app.use((_req, res) => {
-  res.status(404).json({ message: "Not found" });
-});
+app.use(notFound);
 
-app.use(
-  (
-    err: Error,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction,
-  ) => {
-    logger.error(err);
-    res.status(500).json({ message: "Internal server error" });
-  },
-);
+app.use(createErrorHandler(logger));
 
 export default app;

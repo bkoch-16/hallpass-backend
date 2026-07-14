@@ -6,9 +6,9 @@ import { env } from "./env.js";
 import app from "./app.js";
 import { initSocket } from "./lib/socket.js";
 import { redis } from "./lib/redis.js";
-import { startExpiryWorker, closeQueue } from "./lib/queue.js";
+import { clearAllExpiryTimers } from "./lib/expiry.js";
 
-const PORT = env.PORT;
+const PORT = env.PORT ?? 3003;
 
 process.on("unhandledRejection", (reason) => {
   logger.error(reason, "Unhandled Rejection");
@@ -22,7 +22,6 @@ process.on("uncaughtException", (err) => {
 
 const httpServer = http.createServer(app);
 const { io, pubClient, subClient } = initSocket(httpServer);
-const expiryWorker = startExpiryWorker();
 
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received — shutting down");
@@ -34,12 +33,7 @@ process.on("SIGTERM", async () => {
   // Await it so in-flight requests finish before connections are torn down.
   await new Promise<void>((resolve) => io.close(() => resolve()));
   logger.info("HTTP server closed");
-  try {
-    await expiryWorker.close();
-  } catch (err) {
-    logger.error(err, "Error closing expiry worker");
-  }
-  await closeQueue();
+  clearAllExpiryTimers();
   await prisma.$disconnect();
   redis.disconnect();
   pubClient.disconnect();

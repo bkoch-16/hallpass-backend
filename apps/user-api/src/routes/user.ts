@@ -1,10 +1,14 @@
 import { Router, Request, Response } from "express";
+import { randomBytes } from "node:crypto";
+import { logger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
+import { createUserWithCredential, EmailInUseError } from "@hallpass/auth";
 import { UserRole } from "@hallpass/types";
-import type { UserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
+import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
+import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole, requireSelfOrRole, roleRank } from "../middleware/roleGuard.js";
-import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createUserWithPin } from "../lib/pin.js";
 import {
   bulkCreateSchema,
@@ -22,6 +26,51 @@ type UserRow = { id: number; email: string; name: string | null; role: UserRole;
 
 function toUserResponse(u: UserRow): UserResponse {
   return { id: u.id, email: u.email, name: u.name, role: u.role, schoolId: u.schoolId, createdAt: u.createdAt };
+}
+
+// Server-generated one-time password. 24 url-safe base64 chars — comfortably
+// above better-auth's 8-char minimum. Never logged; returned to the caller once.
+function generateTempPassword(): string {
+  return randomBytes(18).toString("base64url");
+}
+
+// Students need a unique pinCode for the parent voice tool, but
+// createUserWithCredential can't set it (better-auth additionalFields cover only
+// role/schoolId). Assign the pin right after creation; a collision retries only
+// this update, never the user creation itself.
+async function assignPin(userId: number, role: UserRole): Promise<void> {
+  await createUserWithPin(role, async (pinCode) => {
+    if (!pinCode) return;
+    await prisma.user.update({ where: { id: userId }, data: { pinCode } });
+  });
+}
+
+// role/schoolId are better-auth additionalFields — present at runtime (the helper
+// sets them) but absent from the helper's static return type.
+type ProvisionedUser = Awaited<ReturnType<typeof createUserWithCredential>>;
+
+function provisionedToRow(u: ProvisionedUser): UserRow {
+  const withFields = u as ProvisionedUser & { role: UserRole; schoolId: number | null };
+  return {
+    id: withFields.id,
+    email: withFields.email,
+    name: withFields.name,
+    role: withFields.role,
+    schoolId: withFields.schoolId,
+    createdAt: withFields.createdAt,
+  };
+}
+
+const BULK_CONCURRENCY = 8;
+
+// createUserWithCredential translates a racing insert's Prisma P2002 into
+// EmailInUseError internally, but keep the raw P2002 check here too as a
+// defense-in-depth backstop in case that translation is ever bypassed.
+function isDuplicateEmailError(err: unknown): boolean {
+  return (
+    err instanceof EmailInUseError ||
+    (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002")
+  );
 }
 
 // GET /me — must come before /:id
@@ -131,22 +180,28 @@ router.post(
       return;
     }
 
+    const tempPassword = generateTempPassword();
+
     try {
-      const user = await createUserWithPin(targetRole, (pinCode) =>
-        prisma.user.create({
-          data: {
-            email: req.body.email,
-            name: req.body.name,
-            role: targetRole,
-            ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
-            ...(pinCode ? { pinCode } : {}),
-          },
-          select: USER_SELECT,
-        }),
-      );
-      res.status(201).json(toUserResponse(user));
+      const user = await createUserWithCredential(auth, {
+        email: req.body.email,
+        name: req.body.name,
+        password: tempPassword,
+        role: targetRole,
+        ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+      });
+      try {
+        await assignPin(user.id, targetRole);
+      } catch (pinErr: unknown) {
+        // The user row is already committed here; a pin failure (transient DB
+        // error, or exhausting MAX_PIN_ATTEMPTS) must not turn an
+        // already-created account into an unrecoverable 500 behind the
+        // duplicate-email guard below — log and continue without a pin.
+        logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
+      }
+      res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      if (isDuplicateEmailError(err)) {
         res.status(409).json({ message: "Email already in use" });
         return;
       }
@@ -171,29 +226,48 @@ router.post(
       }
     }
 
-    const results = await Promise.allSettled(
-      users.map((u) => {
-        const role = u.role ?? UserRole.STUDENT;
-        return createUserWithPin(role, (pinCode) =>
-          prisma.user.create({
-            data: {
-              email: u.email,
-              name: u.name,
-              role,
-              ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
-              ...(pinCode ? { pinCode } : {}),
-            },
-            select: USER_SELECT,
-          }),
-        );
-      }),
-    );
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+    const results: PromiseSettledResult<unknown>[] = new Array(users.length);
+
+    // scrypt hashing is deliberately slow — throttle to a small pool rather than
+    // firing every provisioning call at once.
+    for (let start = 0; start < users.length; start += BULK_CONCURRENCY) {
+      const batch = users.slice(start, start + BULK_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map(async (u) => {
+          const role = u.role ?? UserRole.STUDENT;
+          const user = await createUserWithCredential(auth, {
+            email: u.email,
+            name: u.name,
+            password: generateTempPassword(),
+            role,
+            ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+          });
+          try {
+            await assignPin(user.id, role);
+          } catch (pinErr: unknown) {
+            // Same non-fatal handling as the single-create path: the user is
+            // already committed, so a pin failure must not report an
+            // otherwise-successful creation as a failed PromiseSettledResult.
+            logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
+          }
+          return user;
+        }),
+      );
+      for (let i = 0; i < settled.length; i += 1) results[start + i] = settled[i];
+    }
 
     const created = results.filter((r) => r.status === "fulfilled").length;
     const failed = results
       .map((r, i) => ({ result: r, index: i }))
       .filter(({ result }) => result.status === "rejected")
-      .map(({ index }) => ({ index, email: users[index].email, error: "Failed to create user" }));
+      .map(({ result, index }) => ({
+        index,
+        email: users[index].email,
+        error: isDuplicateEmailError((result as PromiseRejectedResult).reason)
+          ? "Email already in use"
+          : "Failed to create user",
+      }));
 
     res.status(failed.length === users.length ? 400 : 200).json({ created, failed } satisfies BulkUserResult);
   },
@@ -227,6 +301,11 @@ router.patch(
 
     if (!user) {
       res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    if (!isSelf && roleRank(user.role as UserRole) >= roleRank(req.user!.role)) {
+      res.status(403).json({ message: "Forbidden" });
       return;
     }
 

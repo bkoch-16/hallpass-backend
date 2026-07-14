@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth is mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -23,12 +24,14 @@ import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  await prisma.pass.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
 });
 
 afterAll(async () => {
+  await prisma.pass.deleteMany();
   await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
@@ -66,9 +69,30 @@ async function seedDestination(schoolId: number, overrides: Partial<{
   });
 }
 
+async function seedPass(
+  schoolId: number,
+  destinationId: number,
+  studentId: number,
+  status: "PENDING" | "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "DENIED" | "EXPIRED",
+) {
+  return prisma.pass.create({
+    data: {
+      schoolId,
+      destinationId,
+      studentId,
+      requesterId: studentId,
+      status,
+    },
+  });
+}
+
 function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
+
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
 
 describe("GET /api/schools/:schoolId/destinations (integration)", () => {
   it("TEACHER of the school can list destinations", async () => {
@@ -78,7 +102,7 @@ describe("GET /api/schools/:schoolId/destinations (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
@@ -90,7 +114,7 @@ describe("GET /api/schools/:schoolId/destinations (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -102,7 +126,7 @@ describe("GET /api/schools/:schoolId/destinations (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: otherSchool.id });
     authenticateAs(student);
 
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.status).toBe(403);
   });
@@ -115,7 +139,7 @@ describe("GET /api/schools/:schoolId/destinations (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].name).toBe("Active");
@@ -127,7 +151,7 @@ describe("GET /api/schools/:schoolId/destinations (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.status).toBe(200);
   });
@@ -139,7 +163,7 @@ describe("POST /api/schools/:schoolId/destinations (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/destinations`)
       .send({ name: "Library", maxOccupancy: 30 });
 
@@ -156,7 +180,7 @@ describe("POST /api/schools/:schoolId/destinations (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/destinations`)
       .send({ name: "Office" });
 
@@ -169,7 +193,7 @@ describe("POST /api/schools/:schoolId/destinations (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/destinations`)
       .send({ name: "Gym" });
 
@@ -180,7 +204,7 @@ describe("POST /api/schools/:schoolId/destinations (integration)", () => {
     const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
     authenticateAs(superAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/schools/99999/destinations")
       .send({ name: "Gym" });
 
@@ -195,7 +219,7 @@ describe("PATCH /api/schools/:schoolId/destinations/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/destinations/${dest.id}`)
       .send({ name: "New Name" });
 
@@ -211,7 +235,7 @@ describe("PATCH /api/schools/:schoolId/destinations/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/destinations/99999`)
       .send({ name: "X" });
 
@@ -226,7 +250,7 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/destinations/${dest.id}`,
     );
 
@@ -242,8 +266,8 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    await request(app).delete(`/api/schools/${school.id}/destinations/${dest.id}`);
-    const res = await request(app).get(`/api/schools/${school.id}/destinations`);
+    await request(server).delete(`/api/schools/${school.id}/destinations/${dest.id}`);
+    const res = await request(server).get(`/api/schools/${school.id}/destinations`);
 
     expect(res.body.map((d: { id: number }) => d.id)).not.toContain(dest.id);
   });
@@ -253,10 +277,52 @@ describe("DELETE /api/schools/:schoolId/destinations/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/destinations/99999`,
     );
 
     expect(res.status).toBe(404);
   });
+
+  it.each(["PENDING", "WAITING", "ACTIVE"] as const)(
+    "returns 409 and does NOT soft-delete when a %s pass references the destination",
+    async (status) => {
+      const school = await seedSchool();
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+      await seedPass(school.id, dest.id, student.id, status);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/destinations/${dest.id}`,
+      );
+
+      expect(res.status).toBe(409);
+
+      const inDb = await prisma.destination.findUnique({ where: { id: dest.id } });
+      expect(inDb?.deletedAt).toBeNull();
+    },
+  );
+
+  it.each(["COMPLETED", "CANCELLED", "DENIED", "EXPIRED"] as const)(
+    "returns 204 and soft-deletes when only a %s (terminal) pass references the destination",
+    async (status) => {
+      const school = await seedSchool();
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+      await seedPass(school.id, dest.id, student.id, status);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/destinations/${dest.id}`,
+      );
+
+      expect(res.status).toBe(204);
+
+      const inDb = await prisma.destination.findUnique({ where: { id: dest.id } });
+      expect(inDb?.deletedAt).not.toBeNull();
+    },
+  );
 });

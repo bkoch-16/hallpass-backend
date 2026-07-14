@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth and external deps are mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession, mockClaimPassSlots, mockReleasePassSlots, mockPromoteFromQueue, mockReconcileSlots, mockReconcileSchoolSlots, mockGetMaxActivePasses, mockReleaseAndPromote } =
   vi.hoisted(() => ({
@@ -41,8 +42,9 @@ vi.mock("../../src/lib/socket.js", () => ({
   initSocket: vi.fn(),
 }));
 
-vi.mock("../../src/lib/queue.js", () => ({
-  schedulePassExpiry: vi.fn().mockResolvedValue(undefined),
+vi.mock("../../src/lib/expiry.js", () => ({
+  scheduleLocalExpiry: vi.fn(),
+  expirePass: vi.fn().mockResolvedValue(undefined),
 }));
 
 import app from "../../src/app";
@@ -245,13 +247,17 @@ async function seedActiveSchool() {
 // POST /api/passes
 // ---------------------------------------------------------------------------
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("POST /api/passes (integration)", () => {
   it("201 student creates pass when school has active period and destination", async () => {
     const { school, destination } = await seedActiveSchool();
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id });
 
@@ -267,22 +273,23 @@ describe("POST /api/passes (integration)", () => {
   it("401 unauthenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: 1 });
 
     expect(res.status).toBe(401);
   });
 
-  it("422 student has no schoolId", async () => {
+  it("403 student has no schoolId", async () => {
     const student = await seedUser({ role: "STUDENT", schoolId: null });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: 1 });
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe("User is not associated with a school");
   });
 
   it("422 no active period when no calendar entry exists for today", async () => {
@@ -294,7 +301,7 @@ describe("POST /api/passes (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id });
 
@@ -307,7 +314,7 @@ describe("POST /api/passes (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({});
 
@@ -321,7 +328,7 @@ describe("POST /api/passes (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: otherDestination.id });
 
@@ -334,10 +341,10 @@ describe("POST /api/passes (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(student);
 
-    const first = await request(app).post("/api/passes").send({ destinationId: destination.id });
+    const first = await request(server).post("/api/passes").send({ destinationId: destination.id });
     expect(first.status).toBe(201);
 
-    const second = await request(app).post("/api/passes").send({ destinationId: destination.id });
+    const second = await request(server).post("/api/passes").send({ destinationId: destination.id });
     expect(second.status).toBe(409);
     expect(second.body.message).toBe("Active pass already exists");
   });
@@ -348,7 +355,7 @@ describe("POST /api/passes (integration)", () => {
     const student = await seedUser({ role: "STUDENT", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id, studentId: student.id });
 
@@ -369,7 +376,7 @@ describe("POST /api/passes (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id });
 
@@ -384,7 +391,7 @@ describe("POST /api/passes (integration)", () => {
     const otherStudent = await seedUser({ role: "STUDENT", schoolId: otherSchool.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id, studentId: otherStudent.id });
 
@@ -401,7 +408,7 @@ describe("POST /api/passes (integration)", () => {
     await seedPass(school.id, student.id, destination.id, { status: "COMPLETED" });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id, studentId: student.id });
 
@@ -416,7 +423,7 @@ describe("POST /api/passes (integration)", () => {
     await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post("/api/passes")
       .send({ destinationId: destination.id, studentId: student.id });
 
@@ -447,7 +454,7 @@ describe("GET /api/passes (integration)", () => {
     await seedPass(school.id, student2.id, destination.id, { periodId: period.id });
     authenticateAs(student1);
 
-    const res = await request(app).get("/api/passes");
+    const res = await request(server).get("/api/passes");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -467,7 +474,7 @@ describe("GET /api/passes (integration)", () => {
     await seedPass(school.id, student2.id, destination.id, { periodId: period.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/passes");
+    const res = await request(server).get("/api/passes");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
@@ -485,26 +492,27 @@ describe("GET /api/passes (integration)", () => {
     }
     authenticateAs(teacher);
 
-    const page1 = await request(app).get("/api/passes?limit=2");
+    const page1 = await request(server).get("/api/passes?limit=2");
 
     expect(page1.status).toBe(200);
     expect(page1.body.data).toHaveLength(2);
     expect(page1.body.nextCursor).toBe(String(page1.body.data[1].id));
 
-    const page2 = await request(app).get(
+    const page2 = await request(server).get(
       `/api/passes?limit=2&cursor=${page1.body.nextCursor}`,
     );
 
     expect(page2.status).toBe(200);
     expect(page2.body.data).toHaveLength(1);
     expect(page2.body.nextCursor).toBeNull();
-    expect(page2.body.data[0].id).toBeGreaterThan(page1.body.data[1].id);
+    // Passes are ordered newest-first, so page 2 holds older (lower) ids.
+    expect(page2.body.data[0].id).toBeLessThan(page1.body.data[1].id);
   });
 
   it("401 unauthenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get("/api/passes");
+    const res = await request(server).get("/api/passes");
 
     expect(res.status).toBe(401);
   });
@@ -522,7 +530,7 @@ describe("GET /api/passes/:id (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id);
     authenticateAs(student);
 
-    const res = await request(app).get(`/api/passes/${pass.id}`);
+    const res = await request(server).get(`/api/passes/${pass.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(pass.id);
@@ -536,7 +544,7 @@ describe("GET /api/passes/:id (integration)", () => {
     const pass = await seedPass(school.id, student2.id, destination.id);
     authenticateAs(student1);
 
-    const res = await request(app).get(`/api/passes/${pass.id}`);
+    const res = await request(server).get(`/api/passes/${pass.id}`);
 
     expect(res.status).toBe(404);
   });
@@ -549,7 +557,7 @@ describe("GET /api/passes/:id (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id);
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/passes/${pass.id}`);
+    const res = await request(server).get(`/api/passes/${pass.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(pass.id);
@@ -560,7 +568,7 @@ describe("GET /api/passes/:id (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get("/api/passes/99999");
+    const res = await request(server).get("/api/passes/99999");
 
     expect(res.status).toBe(404);
   });
@@ -580,7 +588,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/approve`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ACTIVE");
@@ -596,7 +604,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/approve`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/approve`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("WAITING");
@@ -610,7 +618,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/approve`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/approve`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -622,7 +630,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/approve`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/approve`).send({});
 
     expect(res.status).toBe(403);
   });
@@ -632,7 +640,7 @@ describe("POST /api/passes/:id/approve (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).post("/api/passes/99999/approve").send({});
+    const res = await request(server).post("/api/passes/99999/approve").send({});
 
     expect(res.status).toBe(404);
   });
@@ -651,7 +659,7 @@ describe("POST /api/passes/:id/deny (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/deny`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/deny`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("DENIED");
@@ -666,7 +674,7 @@ describe("POST /api/passes/:id/deny (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "WAITING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/deny`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/deny`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -679,7 +687,7 @@ describe("POST /api/passes/:id/deny (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/deny`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/deny`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -691,7 +699,7 @@ describe("POST /api/passes/:id/deny (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/deny`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/deny`).send({});
 
     expect(res.status).toBe(403);
   });
@@ -709,7 +717,7 @@ describe("POST /api/passes/:id/return (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/return`);
+    const res = await request(server).post(`/api/passes/${pass.id}/return`);
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("COMPLETED");
@@ -724,7 +732,7 @@ describe("POST /api/passes/:id/return (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/return`);
+    const res = await request(server).post(`/api/passes/${pass.id}/return`);
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("COMPLETED");
@@ -738,7 +746,7 @@ describe("POST /api/passes/:id/return (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/return`);
+    const res = await request(server).post(`/api/passes/${pass.id}/return`);
 
     expect(res.status).toBe(400);
   });
@@ -751,7 +759,7 @@ describe("POST /api/passes/:id/return (integration)", () => {
     const pass = await seedPass(school.id, student2.id, destination.id, { status: "ACTIVE" });
     authenticateAs(student1);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/return`);
+    const res = await request(server).post(`/api/passes/${pass.id}/return`);
 
     expect(res.status).toBe(404);
   });
@@ -769,7 +777,7 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");
@@ -784,7 +792,7 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "PENDING" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");
@@ -798,7 +806,7 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "ACTIVE" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Pass must be PENDING or WAITING to cancel");
@@ -812,7 +820,7 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "COMPLETED" });
     authenticateAs(teacher);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -824,7 +832,7 @@ describe("POST /api/passes/:id/cancel (integration)", () => {
     const pass = await seedPass(school.id, student.id, destination.id, { status: "WAITING" });
     authenticateAs(student);
 
-    const res = await request(app).post(`/api/passes/${pass.id}/cancel`).send({});
+    const res = await request(server).post(`/api/passes/${pass.id}/cancel`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("CANCELLED");

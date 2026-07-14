@@ -1,0 +1,20 @@
+flowchart LR
+    demo["demo-ui / API playground<br/>(GitHub Pages)"]
+
+    subgraph CloudRun["Google Cloud Run (scale-to-zero)"]
+        direction TB
+        user["user-api"]
+        schools["schools-api"]
+        passes["passes-api<br/>(Socket.IO, in-process expiry)"]
+    end
+
+    pg[("PostgreSQL<br/>(Neon)")]
+    redis[("Redis<br/>(Upstash)")]
+
+    style CloudRun fill:none,stroke:none
+
+    demo --> CloudRun
+    user --> pg
+    schools --> pg
+    passes --> pg
+    passes --> redis

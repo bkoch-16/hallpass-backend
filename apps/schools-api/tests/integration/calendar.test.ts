@@ -3,8 +3,9 @@
  * Uses real Prisma against live test DB. Auth is mocked.
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -65,6 +66,10 @@ function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe("GET /api/schools/:schoolId/calendar (integration)", () => {
   it("returns calendar entries for the school", async () => {
     const school = await seedSchool();
@@ -77,7 +82,7 @@ describe("GET /api/schools/:schoolId/calendar (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(`/api/schools/${school.id}/calendar`);
+    const res = await request(server).get(`/api/schools/${school.id}/calendar`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
@@ -97,7 +102,7 @@ describe("GET /api/schools/:schoolId/calendar (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(
+    const res = await request(server).get(
       `/api/schools/${school.id}/calendar?from=2025-09-01`,
     );
 
@@ -116,7 +121,7 @@ describe("GET /api/schools/:schoolId/calendar (integration)", () => {
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app).get(
+    const res = await request(server).get(
       `/api/schools/${school.id}/calendar?to=2025-11-30`,
     );
 
@@ -131,7 +136,7 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01" }, { date: "2025-09-02" }]);
 
@@ -151,7 +156,7 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01", note: "Updated note" }]);
 
@@ -173,7 +178,7 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01", note: "Updated" }, { date: "2025-09-02" }]);
 
@@ -189,11 +194,31 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01", scheduleTypeId: st.id }]);
 
     expect(res.status).toBe(422);
+  });
+
+  it("writes nothing when a later entry has an invalid scheduleTypeId (atomic)", async () => {
+    const school = await seedSchool();
+    const otherSchool = await seedSchool();
+    const badSt = await seedScheduleType(otherSchool.id);
+    const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+    authenticateAs(admin);
+
+    const res = await request(server)
+      .post(`/api/schools/${school.id}/calendar`)
+      .send([
+        { date: "2025-09-01" }, // valid, would have been written first
+        { date: "2025-09-02", scheduleTypeId: badSt.id }, // invalid
+      ]);
+
+    expect(res.status).toBe(422);
+
+    const inDb = await prisma.schoolCalendar.findMany({ where: { schoolId: school.id } });
+    expect(inDb).toHaveLength(0); // the valid first entry must not have been persisted
   });
 
   it("links valid scheduleTypeId to calendar entry", async () => {
@@ -202,7 +227,7 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01", scheduleTypeId: st.id }]);
 
@@ -216,7 +241,7 @@ describe("POST /api/schools/:schoolId/calendar (bulk upsert, integration)", () =
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
     authenticateAs(teacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/schools/${school.id}/calendar`)
       .send([{ date: "2025-09-01" }]);
 
@@ -233,7 +258,7 @@ describe("PATCH /api/schools/:schoolId/calendar/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/calendar/${entry.id}`)
       .send({ note: "Updated" });
 
@@ -246,7 +271,7 @@ describe("PATCH /api/schools/:schoolId/calendar/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`/api/schools/${school.id}/calendar/99999`)
       .send({ note: "X" });
 
@@ -263,7 +288,7 @@ describe("DELETE /api/schools/:schoolId/calendar/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/calendar/${entry.id}`,
     );
 
@@ -278,7 +303,7 @@ describe("DELETE /api/schools/:schoolId/calendar/:id (integration)", () => {
     const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
     authenticateAs(admin);
 
-    const res = await request(app).delete(
+    const res = await request(server).delete(
       `/api/schools/${school.id}/calendar/99999`,
     );
 

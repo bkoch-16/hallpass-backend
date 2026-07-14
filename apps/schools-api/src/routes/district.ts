@@ -3,8 +3,8 @@ import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { DistrictResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/roleGuard.js";
-import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { requireRole } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createDistrictSchema, districtIdSchema, listDistrictsSchema, updateDistrictSchema } from "../schemas/district.js";
 
 const router = Router();

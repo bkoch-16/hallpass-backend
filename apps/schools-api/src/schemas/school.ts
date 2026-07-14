@@ -13,16 +13,25 @@ export const listSchoolsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+const IANA_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+
+const timezoneSchema = z
+  .string()
+  .refine((tz) => IANA_TIMEZONES.has(tz), {
+    message: "timezone must be a valid IANA time zone",
+  })
+  .optional();
+
 export const createSchoolSchema = z.object({
   name: z.string().min(1, "name is required"),
-  timezone: z.string().optional(),
+  timezone: timezoneSchema,
   districtId: z.number().int().positive().optional(),
 });
 
 export const updateSchoolSchema = z
   .object({
     name: z.string().min(1).optional(),
-    timezone: z.string().optional(),
+    timezone: timezoneSchema,
     districtId: z.number().int().positive().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

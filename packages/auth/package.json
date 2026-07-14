@@ -9,8 +9,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@hallpass/db": "workspace:*",
-    "better-auth": "latest"
+    "better-auth": "1.5.4"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

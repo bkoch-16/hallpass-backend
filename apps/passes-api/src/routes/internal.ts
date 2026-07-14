@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
-import { schedulePassExpiry } from "../lib/queue.js";
+import { scheduleLocalExpiry, expirePass } from "../lib/expiry.js";
 import { reconcileSlots, reconcileSchoolSlots, promoteFromQueue } from "../lib/slots.js";
-import { periodEndDate } from "../lib/time.js";
+import { getTodayInTimezone, periodEndDate } from "../lib/time.js";
 import { createRequireApiKey } from "../middleware/apiKey.js";
 import { env } from "../env.js";
 
@@ -41,16 +41,29 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     for (const pass of batch) {
       try {
         // A pass whose period was deleted (periodId null) has no derivable end time —
-        // arm an immediate expiry; processPassExpiry treats a missing period as
-        // last-period and resolves the pass safely.
-        const endTime = pass.period
-          ? periodEndDate(
-              pass.period.endTime,
-              pass.period.scheduleType?.endBuffer ?? 0,
-              pass.school.timezone,
-            )
-          : new Date();
-        await schedulePassExpiry(pass.id, endTime);
+        // expire it now; expirePass treats a missing period as last-period and
+        // resolves the pass safely. Likewise, a stale pass from a previous
+        // school-local calendar day must expire now — periodEndDate is computed for
+        // TODAY, so rescheduling would push it to today's period end.
+        const timezone = pass.school.timezone;
+        const isPriorDay =
+          getTodayInTimezone(timezone, pass.requestedAt) < getTodayInTimezone(timezone);
+        const endTime =
+          pass.period && !isPriorDay
+            ? periodEndDate(
+                pass.period.endTime,
+                pass.period.scheduleType?.endBuffer ?? 0,
+                timezone,
+              )
+            : new Date();
+        // Already due (past end time, prior day, or missing period) → resolve now
+        // as the cold-path backstop. Otherwise (re-)arm the in-process timer on
+        // this — possibly freshly-woken — instance.
+        if (endTime.getTime() <= Date.now()) {
+          await expirePass(pass.id);
+        } else {
+          scheduleLocalExpiry(pass.id, endTime);
+        }
         scheduled++;
       } catch (err) {
         errors.push({

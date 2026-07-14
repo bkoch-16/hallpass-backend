@@ -1,7 +1,7 @@
 # hallpass-backend
 
 Monorepo for HallPass backend services. The objective of this project is to build a fully functional school hallpass system.
-Designed as a microservice deployment with separate APIs for Users, Passes, Schools, Schedules, Destinations.
+Designed as a microservice deployment with separate APIs for Users, Passes, and Schools (which covers schedules, destinations, and pass policy).
 
 ## Stack
 
@@ -10,6 +10,7 @@ Designed as a microservice deployment with separate APIs for Users, Passes, Scho
 - **Auth**: better-auth
 - **ORM**: Prisma
 - **Database**: PostgreSQL (local via Docker, cloud via [Neon](https://neon.tech))
+- **Cache / rate limiting**: Redis (local via Docker, cloud via [Upstash](https://upstash.com))
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Infrastructure**: Google Cloud Run, GCP Artifact Registry, GCP Secret Manager
 - **CI/CD**: GitHub Actions
@@ -28,7 +29,7 @@ See [docs/SCHEMA_PLAN.md](docs/SCHEMA_PLAN.md) for the full data model, API desi
 
 - `apps/user-api` - User management REST API (Express)
 - `apps/schools-api` - Districts, schools, schedule types, periods, calendar, destinations, and pass policy REST API (Express)
-- `apps/passes-api` - Hall pass lifecycle REST API with real-time WebSocket (Socket.io) and delayed job processing (BullMQ)
+- `apps/passes-api` - Hall pass lifecycle REST API with real-time WebSocket (Socket.io) and scheduled pass expiry (in-process timers + reconcile-sweep backstop)
 - `packages/auth` - Authentication layer (better-auth)
 - `packages/db` - Database access layer (Prisma + PostgreSQL)
 
@@ -80,7 +81,7 @@ These users exist on the dev cloud environment and are created locally when you 
 ## Local Development
 
 ```bash
-# Start the local database
+# Start local Postgres + Redis (rate limiting); integration tests need both
 docker-compose up -d
 
 # Install dependencies

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -103,11 +104,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const { server, start, stop } = createTestServer(app);
+beforeAll(start);
+afterAll(stop);
+
 describe(`GET ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
   });
@@ -116,7 +121,7 @@ describe(`GET ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: "Schedule type not found" });
@@ -127,7 +132,7 @@ describe(`GET ${BASE}`, () => {
     mockPrisma.scheduleType.findFirst.mockResolvedValue(fakeScheduleType);
     mockPrisma.period.findMany.mockResolvedValue([fakePeriod]);
 
-    const res = await request(app).get(BASE);
+    const res = await request(server).get(BASE);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -139,7 +144,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
 
@@ -149,7 +154,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 403 when TEACHER attempts create", async () => {
     authenticateAs(fakeTeacher);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
 
@@ -161,7 +166,7 @@ describe(`POST ${BASE}`, () => {
     mockPrisma.scheduleType.findFirst.mockResolvedValue(fakeScheduleType);
     mockPrisma.period.create.mockResolvedValue(fakePeriod);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
 
@@ -174,7 +179,7 @@ describe(`POST ${BASE}`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.scheduleType.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
 
@@ -185,7 +190,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 400 for invalid time format", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app)
+    const res = await request(server)
       .post(BASE)
       .send({ name: "Period 1", startTime: "8:00", endTime: "09:00", order: 0 });
 
@@ -196,7 +201,7 @@ describe(`POST ${BASE}`, () => {
   it("returns 400 for missing required fields", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).post(BASE).send({ name: "Period 1" });
+    const res = await request(server).post(BASE).send({ name: "Period 1" });
 
     expect(res.status).toBe(400);
   });
@@ -207,7 +212,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(null);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/99999`)
       .send({ name: "Updated" });
 
@@ -220,7 +225,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
     mockPrisma.period.update.mockResolvedValue(updated);
 
-    const res = await request(app)
+    const res = await request(server)
       .patch(`${BASE}/1`)
       .send({ name: "Updated Period" });
 
@@ -231,7 +236,7 @@ describe(`PATCH ${BASE}/:id`, () => {
   it("returns 400 for empty body", async () => {
     authenticateAs(fakeAdmin);
 
-    const res = await request(app).patch(`${BASE}/1`).send({});
+    const res = await request(server).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
   });
@@ -243,7 +248,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
     mockPrisma.period.update.mockResolvedValue({ ...fakePeriod, deletedAt: new Date() });
 
-    const res = await request(app).delete(`${BASE}/1`);
+    const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(204);
     expect(mockPrisma.period.update).toHaveBeenCalledWith({
@@ -256,7 +261,7 @@ describe(`DELETE ${BASE}/:id`, () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(null);
 
-    const res = await request(app).delete(`${BASE}/99999`);
+    const res = await request(server).delete(`${BASE}/99999`);
 
     expect(res.status).toBe(404);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();

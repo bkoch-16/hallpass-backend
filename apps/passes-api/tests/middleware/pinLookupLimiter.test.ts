@@ -1,16 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import express from "express";
 import request from "supertest";
-import { createPinLookupLimiter, RedisStore } from "../../src/middleware/pinLookupLimiter.js";
-import { redis } from "../../src/lib/redis.js";
+import { createPinLookupLimiter } from "../../src/middleware/pinLookupLimiter.js";
 import type { Store, ClientRateLimitInfo } from "express-rate-limit";
-
-vi.mock("../../src/lib/redis.js", () => ({
-  redis: {
-    eval: vi.fn(),
-    del: vi.fn(),
-  },
-}));
 
 // In-memory Store stand-in for these unit tests — the real Redis-backed store
 // is exercised by the integration test (real Redis) and by the route tests
@@ -134,47 +126,5 @@ describe("createPinLookupLimiter", () => {
       const res = await request(app).get("/lookup");
       expect(res.status).toBe(404);
     }
-  });
-});
-
-describe("RedisStore (atomic Redis backing)", () => {
-  const evalMock = vi.mocked(redis.eval);
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("increment does the INCR + conditional PEXPIRE in a single atomic eval, not separate incr+pexpire", async () => {
-    // [totalHits, pttl] — the Lua script returns both so no follow-up round trip.
-    evalMock.mockResolvedValue([1, 900000] as never);
-    const store = new RedisStore();
-
-    const info = await store.increment("1.2.3.4");
-
-    // Exactly one Redis round trip for the whole increment path.
-    expect(evalMock).toHaveBeenCalledTimes(1);
-    // The atomic script gets the key (numKeys=1) and the window ms as an arg.
-    expect(evalMock).toHaveBeenCalledWith(
-      expect.stringContaining("PEXPIRE"),
-      1,
-      expect.stringContaining(":rl:passes-api:parent-lookup:1.2.3.4"),
-      store.windowMs,
-    );
-    expect(info.totalHits).toBe(1);
-    expect(info.resetTime.getTime()).toBeGreaterThan(Date.now());
-  });
-
-  it("decrement deletes-on-zero in a single atomic eval", async () => {
-    evalMock.mockResolvedValue(0 as never);
-    const store = new RedisStore();
-
-    await store.decrement("1.2.3.4");
-
-    expect(evalMock).toHaveBeenCalledTimes(1);
-    expect(evalMock).toHaveBeenCalledWith(
-      expect.stringContaining("DEL"),
-      1,
-      expect.stringContaining(":rl:passes-api:parent-lookup:1.2.3.4"),
-    );
   });
 });

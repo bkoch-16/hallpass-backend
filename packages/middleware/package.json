@@ -1,0 +1,34 @@
+{
+  "name": "@hallpass/express-middleware",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hallpass/db": "workspace:*",
+    "@hallpass/logger": "workspace:*",
+    "@hallpass/types": "workspace:*",
+    "ioredis": "^5.10.0",
+    "rate-limit-redis": "^4.3.1",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "@types/node": "^25.5.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

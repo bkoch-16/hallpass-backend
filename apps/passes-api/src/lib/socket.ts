@@ -1,12 +1,12 @@
 import { Server, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
-import Redis from "ioredis";
+import type Redis from "ioredis";
 import { UserRole } from "@hallpass/types";
-import { resolveSessionUser } from "./sessionUser.js";
-import { roleRank } from "../middleware/roleGuard.js";
-import { corsOrigins } from "./cors.js";
+import { resolveSessionUser, roleRank, parseCorsOrigins } from "@hallpass/express-middleware";
+import { auth } from "../auth.js";
 import { env } from "../env.js";
+import { createBlockingRedis } from "./redis.js";
 import { logger } from "@hallpass/logger";
 
 let io: Server | undefined;
@@ -15,13 +15,10 @@ export function initSocket(
   httpServer: HttpServer,
 ): { io: Server; pubClient: Redis; subClient: Redis } {
   io = new Server(httpServer, {
-    cors: { origin: corsOrigins, credentials: env.CORS_ORIGIN !== "*" },
+    cors: { origin: parseCorsOrigins(env), credentials: env.CORS_ORIGIN !== "*" },
   });
 
-  const pubClient = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-  });
+  const pubClient = createBlockingRedis();
   const subClient = pubClient.duplicate();
 
   pubClient.on("error", (err) =>
@@ -60,22 +57,33 @@ export function initSocket(
   void pubClient.connect().catch((err) =>
     logger.error(err, "[socket-adapter] pub connect error"),
   );
-  void subClient.connect().catch((err) =>
-    logger.error(err, "[socket-adapter] sub connect error"),
-  );
 
   io.use(async (socket, next) => {
+    // Browsers can't set an Authorization header on a WebSocket upgrade, so
+    // socket.io-client's `auth` option carries the session token instead.
+    // Only used when no authorization header is already present.
+    const token = socket.handshake.auth?.token;
+    const headers =
+      typeof token === "string" && token && !socket.handshake.headers.authorization
+        ? { ...socket.handshake.headers, authorization: `Bearer ${token}` }
+        : socket.handshake.headers;
+
+    let user;
     try {
-      const user = await resolveSessionUser(socket.handshake.headers);
-      if (!user) {
-        next(new Error("Unauthorized"));
-        return;
-      }
-      socket.data.user = user;
-      next();
-    } catch {
-      next(new Error("Unauthorized"));
+      user = await resolveSessionUser(auth, headers);
+    } catch (err) {
+      // resolveSessionUser returns null for missing/invalid sessions and only
+      // throws on unexpected/DB errors — surface those as connect_error rather
+      // than masking them as a false "Unauthorized".
+      next(err as Error);
+      return;
     }
+    if (!user) {
+      next(new Error("Unauthorized"));
+      return;
+    }
+    socket.data.user = user;
+    next();
   });
 
   io.on("connection", (socket: Socket) => {

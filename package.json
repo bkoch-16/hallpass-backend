@@ -12,7 +12,8 @@
     "test:integration": "turbo test:integration --concurrency=1",
     "prepare": "husky",
     "demo:generate": "tsx scripts/generate-demo.ts",
-    "demo:serve": "npx serve apps/demo-ui"
+    "demo:serve": "npx serve apps/demo-ui",
+    "check:pass-index": "node scripts/check-pass-index.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

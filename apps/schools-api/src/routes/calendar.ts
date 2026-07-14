@@ -1,10 +1,10 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, Prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { SchoolCalendarResponse, BulkUpsertResult } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/roleGuard.js";
-import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { requireRole } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { calendarBulkSchema, calendarIdSchema, calendarQuerySchema, updateCalendarSchema } from "../schemas/calendar.js";
 
@@ -60,51 +60,60 @@ router.post(
     const schoolId = Number(req.params.schoolId);
     const entries = Array.isArray(req.body) ? req.body : [req.body];
 
-    let created = 0;
-    let updated = 0;
+    // Validate every referenced schedule type up front, in one query, before
+    // any write — so a bad id returns 422 without leaving partial state.
+    const byDate = new Map<number, { date: Date; scheduleTypeId: number | null; note: string | null }>();
+    for (const e of entries) {
+      const date = new Date(e.date);
+      if (byDate.has(date.getTime())) {
+        res.status(422).json({ message: `Duplicate date ${e.date} in request` });
+        return;
+      }
+      byDate.set(date.getTime(), {
+        date,
+        scheduleTypeId: e.scheduleTypeId ?? null,
+        note: e.note ?? null,
+      });
+    }
+    const validatedEntries = [...byDate.values()];
 
-    for (const entry of entries) {
-      if (entry.scheduleTypeId) {
-        const scheduleType = await prisma.scheduleType.findFirst({
-          where: { id: Number(entry.scheduleTypeId), schoolId },
-        });
+    const scheduleTypeIds = [
+      ...new Set(
+        validatedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
+      ),
+    ];
+    if (scheduleTypeIds.length) {
+      const scheduleTypes = await prisma.scheduleType.findMany({
+        where: { id: { in: scheduleTypeIds }, schoolId },
+      });
+      const byId = new Map(scheduleTypes.map((st) => [st.id, st]));
+      for (const id of scheduleTypeIds) {
+        const scheduleType = byId.get(id);
         if (!scheduleType) {
-          res.status(422).json({ message: `Schedule type ${entry.scheduleTypeId} not found for this school` });
+          res.status(422).json({ message: `Schedule type ${id} not found for this school` });
           return;
         }
         if (scheduleType.deletedAt !== null) {
-          res.status(422).json({ message: `Schedule type ${entry.scheduleTypeId} has been deleted` });
+          res.status(422).json({ message: `Schedule type ${id} has been deleted` });
           return;
         }
       }
-
-      const date = new Date(entry.date);
-
-      const existing = await prisma.schoolCalendar.findUnique({
-        where: { schoolId_date: { schoolId, date } },
-      });
-
-      if (existing) {
-        await prisma.schoolCalendar.update({
-          where: { schoolId_date: { schoolId, date } },
-          data: {
-            scheduleTypeId: entry.scheduleTypeId ?? null,
-            note: entry.note ?? null,
-          },
-        });
-        updated++;
-      } else {
-        await prisma.schoolCalendar.create({
-          data: {
-            schoolId,
-            date,
-            scheduleTypeId: entry.scheduleTypeId ?? null,
-            note: entry.note ?? null,
-          },
-        });
-        created++;
-      }
     }
+
+    const values = Prisma.join(
+      validatedEntries.map(
+        (e) => Prisma.sql`(${schoolId}, ${e.date}, ${e.scheduleTypeId}, ${e.note})`,
+      ),
+    );
+    const rows = await prisma.$queryRaw<{ inserted: boolean }[]>(
+      Prisma.sql`INSERT INTO "SchoolCalendar" ("schoolId", "date", "scheduleTypeId", "note")
+                 VALUES ${values}
+                 ON CONFLICT ("schoolId", "date")
+                 DO UPDATE SET "scheduleTypeId" = EXCLUDED."scheduleTypeId", "note" = EXCLUDED."note"
+                 RETURNING (xmax = 0) AS inserted`,
+    );
+    const created = rows.filter((r) => r.inserted).length;
+    const updated = rows.length - created;
 
     res.status(200).json({ created, updated } satisfies BulkUpsertResult);
   },

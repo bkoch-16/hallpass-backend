@@ -63,6 +63,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -72,9 +75,6 @@ importers:
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.6)
-      bullmq:
-        specifier: ^5.71.0
-        version: 5.71.0
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -109,9 +109,15 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
+      pg:
+        specifier: ^8.18.0
+        version: 8.18.0
       supertest:
         specifier: ^7.2.2
         version: 7.2.2
@@ -133,6 +139,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -148,9 +157,6 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
-      express-rate-limit:
-        specifier: ^8.2.1
-        version: 8.2.1(express@5.2.1)
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
@@ -191,6 +197,9 @@ importers:
       '@hallpass/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hallpass/express-middleware':
+        specifier: workspace:*
+        version: link:../../packages/middleware
       '@hallpass/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -206,9 +215,6 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
-      express-rate-limit:
-        specifier: ^8.2.1
-        version: 8.2.1(express@5.2.1)
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
@@ -243,12 +249,9 @@ importers:
 
   packages/auth:
     dependencies:
-      '@hallpass/db':
-        specifier: workspace:*
-        version: link:../db
       better-auth:
-        specifier: latest
-        version: 1.5.4(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(pg@8.18.0)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.2))
+        specifier: 1.5.4
+        version: 1.5.4(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(pg@8.18.0)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.2))
     devDependencies:
       '@types/node':
         specifier: ^25.3.0
@@ -259,9 +262,6 @@ importers:
 
   packages/db:
     dependencies:
-      '@noble/hashes':
-        specifier: ^1.8.0
-        version: 1.8.0
       '@prisma/adapter-pg':
         specifier: ^7.4.1
         version: 7.4.1
@@ -275,6 +275,9 @@ importers:
         specifier: ^8.18.0
         version: 8.18.0
     devDependencies:
+      '@hallpass/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -300,6 +303,52 @@ importers:
       typescript:
         specifier: latest
         version: 5.9.3
+
+  packages/middleware:
+    dependencies:
+      '@hallpass/db':
+        specifier: workspace:*
+        version: link:../db
+      '@hallpass/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@hallpass/types':
+        specifier: workspace:*
+        version: link:../types
+      ioredis:
+        specifier: 5.10.0
+        version: 5.10.0
+      rate-limit-redis:
+        specifier: ^4.3.1
+        version: 4.3.1(express-rate-limit@8.2.1(express@5.2.1))
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
+      '@types/supertest':
+        specifier: ^6.0.3
+        version: 6.0.3
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.2.1
+        version: 8.2.1(express@5.2.1)
+      supertest:
+        specifier: ^7.2.2
+        version: 7.2.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.5.0)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.2)
 
   packages/types:
     devDependencies:
@@ -797,36 +846,6 @@ packages:
     resolution: {integrity: sha512-XyroGQXcHrZdvmrGJvsA9KNeOOgGMg1Vg9OlheUsBOSKznLMDl+YChxbkboRHvtFYJEMRYmlV3uoo/njCw05iw==}
     engines: {node: '>=16'}
 
-  '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3':
-    resolution: {integrity: sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@msgpackr-extract/msgpackr-extract-darwin-x64@3.0.3':
-    resolution: {integrity: sha512-mdzd3AVzYKuUmiWOQ8GNhl64/IoFGol569zNRdkLReh6LRLHOXxU4U8eq0JwaD8iFHdVGqSy4IjFL4reoWCDFw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@msgpackr-extract/msgpackr-extract-linux-arm64@3.0.3':
-    resolution: {integrity: sha512-YxQL+ax0XqBJDZiKimS2XQaf+2wDGVa1enVRGzEvLLVFeqa5kx2bWbtcSXgsxjQB7nRqqIGFIcLteF/sHeVtQg==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@msgpackr-extract/msgpackr-extract-linux-arm@3.0.3':
-    resolution: {integrity: sha512-fg0uy/dG/nZEXfYilKoRe7yALaNmHoYeIoJuJ7KJ+YyU2bvY8vPv27f7UKhGRpY6euFYqEVhxCFZgAUNQBM3nw==}
-    cpu: [arm]
-    os: [linux]
-
-  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.3':
-    resolution: {integrity: sha512-cvwNfbP07pKUfq1uH+S6KJ7dT9K8WOE4ZiAcsrSes+UY55E/0jLYc+vq+DO7jlmqRb5zAggExKm0H7O/CBaesg==}
-    cpu: [x64]
-    os: [linux]
-
-  '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3':
-    resolution: {integrity: sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ==}
-    cpu: [x64]
-    os: [win32]
-
   '@noble/ciphers@2.1.1':
     resolution: {integrity: sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw==}
     engines: {node: '>= 20.19.0'}
@@ -1128,6 +1147,9 @@ packages:
   '@types/pg@8.16.0':
     resolution: {integrity: sha512-RmhMd/wD+CF8Dfo+cVIy3RR5cl8CyfXQ0tGgW6XBL8L4LM/UTEbNXYRbLwU6w+CgrKBNbrQWt4FUtTfaU5jSYQ==}
 
+  '@types/pg@8.20.0':
+    resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
+
   '@types/qs@6.14.0':
     resolution: {integrity: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==}
 
@@ -1382,9 +1404,6 @@ packages:
     resolution: {integrity: sha512-YCEo7KjMlbNlyHhz7zAZNDpIpQbd+wOEHJYezv0nMYTn4x31eIUM2yomNNubclAt63dObUzKHWsBLJ9QcZNSnQ==}
     engines: {node: '>=20.19.0'}
 
-  bullmq@5.71.0:
-    resolution: {integrity: sha512-aeNWh4drsafSKnAJeiNH/nZP/5O8ZdtdMbnOPZmpjXj7NZUP5YC901U3bIH41iZValm7d1i3c34ojv7q31m30w==}
-
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
@@ -1463,10 +1482,6 @@ packages:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
 
-  cron-parser@4.9.0:
-    resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
-    engines: {node: '>=12.0.0'}
-
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -1516,10 +1531,6 @@ packages:
 
   destr@2.0.5:
     resolution: {integrity: sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA==}
-
-  detect-libc@2.1.2:
-    resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
-    engines: {node: '>=8'}
 
   dezalgo@1.0.4:
     resolution: {integrity: sha512-rXSP0bf+5n0Qonsb+SVVfNfIsimO4HEtmnIpPHY8Q1UCzKlQrDMfdobr8nJOOsRgWCyMRqeSBQzmWUMq7zvVig==}
@@ -2030,10 +2041,6 @@ packages:
     resolution: {integrity: sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
-  luxon@3.7.2:
-    resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
-    engines: {node: '>=12'}
-
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -2123,13 +2130,6 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  msgpackr-extract@3.0.3:
-    resolution: {integrity: sha512-P0efT1C9jIdVRefqjzOQ9Xml57zpOXnIuS+csaB4MdZbTdmGDLo8XhzBG1N7aO11gKDDkJvBLULeFTo46wwreA==}
-    hasBin: true
-
-  msgpackr@1.11.5:
-    resolution: {integrity: sha512-UjkUHN0yqp9RWKy0Lplhh+wlpdt9oQBYgULZOiFhV3VclSF1JnSQWZ5r9gORQlNYaUKQoR8itv7g7z1xDDuACA==}
-
   mysql2@3.15.3:
     resolution: {integrity: sha512-FBrGau0IXmuqg4haEZRBfHNWB5mUARw6hNwPDXXGg0XzVJ50mr/9hb267lvpVMnhZ1FON3qNd4Xfcez1rbFwSg==}
     engines: {node: '>= 8.0'}
@@ -2158,15 +2158,8 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
-  node-abort-controller@3.1.1:
-    resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
-
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
-
-  node-gyp-build-optional-packages@5.2.2:
-    resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
-    hasBin: true
 
   notepack.io@3.0.1:
     resolution: {integrity: sha512-TKC/8zH5pXIAMVQio2TvVDTtPRX+DJPHDqjRbxogtFiByHyzKmy96RA0JtCQJ+WouyyL4A10xomQzgbUT+1jCg==}
@@ -2375,6 +2368,12 @@ packages:
   range-parser@1.2.1:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
     engines: {node: '>= 0.6'}
+
+  rate-limit-redis@4.3.1:
+    resolution: {integrity: sha512-+a1zU8+D7L8siDK9jb14refQXz60vq427VuiplgnaLk9B2LnvGe/APLTfhwb4uNIL7eWVknh8GnRp/unCj+lMA==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express-rate-limit: '>= 6'
 
   raw-body@3.0.2:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
@@ -2596,9 +2595,6 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4'
 
-  tslib@2.8.1:
-    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
-
   tsx@4.21.0:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
@@ -2679,10 +2675,6 @@ packages:
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
-
-  uuid@11.1.0:
-    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
-    hasBin: true
 
   valibot@1.2.0:
     resolution: {integrity: sha512-mm1rxUsmOxzrwnX5arGS+U4T25RdvpPjPN4yR0u9pUBov9+zGVtO84tif1eY4r6zWxVxu3KzIyknJy3rxfRZZg==}
@@ -2847,11 +2839,11 @@ snapshots:
       nanostores: 1.1.1
       zod: 4.3.6
 
-  '@better-auth/drizzle-adapter@1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))':
+  '@better-auth/drizzle-adapter@1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
       '@better-auth/utils': 0.3.1
-      drizzle-orm: 0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+      drizzle-orm: 0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
 
   '@better-auth/kysely-adapter@1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(kysely@0.28.11)':
     dependencies:
@@ -3130,24 +3122,6 @@ snapshots:
       chevrotain: 10.5.0
       lilconfig: 2.1.0
 
-  '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3':
-    optional: true
-
-  '@msgpackr-extract/msgpackr-extract-darwin-x64@3.0.3':
-    optional: true
-
-  '@msgpackr-extract/msgpackr-extract-linux-arm64@3.0.3':
-    optional: true
-
-  '@msgpackr-extract/msgpackr-extract-linux-arm@3.0.3':
-    optional: true
-
-  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.3':
-    optional: true
-
-  '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3':
-    optional: true
-
   '@noble/ciphers@2.1.1': {}
 
   '@noble/hashes@1.8.0': {}
@@ -3424,6 +3398,12 @@ snapshots:
       pg-protocol: 1.11.0
       pg-types: 2.2.0
 
+  '@types/pg@8.20.0':
+    dependencies:
+      '@types/node': 25.5.0
+      pg-protocol: 1.11.0
+      pg-types: 2.2.0
+
   '@types/qs@6.14.0': {}
 
   '@types/range-parser@1.2.7': {}
@@ -3660,10 +3640,10 @@ snapshots:
 
   base64id@2.0.0: {}
 
-  better-auth@1.5.4(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(pg@8.18.0)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.2)):
+  better-auth@1.5.4(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(pg@8.18.0)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.2)):
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
-      '@better-auth/drizzle-adapter': 1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))
+      '@better-auth/drizzle-adapter': 1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))
       '@better-auth/kysely-adapter': 1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(kysely@0.28.11)
       '@better-auth/memory-adapter': 1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)
       '@better-auth/mongo-adapter': 1.5.4(@better-auth/core@1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(mongodb@7.1.0)
@@ -3681,7 +3661,7 @@ snapshots:
       zod: 4.3.6
     optionalDependencies:
       '@prisma/client': 7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
-      drizzle-orm: 0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+      drizzle-orm: 0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       mongodb: 7.1.0
       mysql2: 3.15.3
       pg: 8.18.0
@@ -3724,18 +3704,6 @@ snapshots:
       fill-range: 7.1.1
 
   bson@7.2.0: {}
-
-  bullmq@5.71.0:
-    dependencies:
-      cron-parser: 4.9.0
-      ioredis: 5.10.0
-      msgpackr: 1.11.5
-      node-abort-controller: 3.1.1
-      semver: 7.7.4
-      tslib: 2.8.1
-      uuid: 11.1.0
-    transitivePeerDependencies:
-      - supports-color
 
   bytes@3.1.2: {}
 
@@ -3812,10 +3780,6 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  cron-parser@4.9.0:
-    dependencies:
-      luxon: 3.7.2
-
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -3846,9 +3810,6 @@ snapshots:
 
   destr@2.0.5: {}
 
-  detect-libc@2.1.2:
-    optional: true
-
   dezalgo@1.0.4:
     dependencies:
       asap: 2.0.6
@@ -3860,11 +3821,11 @@ snapshots:
 
   dotenv@17.4.2: {}
 
-  drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.16.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
+  drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.20.0)(@upstash/redis@1.36.4)(kysely@0.28.11)(mysql2@3.15.3)(pg@8.18.0)(postgres@3.4.7)(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.15
       '@prisma/client': 7.4.1(prisma@7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
-      '@types/pg': 8.16.0
+      '@types/pg': 8.20.0
       '@upstash/redis': 1.36.4
       kysely: 0.28.11
       mysql2: 3.15.3
@@ -4359,8 +4320,6 @@ snapshots:
 
   lru.min@1.1.4: {}
 
-  luxon@3.7.2: {}
-
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -4413,22 +4372,6 @@ snapshots:
 
   ms@2.1.3: {}
 
-  msgpackr-extract@3.0.3:
-    dependencies:
-      node-gyp-build-optional-packages: 5.2.2
-    optionalDependencies:
-      '@msgpackr-extract/msgpackr-extract-darwin-arm64': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-darwin-x64': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-linux-arm': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-linux-arm64': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-linux-x64': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-win32-x64': 3.0.3
-    optional: true
-
-  msgpackr@1.11.5:
-    optionalDependencies:
-      msgpackr-extract: 3.0.3
-
   mysql2@3.15.3:
     dependencies:
       aws-ssl-profiles: 1.1.2
@@ -4455,14 +4398,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  node-abort-controller@3.1.1: {}
-
   node-fetch-native@1.6.7: {}
-
-  node-gyp-build-optional-packages@5.2.2:
-    dependencies:
-      detect-libc: 2.1.2
-    optional: true
 
   notepack.io@3.0.1: {}
 
@@ -4659,6 +4595,10 @@ snapshots:
   quick-format-unescaped@4.0.4: {}
 
   range-parser@1.2.1: {}
+
+  rate-limit-redis@4.3.1(express-rate-limit@8.2.1(express@5.2.1)):
+    dependencies:
+      express-rate-limit: 8.2.1(express@5.2.1)
 
   raw-body@3.0.2:
     dependencies:
@@ -4930,8 +4870,6 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  tslib@2.8.1: {}
-
   tsx@4.21.0:
     dependencies:
       esbuild: 0.27.3
@@ -5007,8 +4945,6 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
-
-  uuid@11.1.0: {}
 
   valibot@1.2.0(typescript@5.9.3):
     optionalDependencies:

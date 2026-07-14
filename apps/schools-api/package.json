@@ -13,12 +13,12 @@
   "dependencies": {
     "@hallpass/auth": "workspace:*",
     "@hallpass/db": "workspace:*",
+    "@hallpass/express-middleware": "workspace:*",
     "@hallpass/logger": "workspace:*",
     "@hallpass/types": "workspace:*",
-"cors": "^2.8.6",
+    "cors": "^2.8.6",
     "dotenv": "latest",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "zod": "^4.3.6"
   },
