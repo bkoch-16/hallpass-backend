@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-14T16:57:38.371Z — 21 files indexed_
+_Generated: 2026-07-14T20:12:49.025Z — 18 files indexed_
 
 ## File Summaries
 
@@ -10,7 +10,7 @@ GitHub Actions workflow that generates and deploys a Demo UI to GitHub Pages. Tr
 
 ### `.github/workflows/deploy.yml`
 
-GitHub Actions CI/CD workflow that runs on pushes to main/develop, PRs, and manual dispatch with environment selection. The 'validate' job runs lint, build, and test with dummy env vars on Ubuntu with Node 22 and pnpm, including Prisma client generation. The 'deploy-dev' job deploys to Cloud Run on develop branch pushes or manual dev dispatch, while 'deploy-prod' deploys on main branch pushes or manual prod dispatch (restricted to main). Both deploy jobs use a matrix strategy across user-api, schools-api, and passes-api services, building Docker images with Buildx (GHA cache), pushing to GCP Artifact Registry, and deploying to Cloud Run in us-west1. Environment variables and secrets are managed via GCP Secret Manager on the Cloud Run services directly.
+CI/CD pipeline for a pnpm monorepo deploying three microservices (user-api, schools-api, passes-api) to Google Cloud Run, with separate dev and prod environments. The `validate` job runs linting, building, Prisma client generation, a pass index guard check, and tests on every push/PR, using dummy environment variables since tests mock the DB. Dev deploys trigger on pushes to `develop` (or manual dispatch with env=dev), while prod deploys trigger on pushes to `main` (or manual dispatch with env=prod on main). Database migrations run via `prisma migrate deploy` in isolated jobs (`migrate-dev`/`migrate-prod`), fetching connection strings from GCP Secret Manager at runtime to avoid leaking secrets. Docker images are built per-service using Buildx with GitHub Actions cache, pushed to GCP Artifact Registry, and deployed to Cloud Run with env vars/secrets managed directly on the Cloud Run service via GCP Secret Manager. Key secrets required: `GCP_SA_KEY` and `GCP_PROJECT_ID`; the SA needs `secretmanager.secretAccessor` for the relevant DATABASE_URL secrets.
 
 ### `.github/workflows/index-codebase.yml`
 
@@ -26,27 +26,23 @@ Keeps the `develop` branch in sync with `main` by automatically creating a merge
 
 ### `apps/user-api/Dockerfile`
 
-Multi-stage-style Dockerfile for the user-api Express service, based on node:22-alpine with pnpm@10. It copies package manifests first for Docker layer caching, runs `pnpm install --frozen-lockfile`, then copies source code and generates the Prisma client with a dummy DATABASE_URL. Builds all dependent workspace packages (@hallpass/db, auth, logger, types) before building the user-api itself. Uses a custom docker-entrypoint.sh script and exposes port 3001.
+Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm@10. Uses layer caching by copying package manifests first and running pnpm install before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all dependent workspace packages in dependency order. Uses a custom docker-entrypoint.sh script as ENTRYPOINT and exposes port 3001. Developers modifying this must update the COPY and build filter steps if new workspace packages are added as dependencies.
 
 ### `apps/user-api/src/app.ts`
 
-Sets up the Express application for the user-api microservice, configuring helmet, CORS (supporting wildcard or comma-separated origins), HTTP logging, JSON parsing, and rate limiting (100 req/15min general, 10 req/15min for auth). Exposes a /health endpoint (with Prisma DB check) before rate limiting, delegates /api/auth/* to Better Auth via toNodeHandler, and mounts user routes at /api/users. Includes a 404 catch-all and a global error handler that logs and returns 500. Trust proxy is set to 1 for deployment behind a load balancer.
+Express application setup for the user-api service. Configures helmet, CORS, HTTP logging, JSON parsing, health check endpoint (exempt from rate limiting), and Redis-backed rate limiting with separate general and auth limiters. Routes better-auth endpoints under /api/auth/* with a strict auth limiter on credential-sensitive POST routes, and mounts the user CRUD router at /api/users. Falls back to in-memory rate limiting when Redis is unavailable or in test mode. Uses middleware from @hallpass/express-middleware throughout.
 
 ### `apps/user-api/src/auth.ts`
 
-Creates and exports the Better Auth instance for the user-api service by calling createAuth from the @hallpass/auth package. Configured with baseURL, secret, and trustedOrigins derived from environment variables. When CORS_ORIGIN is '*', trustedOrigins is set to undefined (unrestricted).
+Configures and exports the better-auth instance for the user-api service by calling createAuth from @hallpass/auth with the shared Prisma client, base URL, secret, and parsed CORS origins as trusted origins. The wildcard '*' origin maps to undefined (better-auth requires concrete origin lists). This auth instance is imported by route handlers and middleware throughout the service.
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports environment variables for the user-api service using Zod schema parsing. Required variables are DATABASE_URL, BETTER_AUTH_URL, BETTER_AUTH_SECRET, and CORS_ORIGIN (all non-empty strings). PORT is optional. The module eagerly validates at import time, causing the process to fail fast on missing or invalid configuration.
-
-### `apps/user-api/src/express.d.ts`
-
-TypeScript declaration file that augments the Express `Request` interface to include an optional `user` property. The user object contains id, email, name, emailVerified, role (using the UserRole type from @hallpass/types), schoolId, createdAt, and updatedAt fields. This enables type-safe access to `req.user` throughout the user-api middleware and route handlers after authentication.
+Validates and exports the runtime environment variables for the user-api service using the rateLimitEnvSchema from @hallpass/express-middleware (which extends the base env schema with REDIS_URL and REDIS_PREFIX). The parsed env object is the single source of truth for configuration across the service. Any new environment variables must be added to the upstream schema.
 
 ### `apps/user-api/src/index.ts`
 
-Entry point for the user-api service that loads dotenv, imports the validated env config and Express app, then starts listening on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure the process crashes cleanly on fatal errors.
+Entry point for the user-api service. Loads dotenv, sets up global unhandledRejection and uncaughtException handlers that log and exit, then starts the Express app listening on the configured PORT (default 3001). This file should remain minimal — application setup lives in app.ts.
 
 ### `apps/user-api/src/lib/pin.ts`
 
@@ -54,19 +50,11 @@ Provides PIN code generation and collision-safe user creation logic for the user
 
 ### `apps/user-api/src/middleware/auth.ts`
 
-Exports the requireAuth Express middleware that validates the user's session via Better Auth's getSession API using fromNodeHeaders. After session validation, it looks up the user in Prisma (excluding soft-deleted users) and attaches the full user record to req.user. Returns 401 for any authentication failure (missing session, invalid user ID, deleted user). Depends on the auth instance from ../auth.js and the shared Prisma client.
-
-### `apps/user-api/src/middleware/roleGuard.ts`
-
-Express middleware factories for role-based access control. Exports `requireRole(...roles)` which checks if `req.user.role` is in the allowed list, and `requireSelfOrRole(...roles)` which additionally permits access if the request's `:id` param matches the authenticated user's ID. Also exports a `roleRank` function that maps UserRole to a numeric hierarchy (STUDENT=0 through SERVICE=4), used elsewhere for privilege escalation checks.
-
-### `apps/user-api/src/middleware/validate.ts`
-
-Express middleware factory functions for validating request query parameters, body, and URL params using Zod schemas. Exports `validateQuery`, `validateBody`, and `validateParams`, each returning middleware that responds with 400 and flattened Zod errors on validation failure, or replaces the relevant `req` property with the parsed (and potentially coerced/defaulted) data on success. Note that `validateQuery` uses `Object.defineProperty` to overwrite `req.query` since it's normally read-only in Express.
+Exports a requireAuth Express middleware created via createRequireAuth from the shared middleware package, bound to this service's auth instance. This middleware is used on protected routes to verify the session and populate req.user.
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for users with role-based access control and cursor pagination. Endpoints include GET /me, GET / (list with optional `ids` batch lookup, role filter, cursor pagination), GET /:id, POST / (single create), POST /bulk (batch create with partial-failure reporting via `Promise.allSettled`), PATCH /:id, and DELETE /:id (soft-delete via `deletedAt`). Authorization is layered: `requireAuth` for all routes, `requireRole`/`requireSelfOrRole` for elevated operations, and `roleRank` comparisons prevent privilege escalation (users cannot create/modify/delete users of equal or higher rank). SUPER_ADMIN bypasses school scoping; all other roles are constrained to their own `schoolId`. User creation delegates to `createUserWithPin` for automatic student PIN assignment, and Prisma error codes P2002/P2003 are mapped to 409/400 HTTP responses. The `USER_SELECT` constant ensures sensitive fields (password, pinCode) are never returned.
+Comprehensive Express router implementing CRUD operations for users at /api/users. Supports GET /me, cursor-paginated listing with optional role/ids filtering, GET/:id, POST (single create with temp password and pin assignment), POST /bulk (concurrent batch creation with throttled scrypt hashing), PATCH/:id, and soft DELETE/:id. Enforces role-based access control via requireRole/requireSelfOrRole, school-scoped tenancy (non-super-admins only see their school's users), and role hierarchy checks preventing privilege escalation. Uses Zod validation middleware for body/params/query and handles duplicate email errors (both EmailInUseError and Prisma P2002).
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -74,15 +62,15 @@ Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (v
 
 ### `docker-compose.yml`
 
-Docker Compose configuration defining three services: postgres (PostgreSQL 16 with health checks and persistent volume), user-api (port 3001), and schools-api (port 3002). Both API services depend on postgres being healthy and share the same DATABASE_URL pattern pointing to the postgres service. Environment variables like BETTER_AUTH_SECRET, BETTER_AUTH_URL, and CORS_ORIGIN are configurable via .env with sensible defaults for local development.
+Docker Compose configuration for local development defining four services: postgres (16-alpine), redis (7-alpine), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy postgres and redis containers, with DATABASE_URL and REDIS_URL wired to the internal Docker network. Environment variables like BETTER_AUTH_SECRET are expected from the host environment or .env file. A named volume 'postgres_data' persists database state across restarts.
 
 ### `package.json`
 
-Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30.1) and Turborepo for orchestrating build, dev, lint, test, and integration test tasks across packages. Scripts include formatting via Prettier, Husky for git hooks, and a demo generation script using tsx. The pnpm config pins ioredis to 5.10.0 via overrides and restricts native builds to @prisma/engines, esbuild, and prisma. Dev dependencies include ESLint with TypeScript support, fast-glob, micromatch, and yaml for tooling scripts. The sole runtime dependency at root level is @anthropic-ai/sdk.
+Root package.json for the 'hallpass-backend' monorepo using pnpm workspaces and Turborepo for orchestration. Defines workspace-level scripts for build, dev, lint, format, test (unit and integration), and demo generation. Dev dependencies include ESLint, Prettier, Husky (git hooks), TypeScript, and tsx for script execution. The only production dependency at root is @anthropic-ai/sdk. Notable: pnpm overrides pin ioredis to 5.10.0, and onlyBuiltDependencies restricts native builds to Prisma engines, esbuild, and prisma.
 
 ### `packages/auth/src/index.ts`
 
-This file is the central authentication configuration module for the project, responsible for creating and exporting a `betterAuth` instance. The main export is `createAuth`, a factory function that accepts a config object (`baseURL`, `secret`, `trustedOrigins`) and returns a configured Better Auth instance using the Prisma adapter with PostgreSQL and the `bearer` plugin. It enables email/password authentication, uses serial ID generation, and conditionally sets secure/sameSite cookie attributes for HTTPS origins. Session configuration is set to expire in 7 days with a 1-day update age. Key type exports include `Auth` (the return type of `createAuth`) and `Session` (inferred session type from Better Auth). It also re-exports `toNodeHandler` and `fromNodeHeaders` from `better-auth/node` for use in Node.js HTTP server integrations, and depends on `@hallpass/db` for the shared Prisma client.
+Shared authentication package wrapping better-auth with PostgreSQL/Prisma adapter and bearer token plugin. Exports createAuth factory (configuring email/password auth with signup disabled, serial ID generation, 7-day sessions, and HTTPS-aware cookie settings), the Auth and Session types, toNodeHandler/fromNodeHeaders utilities, and createUserWithCredential for server-side user provisioning with race-condition-safe duplicate email detection. EmailInUseError is exported for consistent error handling. The user model extends better-auth with role and schoolId additional fields. Developers adding user fields must update both additionalFields and createUserWithCredential.
 
 ### `packages/db/prisma/schema.prisma`
 
