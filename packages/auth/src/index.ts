@@ -66,13 +66,25 @@ export async function createUserWithCredential(
   const email = input.email.toLowerCase();
   if ((await ctx.internalAdapter.findUserByEmail(email))?.user) throw new EmailInUseError();
   const hash = await ctx.password.hash(input.password);
-  const user = await ctx.internalAdapter.createUser({
-    email,
-    name: input.name,
-    emailVerified: false,
-    ...(input.role ? { role: input.role } : {}),
-    ...(input.schoolId !== undefined ? { schoolId: input.schoolId } : {}),
-  });
+  let user;
+  try {
+    user = await ctx.internalAdapter.createUser({
+      email,
+      name: input.name,
+      emailVerified: false,
+      ...(input.role ? { role: input.role } : {}),
+      ...(input.schoolId !== undefined ? { schoolId: input.schoolId } : {}),
+    });
+  } catch (err) {
+    // The findUserByEmail check above is not atomic with this insert; on a
+    // concurrent race the loser hits the DB's unique index on User.email
+    // (Prisma P2002) instead of the pre-check. Translate it here so every
+    // caller gets the documented EmailInUseError regardless of timing.
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002") {
+      throw new EmailInUseError();
+    }
+    throw err;
+  }
   await ctx.internalAdapter.linkAccount({
     userId: String(user.id),
     providerId: "credential",
