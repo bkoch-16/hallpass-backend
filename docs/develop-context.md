@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-14T19:28:18.182Z — 18 files indexed_
+_Generated: 2026-07-14T19:48:20.499Z — 18 files indexed_
 
 ## File Summaries
 
@@ -54,7 +54,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing the full User CRUD API with endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch lookup), GET /:id, POST / (single create), POST /bulk (batched creation with concurrency throttling), PATCH /:id, and DELETE /:id (soft-delete). Uses better-auth's `createUserWithCredential` for user provisioning with server-generated temporary passwords, and assigns student PIN codes post-creation via `assignPin`. Enforces role-based access control throughout using `requireRole`, `requireSelfOrRole`, and `roleRank` comparisons — callers cannot create/modify users of equal or higher rank. School-scoping is enforced for non-SUPER_ADMIN users. Bulk creation throttles to 8 concurrent operations to limit scrypt hashing load, uses `Promise.allSettled` for partial-failure reporting, and treats both `EmailInUseError` and Prisma P2002 as duplicate-email errors. Pin assignment failures are logged but non-fatal to avoid masking successful user creation.
+Express router defining the full CRUD REST API for user management, mounted under a `/users` prefix. Exports a default Router with endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (single create with temp password), POST /bulk (batched creation with concurrency-limited scrypt hashing), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Enforces role-based access control via `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with school-scoped data isolation for non-SUPER_ADMIN users using `roleRank` comparisons. Relies on `@hallpass/auth`'s `createUserWithCredential` for user provisioning (including duplicate-email detection via `EmailInUseError` and P2002), assigns student PIN codes post-creation via `createUserWithPin`, and uses Zod-based validation middleware from `@hallpass/express-middleware`. When modifying, note the careful ordering of middleware (validation before authorization), the non-fatal pin assignment error handling, and that `USER_SELECT` controls the Prisma projection for all read queries.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -70,7 +70,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package that wraps `better-auth` with a factory function `createAuth` producing a configured auth instance using Prisma (PostgreSQL) as the database adapter and the bearer plugin. Configures email/password auth with sign-up disabled, serial ID generation, 7-day sessions with daily refresh, and conditional `sameSite=none; secure` cookies for HTTPS base URLs. Supports custom user fields (`role`, `schoolId`) that are not user-settable (`input: false`). Exports the `Auth` and `Session` types (inferred from the auth instance), re-exports `toNodeHandler` and `fromNodeHeaders` for Express integration, and provides `createUserWithCredential` for programmatic user creation with email uniqueness checking, password hashing, and credential account linking. The `EmailInUseError` custom error class is exported for callers to handle duplicate-email scenarios. Developers should note that `disableSignUp: true` means public sign-up is blocked—users must be created via `createUserWithCredential`.
+Shared authentication package that wraps `better-auth` to create a configured auth instance via `createAuth()`, using Prisma as the PostgreSQL adapter with serial ID generation and the bearer token plugin. Exports the `Auth` and `Session` types inferred from the auth instance, plus `toNodeHandler` and `fromNodeHeaders` re-exports for Express integration. Defines `createUserWithCredential()` which programmatically provisions a user with hashed password and linked credential account, supporting custom `role` and `schoolId` additional fields; it pre-checks for duplicate emails and translates concurrent Prisma P2002 unique-constraint violations into the exported `EmailInUseError` class. Key configuration: public sign-up is disabled (`disableSignUp: true`), sessions expire in 7 days with daily refresh, and HTTPS deployments get `sameSite: 'none'` secure cookies. Developers modifying this file should be aware that `additionalFields` (role, schoolId) are set to `input: false` so they cannot be supplied via the public API, only via internal adapter calls.
 
 ### `packages/db/prisma/schema.prisma`
 
