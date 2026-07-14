@@ -5,7 +5,7 @@ flowchart LR
         direction TB
         user["user-api"]
         schools["schools-api"]
-        passes["passes-api<br/>(Socket.IO, BullMQ)"]
+        passes["passes-api<br/>(Socket.IO, in-process expiry)"]
     end
 
     pg[("PostgreSQL<br/>(Neon)")]
