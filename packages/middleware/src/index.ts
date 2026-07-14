@@ -8,7 +8,7 @@ export {
   createRequireAuthOrApiKey,
   type SessionAuth,
 } from "./auth.js";
-export { createRequireApiKey, constantTimeEquals } from "./apiKey.js";
+export { createRequireApiKey, constantTimeEquals, matchesApiKeyHeader } from "./apiKey.js";
 export {
   roleRank,
   requireRole,

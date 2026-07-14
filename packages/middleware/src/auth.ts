@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Request, Response, NextFunction } from "express";
 import { prisma, type User } from "@hallpass/db";
-import { constantTimeEquals } from "./apiKey.js";
+import { matchesApiKeyHeader } from "./apiKey.js";
 
 /**
  * Minimal structural view of a better-auth instance — only what session
@@ -117,10 +117,7 @@ export function createRequireAuthOrApiKey(
       return;
     }
 
-    const rawHeader = req.headers[headerName.toLowerCase()];
-    const provided = typeof rawHeader === "string" ? rawHeader : "";
-    const valid =
-      typeof rawHeader === "string" && constantTimeEquals(provided, apiKey);
+    const valid = matchesApiKeyHeader(req, headerName, apiKey);
 
     if (!valid) {
       res.status(401).json({ message: "Unauthorized" });
