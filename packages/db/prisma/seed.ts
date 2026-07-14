@@ -54,6 +54,10 @@ async function main() {
         schoolId: userData.assignSchool ? school.id : null,
       });
       console.log(`Seeded ${userData.role}: ${userData.email}`);
+      await prisma.user.update({
+        where: { email: userData.email },
+        data: { pinCode: userData.pinCode ?? null },
+      });
     } catch (e) {
       if (e instanceof EmailInUseError) {
         console.log(`Skipped existing ${userData.role}: ${userData.email}`);
@@ -61,10 +65,6 @@ async function main() {
         throw e;
       }
     }
-    await prisma.user.update({
-      where: { email: userData.email },
-      data: { pinCode: userData.pinCode ?? null },
-    });
   }
 
   await seedSchoolData(school.id);
