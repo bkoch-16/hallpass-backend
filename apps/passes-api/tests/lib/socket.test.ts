@@ -10,6 +10,9 @@ vi.mock('ioredis', () => ({
     constructor(_url: string, _opts?: unknown) {}
     duplicate() { return this; }
     on() { return this; }
+    connect() { return Promise.resolve(); }
+    subscribe() { return Promise.resolve(); }
+    psubscribe() { return Promise.resolve(); }
   },
 }));
 
@@ -135,6 +138,66 @@ describe('emitPassEvent', () => {
 
     ioServer.close();
     httpServer.close();
+  });
+});
+
+describe('redis connect/subscribe failure is non-fatal', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doUnmock('ioredis');
+    vi.doUnmock('@socket.io/redis-adapter');
+  });
+
+  it('does not throw or leak an unhandled rejection when Redis rejects connect/subscribe', async () => {
+    const rejection = new Error('AUTH failed');
+
+    // A Redis client whose connection-establishment and subscribe promises all
+    // reject — mirroring an exhausted-quota / bad-auth Upstash response.
+    class FailingRedis {
+      constructor(_url: string, _opts?: unknown) {}
+      duplicate() { return this; }
+      on() { return this; }
+      connect() { return Promise.reject(rejection); }
+      subscribe() { return Promise.reject(rejection); }
+      psubscribe() { return Promise.reject(rejection); }
+    }
+    vi.doMock('ioredis', () => ({ default: FailingRedis }));
+
+    // A createAdapter that issues the same un-awaited subscribe calls the real
+    // adapter does, so the un-awaited rejection path is exercised.
+    vi.doMock('@socket.io/redis-adapter', () => ({
+      createAdapter: (_pub: unknown, sub: { subscribe: () => unknown; psubscribe: () => unknown }) => {
+        sub.psubscribe();
+        sub.subscribe();
+        return class MockAdapter {
+          constructor(_ns: unknown) {}
+          init() {}
+          close() {}
+        };
+      },
+    }));
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      const { createServer } = await import('node:http');
+      const { initSocket } = await import('../../src/lib/socket.js');
+
+      const httpServer = createServer();
+
+      expect(() => initSocket(httpServer)).not.toThrow();
+
+      // Let all the rejected promises settle so any unhandled rejection would fire.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(unhandled).toEqual([]);
+
+      httpServer.close();
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
 
