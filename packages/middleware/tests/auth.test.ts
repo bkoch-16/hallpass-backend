@@ -10,7 +10,7 @@ vi.mock("@hallpass/db", () => ({
   },
 }));
 
-import { resolveSessionUser, createRequireAuth } from "../src/auth";
+import { resolveSessionUser, createRequireAuth, createRequireAuthOrApiKey } from "../src/auth";
 import { prisma } from "@hallpass/db";
 
 const mockPrisma = prisma as unknown as {
@@ -232,5 +232,75 @@ describe("createRequireAuth", () => {
 
     await expect(requireAuth(req, res, next)).rejects.toThrow("DB connection lost");
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("createRequireAuthOrApiKey", () => {
+  const EXPECTED_KEY = "correct-key";
+  const requireAuthOrApiKey = createRequireAuthOrApiKey(stubAuth, EXPECTED_KEY);
+
+  it("sets req.user and calls next() when a valid session is present, without checking the key", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "1" }, session: {} });
+    mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
+    const req = { headers: {} } as Request;
+    const res = mockRes();
+    const next: NextFunction = vi.fn();
+
+    await requireAuthOrApiKey(req, res, next);
+
+    expect(req.user).toEqual(fakeUser);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the API key and calls next() (without req.user) when there is no session", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = { headers: { "x-api-key": EXPECTED_KEY } } as unknown as Request;
+    const res = mockRes();
+    const next: NextFunction = vi.fn();
+
+    await requireAuthOrApiKey(req, res, next);
+
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when there is no session and the key is wrong", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = { headers: { "x-api-key": "wrong-key" } } as unknown as Request;
+    const res = mockRes();
+    const next: NextFunction = vi.fn();
+
+    await requireAuthOrApiKey(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ message: "Unauthorized" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when there is no session and no key header", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = { headers: {} } as Request;
+    const res = mockRes();
+    const next: NextFunction = vi.fn();
+
+    await requireAuthOrApiKey(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("honors a custom header name", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const requireAuthOrCustomKey = createRequireAuthOrApiKey(stubAuth, EXPECTED_KEY, "x-parent-tool-key");
+    const req = { headers: { "x-parent-tool-key": EXPECTED_KEY } } as unknown as Request;
+    const res = mockRes();
+    const next: NextFunction = vi.fn();
+
+    await requireAuthOrCustomKey(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

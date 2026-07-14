@@ -2,8 +2,22 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vites
 import request from "supertest";
 import { createTestServer } from "@hallpass/express-middleware";
 
-const { mockGetSession } = vi.hoisted(() => ({
+const { mockGetSession, mockRedisCall } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
+  mockRedisCall: vi.fn((command: string) => {
+    if (command === "SCRIPT") return Promise.resolve("fakesha");
+    if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
+    return Promise.resolve(undefined);
+  }),
+}));
+
+// The public GET routes (calendar, schedule-types) run behind
+// publicSchoolDataLimiter, whose RedisStore (rate-limit-redis) sends raw
+// commands via redis.call. Mock the ioredis client so route tests don't
+// depend on a live Redis (CI has none); an unmocked call rejects and the
+// limiter fails closed with a 500. See publicSchoolDataLimiter.test.ts.
+vi.mock("../../src/lib/redis.js", () => ({
+  redis: { call: mockRedisCall },
 }));
 
 vi.mock("@hallpass/db", () => ({
@@ -112,12 +126,32 @@ beforeAll(start);
 afterAll(stop);
 
 describe(`GET ${BASE}`, () => {
-  it("returns 401 when not authenticated", async () => {
+  it("returns 401 when not authenticated and no API key", async () => {
     mockGetSession.mockResolvedValue(null);
 
     const res = await request(server).get(BASE);
 
     expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when the API key is wrong and there is no session", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await request(server).get(BASE).set("x-api-key", "wrong-key");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns calendar entries for a valid API key with no session, bypassing school scoping", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockPrisma.schoolCalendar.findMany.mockResolvedValue([fakeEntry]);
+
+    const res = await request(server)
+      .get("/api/schools/999/calendar")
+      .set("x-api-key", "test-parent-tool-api-key");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
   });
 
   it("returns calendar entries for school member", async () => {

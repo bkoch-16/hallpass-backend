@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { scheduleLocalExpiry, expirePass } from "../lib/expiry.js";
-import { reconcileSlots, reconcileSchoolSlots, promoteFromQueue } from "../lib/slots.js";
+import {
+  reconcileSlots,
+  reconcileSchoolSlots,
+  promoteFromQueue,
+} from "../lib/slots.js";
 import { getTodayInTimezone, periodEndDate } from "../lib/time.js";
-import { createRequireApiKey } from "../middleware/apiKey.js";
+import { createRequireApiKey } from "@hallpass/express-middleware";
 import { env } from "../env.js";
 
 const router = Router();
@@ -30,12 +34,19 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
         },
       },
       include: {
-        period: { select: { endTime: true, scheduleType: { select: { endBuffer: true } } } },
+        period: {
+          select: {
+            endTime: true,
+            scheduleType: { select: { endBuffer: true } },
+          },
+        },
         school: { select: { timezone: true } },
       },
       orderBy: { id: "asc" },
       take: RECONCILE_BATCH_SIZE,
-      ...(passCursor !== undefined ? { cursor: { id: passCursor }, skip: 1 } : {}),
+      ...(passCursor !== undefined
+        ? { cursor: { id: passCursor }, skip: 1 }
+        : {}),
     });
 
     for (const pass of batch) {
@@ -47,7 +58,8 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
         // TODAY, so rescheduling would push it to today's period end.
         const timezone = pass.school.timezone;
         const isPriorDay =
-          getTodayInTimezone(timezone, pass.requestedAt) < getTodayInTimezone(timezone);
+          getTodayInTimezone(timezone, pass.requestedAt) <
+          getTodayInTimezone(timezone);
         const endTime =
           pass.period && !isPriorDay
             ? periodEndDate(
@@ -86,7 +98,11 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     select: { id: true, maxOccupancy: true },
   });
   let reconciled = 0;
-  const reconcileErrors: { destinationId?: number; schoolId?: number; error: string }[] = [];
+  const reconcileErrors: {
+    destinationId?: number;
+    schoolId?: number;
+    error: string;
+  }[] = [];
   for (const dest of cappedDestinations) {
     try {
       await reconcileSlots(dest.id, dest.maxOccupancy);
