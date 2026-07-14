@@ -24,7 +24,7 @@ vi.mock("../../src/env.js", () => ({
 import { createBlockingRedis } from "../../src/lib/redis.js";
 
 describe("createBlockingRedis", () => {
-  it("creates a connection with maxRetriesPerRequest: null for blocking consumers", () => {
+  it("creates a lazy connection with maxRetriesPerRequest: null for blocking consumers", () => {
     // Importing the module already constructed the shared client — only
     // measure the factory call.
     mockRedisCtor.mockClear();
@@ -34,6 +34,7 @@ describe("createBlockingRedis", () => {
     expect(mockRedisCtor).toHaveBeenCalledTimes(1);
     expect(mockRedisCtor).toHaveBeenCalledWith("redis://localhost:6379", {
       maxRetriesPerRequest: null,
+      lazyConnect: true,
     });
   });
 });

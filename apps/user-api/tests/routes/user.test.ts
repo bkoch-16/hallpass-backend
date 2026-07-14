@@ -472,6 +472,20 @@ describe("POST /api/users", () => {
     expect(mockPrisma.user.create).not.toHaveBeenCalled();
   });
 
+  it("still returns 201 when pin assignment fails after the user is already created", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    authenticateAs(admin);
+    provisionResolves({ id: 10, email: "new@test.com", name: "New User", role: "STUDENT" });
+    mockPrisma.user.update.mockRejectedValue(new Error("DB unavailable"));
+
+    const res = await request(server)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.email).toBe("new@test.com");
+  });
+
   it("passes the generated password to the provisioning helper", async () => {
     const admin = { ...fakeUser, id: 3, role: "ADMIN" };
     authenticateAs(admin);

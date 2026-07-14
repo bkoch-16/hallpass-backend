@@ -1,10 +1,12 @@
 import { Router, Request, Response } from "express";
 import { prisma, PassStatus, type Prisma } from "@hallpass/db";
-import { UserRole, type CursorPage, type PassResponse } from "@hallpass/types";
+import { UserRole, type CursorPage, type PassResponse, type ParentLookupPass, type ParentLookupResponse } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
 import { requireMinRole, roleRank } from "@hallpass/express-middleware";
+import { createRequireApiKey } from "../middleware/apiKey.js";
+import { createPinLookupLimiter } from "../middleware/pinLookupLimiter.js";
 import {
   validateBody,
   validateParams,
@@ -16,6 +18,7 @@ import {
   denyPassBody,
   passIdParams,
   listPassesQuery,
+  parentLookupQuery,
 } from "../schemas/passes.js";
 import {
   claimPassSlots,
@@ -25,6 +28,7 @@ import {
 } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
 import { scheduleLocalExpiry } from "../lib/expiry.js";
+import { paginate } from "../lib/pagination.js";
 import {
   periodEndDate,
   getTodayInTimezone,
@@ -34,6 +38,7 @@ import {
   addMinutesToTimeClamped,
   calendarDate,
 } from "../lib/time.js";
+import { env } from "../env.js";
 
 const router = Router({ mergeParams: true });
 
@@ -332,14 +337,81 @@ router.get(
       select: PASS_SELECT,
     });
 
-    const hasMore = passes.length > take;
-    const data = hasMore ? passes.slice(0, take) : passes;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(passes, take);
 
     res.json({
       data: data.map(toPassResponse),
       nextCursor,
     } satisfies CursorPage<PassResponse>);
+  },
+);
+
+// GET /passes/parent-lookup — external voice-AI agent verifies a parent via
+// student PIN and retrieves that student's recent pass activity. New trust
+// boundary for an external caller with no session: no requireAuth/requireSchool.
+// Registered BEFORE /:id or Express's greedy param matcher would swallow this path.
+const pinLookupLimiter = createPinLookupLimiter();
+
+router.get(
+  "/parent-lookup",
+  createRequireApiKey(env.PARENT_TOOL_API_KEY),
+  pinLookupLimiter,
+  validateQuery(parentLookupQuery),
+  async (req: Request, res: Response) => {
+    const { pin, cursor, limit } = req.query as unknown as {
+      pin: string;
+      cursor?: string;
+      limit: number;
+    };
+    const take = limit;
+
+    const student = await prisma.user.findFirst({
+      where: { pinCode: pin, role: UserRole.STUDENT, deletedAt: null },
+      select: { id: true, name: true },
+    });
+
+    if (!student) {
+      res.status(404).json({ message: "Student not found" });
+      return;
+    }
+
+    const passes = await prisma.pass.findMany({
+      where: { studentId: student.id },
+      take: take + 1,
+      ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+      orderBy: { id: "desc" },
+      select: {
+        id: true,
+        status: true,
+        requestedAt: true,
+        activatedAt: true,
+        returnedAt: true,
+        destination: { select: { name: true } },
+      },
+    });
+
+    const { data, nextCursor } = paginate(passes, take);
+
+    const parentLookupPasses: ParentLookupPass[] = data.map((pass) => ({
+      id: pass.id,
+      destination: pass.destination.name,
+      status: pass.status,
+      requestedAt: pass.requestedAt,
+      activatedAt: pass.activatedAt,
+      returnedAt: pass.returnedAt,
+      durationMinutes:
+        pass.activatedAt && pass.returnedAt
+          ? Math.round(
+              (pass.returnedAt.getTime() - pass.activatedAt.getTime()) / 60000,
+            )
+          : null,
+    }));
+
+    res.json({
+      student,
+      passes: parentLookupPasses,
+      nextCursor,
+    } satisfies ParentLookupResponse);
   },
 );
 
