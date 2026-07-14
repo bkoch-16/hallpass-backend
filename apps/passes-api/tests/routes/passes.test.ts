@@ -246,7 +246,7 @@ describe("POST /api/passes", () => {
     );
   });
 
-  it("returns 404 when destination does not belong to school", async () => {
+  it("returns 422 when destination does not belong to school", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, timezone: "UTC" });
     mockPrisma.schoolCalendar.findFirst.mockResolvedValue(fakeCalendar);
@@ -256,7 +256,7 @@ describe("POST /api/passes", () => {
 
     const res = await request(server).post(BASE).send({ destinationId: 99 });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(422);
     expect(res.body.message).toBe("Destination not found");
   });
 
@@ -486,13 +486,13 @@ describe("POST /api/passes — teacher-created", () => {
     expect(res.body.message).toBe("studentId is required");
   });
 
-  it("returns 404 when the target student is not found", async () => {
+  it("returns 422 when the target student is not found", async () => {
     authenticateTeacherWithTarget(null);
     mockActivePeriodAndDestination();
 
     const res = await request(server).post(BASE).send({ destinationId: 1, studentId: 99 });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(422);
     expect(res.body.message).toBe("Student not found");
     // Target lookup must be scoped to STUDENTs of the caller's school
     expect(mockPrisma.user.findFirst).toHaveBeenLastCalledWith(
