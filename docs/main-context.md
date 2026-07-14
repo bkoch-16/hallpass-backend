@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-06T19:52:58.090Z — 20 files indexed_
+_Generated: 2026-07-14T16:57:38.371Z — 21 files indexed_
 
 ## File Summaries
 
@@ -48,6 +48,10 @@ TypeScript declaration file that augments the Express `Request` interface to inc
 
 Entry point for the user-api service that loads dotenv, imports the validated env config and Express app, then starts listening on the configured PORT (default 3001). Registers global handlers for unhandledRejection and uncaughtException that log and exit with code 1 to ensure the process crashes cleanly on fatal errors.
 
+### `apps/user-api/src/lib/pin.ts`
+
+Provides PIN code generation and collision-safe user creation logic for the user API. `generatePinCode()` produces a 6-digit string (100000–999999, no leading zeros) using Node's crypto `randomInt`. `createUserWithPin()` is the primary export: it wraps a user creation callback, automatically generating and assigning a pinCode for STUDENT roles while retrying up to 5 times on Prisma P2002 unique constraint violations specific to the `pinCode` field. Non-student roles receive no pin and skip retry logic. The helper `isPinCodeConflict()` distinguishes pinCode collisions from email conflicts by inspecting the P2002 error's `meta.target`, ensuring email uniqueness errors propagate unchanged to callers.
+
 ### `apps/user-api/src/middleware/auth.ts`
 
 Exports the requireAuth Express middleware that validates the user's session via Better Auth's getSession API using fromNodeHeaders. After session validation, it looks up the user in Prisma (excluding soft-deleted users) and attaches the full user record to req.user. Returns 401 for any authentication failure (missing session, invalid user ID, deleted user). Depends on the auth instance from ../auth.js and the shared Prisma client.
@@ -62,7 +66,7 @@ Express middleware factory functions for validating request query parameters, bo
 
 ### `apps/user-api/src/routes/user.ts`
 
-Implements the full CRUD REST API for users with endpoints: GET /me, GET / (cursor-paginated list with optional ?ids= batch lookup), GET /:id, POST / (create), POST /bulk (bulk create), PATCH /:id (update), and DELETE /:id (soft-delete). Enforces role-based access control via requireRole and requireSelfOrRole middleware, with a roleRank hierarchy preventing privilege escalation. School-scoped data isolation is applied for non-SUPER_ADMIN users. Uses Zod validation middleware for body, params, and query. Returns standardized UserResponse types and CursorPage pagination from @hallpass/types, handling Prisma error codes P2002 (unique conflict → 409) and P2003 (FK violation → 400).
+Express router implementing full CRUD for users with role-based access control and cursor pagination. Endpoints include GET /me, GET / (list with optional `ids` batch lookup, role filter, cursor pagination), GET /:id, POST / (single create), POST /bulk (batch create with partial-failure reporting via `Promise.allSettled`), PATCH /:id, and DELETE /:id (soft-delete via `deletedAt`). Authorization is layered: `requireAuth` for all routes, `requireRole`/`requireSelfOrRole` for elevated operations, and `roleRank` comparisons prevent privilege escalation (users cannot create/modify/delete users of equal or higher rank). SUPER_ADMIN bypasses school scoping; all other roles are constrained to their own `schoolId`. User creation delegates to `createUserWithPin` for automatic student PIN assignment, and Prisma error codes P2002/P2003 are mapped to 409/400 HTTP responses. The `USER_SELECT` constant ensures sensitive fields (password, pinCode) are never returned.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -82,4 +86,4 @@ This file is the central authentication configuration module for the project, re
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the full PostgreSQL database schema for the HallPass system using Prisma ORM. Core models include District, School, User (with Role enum and soft-delete), Session, Account, ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus enum tracking a full lifecycle). The Pass model has an important caveat: a partial unique index 'one_active_pass_per_student' exists only in migrations and cannot be expressed in the Prisma schema — developers must manually remove any auto-generated DROP INDEX for it when creating new migrations. Passes are intentionally never soft-deleted; they reach terminal statuses instead. The schema uses autoincrement integer IDs for most models and cuid for Session/Account, with extensive relational mappings and database indexes on foreign keys and status fields.
+Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Core models include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, Account, ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with lifecycle statuses: PENDING, WAITING, ACTIVE, COMPLETED, CANCELLED, DENIED, EXPIRED). The Pass model has a critical partial unique index (`one_active_pass_per_student`) enforcing one active pass per student that exists only in a migration SQL file—Prisma cannot express it declaratively, so developers must manually remove any auto-generated `DROP INDEX` for it in new migrations. Soft-delete via `deletedAt` is used on most models except Pass, which relies on terminal statuses. The User model has multiple named relations to Pass (student, requester, approver, denier, canceller) and a unique `pinCode` field for student lookup. Key indexes exist on Pass for schoolId, studentId, status, and a composite (destinationId, status).
