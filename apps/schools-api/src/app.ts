@@ -9,8 +9,8 @@ import {
   createGeneralLimiter,
   corsOptions,
   createRateLimitRedis,
+  createRedisRateLimitStore,
 } from "@hallpass/express-middleware";
-import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
 import districtRouter from "./routes/district.js";
 import schoolRouter from "./routes/school.js";
@@ -46,11 +46,7 @@ const useRedisStore = redis !== null && process.env.NODE_ENV !== "test";
 const limiter = createGeneralLimiter(
   useRedisStore
     ? {
-        store: new RedisStore({
-          prefix: `${env.REDIS_PREFIX}:rl:schools-api:general:`,
-          sendCommand: (command: string, ...args: string[]) =>
-            redis!.call(command, ...args) as Promise<RedisReply>,
-        }),
+        store: createRedisRateLimitStore(redis!, `${env.REDIS_PREFIX}:rl:schools-api:general:`),
         passOnStoreError: true,
       }
     : {},

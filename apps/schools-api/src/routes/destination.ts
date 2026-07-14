@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, PassStatus } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { DestinationResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
@@ -111,7 +111,7 @@ router.delete(
     }
 
     const passRef = await prisma.pass.findFirst({
-      where: { destinationId: id, status: { in: ["PENDING", "WAITING", "ACTIVE"] } },
+      where: { destinationId: id, status: { in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE] } },
     });
 
     if (passRef) {

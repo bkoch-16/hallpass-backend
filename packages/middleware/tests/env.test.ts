@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { baseEnvSchema } from "../src/env";
+import { baseEnvSchema, rateLimitEnvSchema } from "../src/env";
 
 /**
  * Common denominator of the three apps' env schemas (user-api, schools-api,
@@ -83,5 +83,24 @@ describe("baseEnvSchema", () => {
       const result = extended.safeParse({ INTERNAL_SECRET: "shh" });
       expect(result.success).toBe(false);
     });
+  });
+});
+
+describe("rateLimitEnvSchema", () => {
+  it("accepts env without REDIS_URL (in-memory fallback)", () => {
+    expect(rateLimitEnvSchema.safeParse(validEnv).success).toBe(true);
+  });
+
+  it("requires REDIS_PREFIX when REDIS_URL is set", () => {
+    expect(
+      rateLimitEnvSchema.safeParse({ ...validEnv, REDIS_URL: "redis://localhost:6379" }).success,
+    ).toBe(false);
+    expect(
+      rateLimitEnvSchema.safeParse({
+        ...validEnv,
+        REDIS_URL: "redis://localhost:6379",
+        REDIS_PREFIX: "local",
+      }).success,
+    ).toBe(true);
   });
 });

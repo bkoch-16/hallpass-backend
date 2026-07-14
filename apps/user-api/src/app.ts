@@ -11,8 +11,8 @@ import {
   createAuthLimiter,
   corsOptions,
   createRateLimitRedis,
+  createRedisRateLimitStore,
 } from "@hallpass/express-middleware";
-import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
 import userRouter from "./routes/user.js";
@@ -42,11 +42,7 @@ app.get("/health", createHealthRoute("user-api"));
 const useRedisStore = redis !== null && process.env.NODE_ENV !== "test";
 
 function redisStore(suffix: string) {
-  return new RedisStore({
-    prefix: `${env.REDIS_PREFIX}:rl:user-api:${suffix}:`,
-    sendCommand: (command: string, ...args: string[]) =>
-      redis!.call(command, ...args) as Promise<RedisReply>,
-  });
+  return createRedisRateLimitStore(redis!, `${env.REDIS_PREFIX}:rl:user-api:${suffix}:`);
 }
 
 const limiter = createGeneralLimiter(

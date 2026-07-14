@@ -25,7 +25,15 @@ function sessionToken(req: Request): string | undefined {
       const name = part.slice(0, eq).trim();
       if (name.includes("session_token")) {
         const value = part.slice(eq + 1).trim();
-        if (value) return decodeURIComponent(value);
+        if (value) {
+          try {
+            return decodeURIComponent(value);
+          } catch {
+            // Malformed percent-encoding in attacker-controlled input — skip this
+            // cookie rather than letting URIError escape the keyGenerator as a 500.
+            continue;
+          }
+        }
       }
     }
   }
@@ -55,6 +63,16 @@ export interface RateLimiterOptions {
   passOnStoreError?: boolean;
 }
 
+/** Options forwarded to rateLimit() only when explicitly provided, so express-rate-limit's defaults (in-memory store, fail-closed) stay in effect otherwise. */
+function storeOverrides(options: RateLimiterOptions) {
+  return {
+    ...(options.store ? { store: options.store } : {}),
+    ...(options.passOnStoreError !== undefined
+      ? { passOnStoreError: options.passOnStoreError }
+      : {}),
+  };
+}
+
 /**
  * General API limiter: keys per session (a hash of the better-auth session
  * token) so users behind a shared IP (e.g. a school NAT) don't exhaust each
@@ -82,10 +100,7 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
     legacyHeaders: false,
     message: { message: "Too many requests" },
     keyGenerator: sessionOrIpKey,
-    ...(options.store ? { store: options.store } : {}),
-    ...(options.passOnStoreError !== undefined
-      ? { passOnStoreError: options.passOnStoreError }
-      : {}),
+    ...storeOverrides(options),
   });
 }
 
@@ -110,9 +125,6 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
           : "";
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
-    ...(options.store ? { store: options.store } : {}),
-    ...(options.passOnStoreError !== undefined
-      ? { passOnStoreError: options.passOnStoreError }
-      : {}),
+    ...storeOverrides(options),
   });
 }

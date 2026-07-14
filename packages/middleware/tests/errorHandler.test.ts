@@ -48,4 +48,26 @@ describe("createErrorHandler", () => {
     expect(logger.error).toHaveBeenCalledOnce();
     expect(logger.error).toHaveBeenCalledWith(boom, "Unhandled route error");
   });
+
+  it("delegates to next(err) when headers are already sent", async () => {
+    const logger = { error: vi.fn() };
+    const app = express();
+    app.get("/late", (_req, res, next) => {
+      res.status(200);
+      res.end("partial");
+      next(new Error("late boom"));
+    });
+    app.use(
+      createErrorHandler(
+        logger as unknown as Parameters<typeof createErrorHandler>[0],
+      ),
+    );
+
+    const res = await request(app).get("/late");
+
+    // Express's finalhandler ends the started response; our handler must not
+    // attempt res.status(500).json() on it (which would throw ERR_HTTP_HEADERS_SENT).
+    expect(res.status).toBe(200);
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
 });

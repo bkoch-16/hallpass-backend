@@ -7,25 +7,36 @@ const { mockGetSession, mockRedisStore } = vi.hoisted(() => ({
   mockRedisStore: vi.fn(),
 }));
 
-vi.mock("rate-limit-redis", () => ({
-  RedisStore: class MockRedisStore {
-    init = vi.fn();
-    get = vi.fn();
-    increment = vi.fn();
-    decrement = vi.fn();
-    resetKey = vi.fn();
-    constructor(options: unknown) {
-      mockRedisStore(options);
-    }
-  },
-}));
-
 vi.mock("ioredis", () => ({
   default: class {
     on = vi.fn();
     call = vi.fn();
   },
 }));
+
+vi.mock("@hallpass/express-middleware", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@hallpass/express-middleware")>();
+  return {
+    ...actual,
+    createRedisRateLimitStore: (
+      redis: { call: (...args: unknown[]) => unknown },
+      prefix: string,
+    ) => {
+      const options = {
+        prefix,
+        sendCommand: (command: string, ...args: string[]) => redis.call(command, ...args),
+      };
+      mockRedisStore(options);
+      return {
+        init: vi.fn(),
+        get: vi.fn(),
+        increment: vi.fn(),
+        decrement: vi.fn(),
+        resetKey: vi.fn(),
+      };
+    },
+  };
+});
 
 vi.mock("@hallpass/auth", () => ({
   createAuth: vi.fn(() => ({ api: { getSession: mockGetSession } })),

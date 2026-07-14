@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { logger } from "@hallpass/logger";
 
 /**
@@ -17,4 +18,16 @@ export function createRateLimitRedis(env: { REDIS_URL?: string }): Redis | null 
     logger.error(err, "[redis] connection error");
   });
   return redis;
+}
+
+/**
+ * rate-limit-redis Store over an ioredis client. Each limiter needs its own
+ * instance (rate-limit-redis stores can't be shared between limiters).
+ */
+export function createRedisRateLimitStore(redis: Redis, prefix: string): RedisStore {
+  return new RedisStore({
+    prefix,
+    sendCommand: (command: string, ...args: string[]) =>
+      redis.call(command, ...args) as Promise<RedisReply>,
+  });
 }
