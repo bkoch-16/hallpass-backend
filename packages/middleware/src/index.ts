@@ -18,7 +18,9 @@ export {
 export {
   createGeneralLimiter,
   createAuthLimiter,
+  createIpRateLimiter,
   type RateLimiterOptions,
+  type IpRateLimiterOptions,
 } from "./rateLimit.js";
 export { baseEnvSchema, rateLimitEnvSchema } from "./env.js";
 export { createRateLimitRedis, createRedisRateLimitStore } from "./redis.js";

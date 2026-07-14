@@ -29,6 +29,7 @@
     "@types/express": "latest",
     "@types/node": "latest",
     "@types/supertest": "^6.0.3",
+    "rate-limit-redis": "^4.3.1",
     "supertest": "^7.2.2",
     "tsx": "latest",
     "typescript": "latest",

@@ -5,8 +5,9 @@ import { logger } from "@hallpass/logger";
 /**
  * Rate-limit store client. Returns null when REDIS_URL is unset (local
  * `pnpm dev`, tests), in which case limiters fall back to express-rate-limit's
- * in-memory store. Used by user-api and schools-api (optional Redis); passes-api
- * has its own required-Redis client for slots/queue.
+ * in-memory store. Used by user-api only now (optional Redis); passes-api has
+ * its own required-Redis client for slots/queue, and schools-api has its own
+ * required-Redis client (apps/schools-api/src/lib/redis.ts).
  */
 export function createRateLimitRedis(env: { REDIS_URL?: string }): Redis | null {
   if (!env.REDIS_URL) return null;

@@ -8,18 +8,19 @@ const { mockRedisStore } = vi.hoisted(() => ({
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
-vi.mock("@hallpass/express-middleware", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@hallpass/express-middleware")>();
+// createRedisRateLimitStore (packages/middleware/src/redis.ts) constructs a
+// `RedisStore` from the `rate-limit-redis` npm package. Mocking that package
+// directly — rather than the `@hallpass/express-middleware` barrel's
+// `createRedisRateLimitStore` export — intercepts store construction
+// regardless of which internal module calls `new RedisStore(...)`: both the
+// general limiter (app.ts calls createRedisRateLimitStore directly) and the
+// public-school-data limiter (routed through createIpRateLimiter's own
+// relative `./redis.js` import, which bypasses a mock of the package barrel).
+vi.mock("rate-limit-redis", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("rate-limit-redis")>();
   return {
     ...actual,
-    createRedisRateLimitStore: (
-      redis: { call: (...args: unknown[]) => unknown },
-      prefix: string,
-    ) => {
-      const options = {
-        prefix,
-        sendCommand: (command: string, ...args: string[]) => redis.call(command, ...args),
-      };
+    RedisStore: vi.fn().mockImplementation(function (options: { prefix: string; sendCommand: unknown }) {
       mockRedisStore(options);
       return {
         init: vi.fn(),
@@ -27,8 +28,10 @@ vi.mock("@hallpass/express-middleware", async (importOriginal) => {
         increment: vi.fn(),
         decrement: vi.fn(),
         resetKey: vi.fn(),
+        incrementScriptSha: Promise.resolve(),
+        getScriptSha: Promise.resolve(),
       };
-    },
+    }),
   };
 });
 

@@ -237,11 +237,14 @@ Recipe (per environment; dev secrets carry a `_DEV` suffix, prod secrets are uns
 
 ### Redis-backed rate limiting on user-api / schools-api (one-time)
 
-These two services now use a Redis rate-limit store **when `REDIS_URL` is set**
-(optional — they fall back to in-memory otherwise, so this is safe to run before or
-after the deploy; the extra env is ignored by the current revision until the new code
-ships). No IAM grant needed — they run as the compute SA, which already has
-`secretAccessor` on `REDIS_URL`/`REDIS_URL_DEV`.
+`user-api` uses a Redis rate-limit store **when `REDIS_URL` is set** (optional —
+it falls back to in-memory otherwise, so this is safe to run before or after the
+deploy; the extra env is ignored by the current revision until the new code
+ships). `schools-api` now **requires** `REDIS_URL`/`REDIS_PREFIX` (no in-memory
+fallback — see "schools-api: PARENT_TOOL_API_KEY" below), so its update must run
+before deploying that change or the revision fails to boot. No IAM grant needed
+for either — they run as the compute SA, which already has `secretAccessor` on
+`REDIS_URL`/`REDIS_URL_DEV`.
 
 ```bash
 # dev
