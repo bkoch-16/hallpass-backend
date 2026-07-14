@@ -8,8 +8,8 @@ import {
   createErrorHandler,
   createGeneralLimiter,
   corsOptions,
+  createRedisRateLimitStore,
 } from "@hallpass/express-middleware";
-import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { env } from "./env.js";
 import { redis } from "./lib/redis.js";
 import passesRouter from "./routes/passes.js";
@@ -40,11 +40,7 @@ const limiter = createGeneralLimiter(
   process.env.NODE_ENV === "test"
     ? {}
     : {
-        store: new RedisStore({
-          prefix: `${env.REDIS_PREFIX}:rl:passes-api:general:`,
-          sendCommand: (command: string, ...args: string[]) =>
-            redis.call(command, ...args) as Promise<RedisReply>,
-        }),
+        store: createRedisRateLimitStore(redis, `${env.REDIS_PREFIX}:rl:passes-api:general:`),
         // fail-open — an Upstash outage must not take down the API; slots/queue paths have their own Redis dependency semantics
         passOnStoreError: true,
       },

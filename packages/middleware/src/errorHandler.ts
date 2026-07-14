@@ -9,8 +9,12 @@ interface ErrorLogger {
 }
 
 export function createErrorHandler(logger: ErrorLogger) {
-  return (err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  return (err: Error, _req: Request, res: Response, next: NextFunction) => {
     logger.error(err, "Unhandled route error");
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
     res.status(500).json({ message: "Internal server error" });
   };
 }

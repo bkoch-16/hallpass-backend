@@ -196,6 +196,17 @@ describe("createGeneralLimiter", () => {
 
     expect(res.status).toBe(500);
   });
+
+  it("treats a malformed session_token cookie as anonymous instead of throwing", async () => {
+    const app = generalApp({ limit: 2 });
+
+    const res = await request(app)
+      .get("/")
+      .set("cookie", "better-auth.session_token=%");
+
+    // Must not 500 (URIError); falls back to IP keying
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("createAuthLimiter", () => {

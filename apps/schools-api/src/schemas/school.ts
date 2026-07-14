@@ -13,9 +13,11 @@ export const listSchoolsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+const IANA_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+
 const timezoneSchema = z
   .string()
-  .refine((tz) => Intl.supportedValuesOf("timeZone").includes(tz), {
+  .refine((tz) => IANA_TIMEZONES.has(tz), {
     message: "timezone must be a valid IANA time zone",
   })
   .optional();

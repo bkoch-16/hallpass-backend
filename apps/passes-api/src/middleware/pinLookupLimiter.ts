@@ -1,6 +1,6 @@
 import rateLimit, { ipKeyGenerator, Store } from "express-rate-limit";
 import { Request } from "express";
-import { RedisStore, type RedisReply } from "rate-limit-redis";
+import { createRedisRateLimitStore } from "@hallpass/express-middleware";
 import { redis } from "../lib/redis.js";
 import { env } from "../env.js";
 
@@ -23,11 +23,7 @@ export function createPinLookupLimiter(options: PinLookupLimiterOptions = {}) {
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ""),
-    store: options.store ?? new RedisStore({
-      prefix: KEY_PREFIX,
-      sendCommand: (command: string, ...args: string[]) =>
-        redis.call(command, ...args) as Promise<RedisReply>,
-    }),
+    store: options.store ?? createRedisRateLimitStore(redis, KEY_PREFIX),
     // Default (passOnStoreError: false) already fails closed — a store error
     // throws and propagates to the app's error handler as a 500, rather than
     // silently letting PIN-guessing requests through.

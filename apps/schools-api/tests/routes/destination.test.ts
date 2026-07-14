@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { passStatusMock } from "../utils/passStatusMock.js";
 import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
@@ -7,6 +8,7 @@ const { mockGetSession } = vi.hoisted(() => ({
 }));
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
   prisma: {
     user: { findFirst: vi.fn() },
     school: { findFirst: vi.fn() },

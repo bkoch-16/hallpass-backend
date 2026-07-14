@@ -174,7 +174,7 @@ router.post(
         },
       });
       if (!student) {
-        res.status(422).json({ message: "Student not found" });
+        res.status(404).json({ message: "Student not found" });
         return;
       }
       studentId = student.id;
@@ -218,7 +218,7 @@ router.post(
       where: { id: req.body.destinationId, schoolId, deletedAt: null },
     });
     if (!destination) {
-      res.status(422).json({ message: "Destination not found" });
+      res.status(404).json({ message: "Destination not found" });
       return;
     }
 
