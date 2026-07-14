@@ -895,6 +895,35 @@ const CONFIG = {
           "pathVariables": [],
           "queryParams": [],
           "body": null
+        },
+        {
+          "name": "Parent Lookup",
+          "order": 9000,
+          "method": "GET",
+          "url": "{{Base}}/api/passes/parent-lookup",
+          "description": "External voice-AI parent tool endpoint. Looks up a student by PIN and returns their pass history. Auth is an X-Api-Key header (PARENT_TOOL_API_KEY), not a session — set ParentToolApiKey in the environment. Rate-limited by IP to throttle PIN guessing. Query params — pin (required, the student's PIN), cursor (pagination cursor from previous response), limit (default 50, max 100). Returns {student, passes, nextCursor}; 400 missing pin, 401 bad key, 404 no student matches the pin, 429 too many attempts.",
+          "headers": [
+            {
+              "key": "X-Api-Key",
+              "value": "{{ParentToolApiKey}}"
+            }
+          ],
+          "pathVariables": [],
+          "queryParams": [
+            {
+              "key": "pin",
+              "value": "1234"
+            },
+            {
+              "key": "cursor",
+              "value": ""
+            },
+            {
+              "key": "limit",
+              "value": "50"
+            }
+          ],
+          "body": null
         }
       ]
     },
