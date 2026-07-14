@@ -1,29 +1,18 @@
-import { timingSafeEqual, createHash } from "node:crypto";
-import { Router, Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import { prisma, PassStatus } from "@hallpass/db";
 import { schedulePassExpiry } from "../lib/queue.js";
 import { reconcileSlots, reconcileSchoolSlots, promoteFromQueue } from "../lib/slots.js";
 import { periodEndDate } from "../lib/time.js";
+import { createRequireApiKey } from "../middleware/apiKey.js";
 import { env } from "../env.js";
 
 const router = Router();
 
-function requireInternalSecret(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  const rawAuth = req.headers["authorization"];
-  const provided = typeof rawAuth === "string" ? rawAuth : "";
-  const expected = `Bearer ${env.INTERNAL_SECRET}`;
-  const hash = (s: string) => createHash("sha256").update(s).digest();
-  const valid = timingSafeEqual(hash(provided), hash(expected));
-  if (!valid) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  next();
-}
+const requireInternalSecret = createRequireApiKey(
+  env.INTERNAL_SECRET,
+  "authorization",
+  "Bearer ",
+);
 
 const RECONCILE_BATCH_SIZE = 500;
 

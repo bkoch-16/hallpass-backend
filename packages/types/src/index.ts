@@ -131,6 +131,22 @@ export interface PassResponse {
   expiredAt: Date | null;
 }
 
+export interface ParentLookupPass {
+  id: number;
+  destination: string;
+  status: PassStatus;
+  requestedAt: Date;
+  activatedAt: Date | null;
+  returnedAt: Date | null;
+  durationMinutes: number | null;
+}
+
+export interface ParentLookupResponse {
+  student: { id: number; name: string | null };
+  passes: ParentLookupPass[];
+  nextCursor: string | null;
+}
+
 // ─── Request bodies ───────────────────────────────────────────────────────────
 
 export interface CreateDistrictBody {

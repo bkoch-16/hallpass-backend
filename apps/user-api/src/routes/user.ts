@@ -5,6 +5,7 @@ import type { UserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "../middleware/roleGuard.js";
 import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
+import { createUserWithPin } from "../lib/pin.js";
 import {
   bulkCreateSchema,
   createUserSchema,
@@ -131,15 +132,18 @@ router.post(
     }
 
     try {
-      const user = await prisma.user.create({
-        data: {
-          email: req.body.email,
-          name: req.body.name,
-          role: targetRole,
-          ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
-        },
-        select: USER_SELECT,
-      });
+      const user = await createUserWithPin(targetRole, (pinCode) =>
+        prisma.user.create({
+          data: {
+            email: req.body.email,
+            name: req.body.name,
+            role: targetRole,
+            ...(isSuperAdmin ? {} : { schoolId: req.user!.schoolId }),
+            ...(pinCode ? { pinCode } : {}),
+          },
+          select: USER_SELECT,
+        }),
+      );
       res.status(201).json(toUserResponse(user));
     } catch (err: unknown) {
       if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
@@ -168,17 +172,21 @@ router.post(
     }
 
     const results = await Promise.allSettled(
-      users.map((u) =>
-        prisma.user.create({
-          data: {
-            email: u.email,
-            name: u.name,
-            role: u.role ?? UserRole.STUDENT,
-            ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
-          },
-          select: USER_SELECT,
-        }),
-      ),
+      users.map((u) => {
+        const role = u.role ?? UserRole.STUDENT;
+        return createUserWithPin(role, (pinCode) =>
+          prisma.user.create({
+            data: {
+              email: u.email,
+              name: u.name,
+              role,
+              ...(req.user!.role === UserRole.SUPER_ADMIN ? {} : { schoolId: req.user!.schoolId }),
+              ...(pinCode ? { pinCode } : {}),
+            },
+            select: USER_SELECT,
+          }),
+        );
+      }),
     );
 
     const created = results.filter((r) => r.status === "fulfilled").length;
