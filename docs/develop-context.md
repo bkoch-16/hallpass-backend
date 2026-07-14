@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-14T18:17:37.114Z — 18 files indexed_
+_Generated: 2026-07-14T19:28:18.182Z — 18 files indexed_
 
 ## File Summaries
 
@@ -30,15 +30,15 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and error handling using shared `@hallpass/express-middleware` utilities. Implements two-tier rate limiting (general and strict auth) with optional Redis-backed stores (via `rate-limit-redis` and Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset; each limiter gets its own namespaced RedisStore instance. Routes all `/api/auth/*` requests to better-auth via `toNodeHandler`, applies the strict auth limiter only to credential-sensitive POST endpoints (sign-in, sign-up, password reset/change), and mounts a user router at `/api/users`. The health route is registered before rate limiters to avoid 429s from load-balancer probes. Developers modifying this file should note the dependency on `./env.js` for environment config, `./auth.js` for the auth instance, and the trust-proxy setting for correct client IP detection behind a reverse proxy.
+Main Express application setup for the user-api service. Configures middleware in order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), Redis-backed rate limiters (general + stricter auth-specific), better-auth handler for `/api/auth/*`, user routes at `/api/users`, and error handling. Rate limiting uses Redis when available (namespaced by REDIS_PREFIX) and falls back to in-memory stores in test or when REDIS_URL is unset; each limiter requires its own RedisStore instance. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Developers modifying this file should note the middleware ordering matters (e.g., health route before limiter), and that the auth limiter only applies to specific POST credential endpoints while GET session requests use the general limiter.
 
 ### `apps/user-api/src/auth.ts`
 
-Initializes and exports the singleton `auth` instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Configures it with the shared Prisma client, environment-driven base URL, secret, and trusted origins. CORS origins are parsed via `@hallpass/express-middleware`; a wildcard `*` disables the trusted-origins list. Developers modifying this file should ensure `env` variables (`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `CORS_ORIGIN`) are set and that downstream middleware/routes import `auth` from here.
+Creates and exports the better-auth instance for the user-api service. Uses `createAuth` from `@hallpass/auth` configured with the shared Prisma client, base URL, secret, and trusted origins parsed from environment variables. Trusted origins are passed as a concrete array or undefined (for allow-all), since better-auth's `trustedOrigins` doesn't accept wildcard strings. Depends on `@hallpass/db` for the Prisma instance and `@hallpass/express-middleware` for CORS origin parsing.
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports the environment configuration for the user-api service using Zod schemas from `@hallpass/express-middleware`. Extends `baseEnvSchema` with optional Redis environment variables (REDIS_URL, REDIS_PREFIX) and applies a refinement ensuring REDIS_PREFIX is provided whenever REDIS_URL is set. The parsed `env` object is used throughout the app for type-safe environment access. When modifying, ensure any new required environment variables are added to the schema and reflected in docker-compose.yml and deployment configs.
+Parses and validates environment variables for the user-api service using the `rateLimitEnvSchema` Zod schema from `@hallpass/express-middleware`. Exports a single typed `env` object used throughout the app for configuration. Any new environment variables needed by this service that relate to rate limiting or shared middleware config should be added to the upstream schema; service-specific vars may require extending it.
 
 ### `apps/user-api/src/index.ts`
 

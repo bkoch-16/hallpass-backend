@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-14T18:17:37.114Z",
+  "generatedAt": "2026-07-14T19:28:18.182Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "ef6d76ebe43866883a585dca25bd19f128265bb8",
       "summary": "Defines the complete PostgreSQL database schema for the HallPass application using Prisma ORM. Models include District, School, User, Session, Account, ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass, representing a school hall-pass management system. Key enums are Role (STUDENT through SERVICE), PolicyInterval (DAY/WEEK/MONTH), and PassStatus (PENDING through EXPIRED). The Pass model has multiple named relations to User (student, requester, approver, denier, canceller) and a critical partial unique index (`one_active_pass_per_student`) that exists only in a migration SQL, not expressible in Prisma schema — developers must manually delete any auto-generated DROP of this index in new migrations. Passes intentionally lack a `deletedAt` field; their lifecycle terminates via status and corresponding timestamps. Soft-delete via `deletedAt` is used on District, School, User, ScheduleType, Period, and Destination."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "fa66b9160325914469c6f3f2d70a5d62b7ce8304",
-      "summary": "Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and error handling using shared `@hallpass/express-middleware` utilities. Implements two-tier rate limiting (general and strict auth) with optional Redis-backed stores (via `rate-limit-redis` and Upstash) that fall back to in-memory stores in test or when REDIS_URL is unset; each limiter gets its own namespaced RedisStore instance. Routes all `/api/auth/*` requests to better-auth via `toNodeHandler`, applies the strict auth limiter only to credential-sensitive POST endpoints (sign-in, sign-up, password reset/change), and mounts a user router at `/api/users`. The health route is registered before rate limiters to avoid 429s from load-balancer probes. Developers modifying this file should note the dependency on `./env.js` for environment config, `./auth.js` for the auth instance, and the trust-proxy setting for correct client IP detection behind a reverse proxy."
+      "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
+      "summary": "Main Express application setup for the user-api service. Configures middleware in order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), Redis-backed rate limiters (general + stricter auth-specific), better-auth handler for `/api/auth/*`, user routes at `/api/users`, and error handling. Rate limiting uses Redis when available (namespaced by REDIS_PREFIX) and falls back to in-memory stores in test or when REDIS_URL is unset; each limiter requires its own RedisStore instance. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Developers modifying this file should note the middleware ordering matters (e.g., health route before limiter), and that the auth limiter only applies to specific POST credential endpoints while GET session requests use the general limiter."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "f451e42bf583bd59b082ed6574c64d8d12d5284d",
-      "summary": "Initializes and exports the singleton `auth` instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Configures it with the shared Prisma client, environment-driven base URL, secret, and trusted origins. CORS origins are parsed via `@hallpass/express-middleware`; a wildcard `*` disables the trusted-origins list. Developers modifying this file should ensure `env` variables (`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `CORS_ORIGIN`) are set and that downstream middleware/routes import `auth` from here."
+      "blobSha": "4b56fc75ad42b0712cc21ef54da2cd21098796c9",
+      "summary": "Creates and exports the better-auth instance for the user-api service. Uses `createAuth` from `@hallpass/auth` configured with the shared Prisma client, base URL, secret, and trusted origins parsed from environment variables. Trusted origins are passed as a concrete array or undefined (for allow-all), since better-auth's `trustedOrigins` doesn't accept wildcard strings. Depends on `@hallpass/db` for the Prisma instance and `@hallpass/express-middleware` for CORS origin parsing."
     },
     "apps/user-api/src/env.ts": {
-      "blobSha": "c11915b134fca8741d145961d48de389c7781e71",
-      "summary": "Validates and exports the environment configuration for the user-api service using Zod schemas from `@hallpass/express-middleware`. Extends `baseEnvSchema` with optional Redis environment variables (REDIS_URL, REDIS_PREFIX) and applies a refinement ensuring REDIS_PREFIX is provided whenever REDIS_URL is set. The parsed `env` object is used throughout the app for type-safe environment access. When modifying, ensure any new required environment variables are added to the schema and reflected in docker-compose.yml and deployment configs."
+      "blobSha": "3a58d73a90ec416d9aab3e8acd42553bf068fe23",
+      "summary": "Parses and validates environment variables for the user-api service using the `rateLimitEnvSchema` Zod schema from `@hallpass/express-middleware`. Exports a single typed `env` object used throughout the app for configuration. Any new environment variables needed by this service that relate to rate limiting or shared middleware config should be added to the upstream schema; service-specific vars may require extending it."
     },
     "apps/user-api/src/index.ts": {
       "blobSha": "c4e0fcb6b67a339a5e32acb8a68967d401e40747",
