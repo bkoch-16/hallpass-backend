@@ -27,6 +27,7 @@ import {
   getMaxActivePasses,
 } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
+import { paginate } from "../lib/pagination.js";
 import { schedulePassExpiry } from "../lib/queue.js";
 import {
   periodEndDate,
@@ -326,9 +327,7 @@ router.get(
       select: PASS_SELECT,
     });
 
-    const hasMore = passes.length > take;
-    const data = hasMore ? passes.slice(0, take) : passes;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(passes, take);
 
     res.json({
       data: data.map(toPassResponse),
@@ -381,9 +380,7 @@ router.get(
       },
     });
 
-    const hasMore = passes.length > take;
-    const data = hasMore ? passes.slice(0, take) : passes;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(passes, take);
 
     const parentLookupPasses: ParentLookupPass[] = data.map((pass) => ({
       id: pass.id,
