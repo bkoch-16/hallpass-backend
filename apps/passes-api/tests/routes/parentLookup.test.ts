@@ -2,8 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { passStatusMock } from "../utils/passStatusMock.js";
 
-const { mockGetSession } = vi.hoisted(() => ({
+const { mockGetSession, mockRedisEval } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
+  mockRedisEval: vi.fn(),
+}));
+
+// The parent-lookup route runs behind the pin-lookup rate limiter, whose
+// RedisStore calls redis.eval. Mock the ioredis client so the route tests
+// don't depend on a live Redis (CI has none); an unmocked eval rejects and the
+// limiter fails closed with a 500. See pinLookupLimiter.test.ts.
+vi.mock("../../src/lib/redis.js", () => ({
+  redis: {
+    eval: mockRedisEval,
+    del: vi.fn(),
+  },
 }));
 
 vi.mock("@hallpass/db", () => ({
@@ -83,6 +95,10 @@ beforeEach(() => {
   // resetAllMocks wipes mockGetSession's resolved value from prior tests —
   // this route never calls it, but reset defensively to avoid cross-test leakage.
   mockGetSession.mockResolvedValue(null);
+  // resetAllMocks clears the eval implementation; restore it each test. Returns
+  // [count, ttl] as the limiter's Lua INCREMENT script does — a count of 1 keeps
+  // every request under the limit.
+  mockRedisEval.mockResolvedValue([1, 15 * 60 * 1000]);
 });
 
 describe("GET /api/passes/parent-lookup", () => {
