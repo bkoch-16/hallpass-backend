@@ -25,9 +25,20 @@ export function createRateLimitRedis(env: { REDIS_URL?: string }): Redis | null 
  * instance (rate-limit-redis stores can't be shared between limiters).
  */
 export function createRedisRateLimitStore(redis: Redis, prefix: string): RedisStore {
-  return new RedisStore({
+  const store = new RedisStore({
     prefix,
     sendCommand: (command: string, ...args: string[]) =>
       redis.call(command, ...args) as Promise<RedisReply>,
   });
+  // RedisStore's constructor fires unawaited SCRIPT LOAD commands and stores the
+  // pending promises on incrementScriptSha/getScriptSha. If a limiter is built at
+  // module load (before any request awaits those promises via retryableIncrement)
+  // and the initial Redis command fails, Node reports an unhandled rejection with
+  // nothing listening yet, which our process-level handler treats as fatal. These
+  // no-op catches only suppress that early "unhandled" report; retryableIncrement
+  // still awaits the same promises per-request, so a genuine outage still fails
+  // closed with a 500 as intended.
+  store.incrementScriptSha.catch(() => {});
+  store.getScriptSha.catch(() => {});
+  return store;
 }
