@@ -89,9 +89,11 @@ also uses Redis for slot counters and the socket.io adapter.
 
 `schools-api` additionally **requires** `PARENT_TOOL_API_KEY` — the same key
 `passes-api` uses for its `parent-lookup` endpoint (see below), accepted as an
-alternative to a session on `GET /api/schools/:schoolId/calendar` and
-`GET /api/schools/:schoolId/schedule-types` so the parent-tool voice AI can
-read school calendar/schedule-type data without a session.
+alternative to a session on `GET /api/schools/:schoolId/calendar`,
+`GET /api/schools/:schoolId/schedule-types`, and
+`GET /api/schools/:schoolId/schedule-types/:scheduleTypeId/periods` so the
+parent-tool voice AI can read school calendar/schedule-type/period data
+without a session.
 
 ## Architecture
 

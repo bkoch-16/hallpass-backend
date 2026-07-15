@@ -1,15 +1,21 @@
 $kind: http-request
-url: "{{Base}}/api/passes/parent-lookup"
+name: Parent Lookup
+url: "{{Base}}/api/passes/parent-lookup?pin=482913&cursor=&limit=50"
 method: GET
 description: External voice-AI parent tool endpoint. Looks up a student by PIN and returns their pass history. Auth is an X-Api-Key header (PARENT_TOOL_API_KEY), not a session — set ParentToolApiKey in the environment. Rate-limited by IP to throttle PIN guessing. Query params — pin (required, the student's PIN), cursor (pagination cursor from previous response), limit (default 50, max 100). Returns {student, passes, nextCursor}; 400 missing pin, 401 bad key, 404 no student matches the pin, 429 too many attempts.
 headers:
-  - key: X-Api-Key
-    value: "{{ParentToolApiKey}}"
+  X-Api-Key: "{{ParentToolApiKey}}"
 queryParams:
   - key: pin
-    value: "1234"
+    value: "482913"
+    disabled: false
+    description: ""
   - key: cursor
     value: ""
+    disabled: false
+    description: ""
   - key: limit
     value: "50"
+    disabled: false
+    description: ""
 order: 9000

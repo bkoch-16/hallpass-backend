@@ -3,3 +3,6 @@ values:
   - key: Base
     value: 'http://localhost:3002'
     enabled: true
+  - key: ParentToolApiKey
+    value: ''
+    enabled: true
