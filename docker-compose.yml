@@ -63,6 +63,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       REDIS_URL: redis://redis:6379
       REDIS_PREFIX: local
+      PARENT_TOOL_API_KEY: ${PARENT_TOOL_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

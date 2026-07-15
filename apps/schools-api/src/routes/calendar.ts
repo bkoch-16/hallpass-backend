@@ -2,11 +2,26 @@ import { Router, Request, Response } from "express";
 import { prisma, Prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { SchoolCalendarResponse, BulkUpsertResult } from "@hallpass/types";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAuthOrApiKey } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
-import { requireSchoolAccess } from "../middleware/schoolScope.js";
-import { calendarBulkSchema, calendarIdSchema, calendarQuerySchema, updateCalendarSchema } from "../schemas/calendar.js";
+import {
+  validateBody,
+  validateParams,
+  validateQuery,
+} from "@hallpass/express-middleware";
+import {
+  requireSchoolAccess,
+  requireSchoolAccessIfSession,
+} from "../middleware/schoolScope.js";
+import { createPublicSchoolDataLimiter } from "../middleware/publicSchoolDataLimiter.js";
+import {
+  calendarBulkSchema,
+  calendarIdSchema,
+  calendarQuerySchema,
+  updateCalendarSchema,
+} from "../schemas/calendar.js";
+
+const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
 const router = Router({ mergeParams: true });
 
@@ -18,16 +33,29 @@ const CALENDAR_SELECT = {
   note: true,
 } as const;
 
-type CalendarRow = { id: number; schoolId: number; date: Date; scheduleTypeId: number | null; note: string | null };
+type CalendarRow = {
+  id: number;
+  schoolId: number;
+  date: Date;
+  scheduleTypeId: number | null;
+  note: string | null;
+};
 
 function toCalendarResponse(c: CalendarRow): SchoolCalendarResponse {
-  return { id: c.id, schoolId: c.schoolId, date: c.date, scheduleTypeId: c.scheduleTypeId, note: c.note };
+  return {
+    id: c.id,
+    schoolId: c.schoolId,
+    date: c.date,
+    scheduleTypeId: c.scheduleTypeId,
+    note: c.note,
+  };
 }
 
 router.get(
   "/",
-  requireAuth,
-  requireSchoolAccess,
+  requireAuthOrApiKey,
+  requireSchoolAccessIfSession,
+  (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
   validateQuery(calendarQuerySchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
@@ -62,11 +90,16 @@ router.post(
 
     // Validate every referenced schedule type up front, in one query, before
     // any write — so a bad id returns 422 without leaving partial state.
-    const byDate = new Map<number, { date: Date; scheduleTypeId: number | null; note: string | null }>();
+    const byDate = new Map<
+      number,
+      { date: Date; scheduleTypeId: number | null; note: string | null }
+    >();
     for (const e of entries) {
       const date = new Date(e.date);
       if (byDate.has(date.getTime())) {
-        res.status(422).json({ message: `Duplicate date ${e.date} in request` });
+        res
+          .status(422)
+          .json({ message: `Duplicate date ${e.date} in request` });
         return;
       }
       byDate.set(date.getTime(), {
@@ -79,7 +112,9 @@ router.post(
 
     const scheduleTypeIds = [
       ...new Set(
-        validatedEntries.filter((e) => e.scheduleTypeId != null).map((e) => Number(e.scheduleTypeId)),
+        validatedEntries
+          .filter((e) => e.scheduleTypeId != null)
+          .map((e) => Number(e.scheduleTypeId)),
       ),
     ];
     if (scheduleTypeIds.length) {
@@ -90,11 +125,15 @@ router.post(
       for (const id of scheduleTypeIds) {
         const scheduleType = byId.get(id);
         if (!scheduleType) {
-          res.status(422).json({ message: `Schedule type ${id} not found for this school` });
+          res
+            .status(422)
+            .json({ message: `Schedule type ${id} not found for this school` });
           return;
         }
         if (scheduleType.deletedAt !== null) {
-          res.status(422).json({ message: `Schedule type ${id} has been deleted` });
+          res
+            .status(422)
+            .json({ message: `Schedule type ${id} has been deleted` });
           return;
         }
       }
@@ -102,7 +141,8 @@ router.post(
 
     const values = Prisma.join(
       validatedEntries.map(
-        (e) => Prisma.sql`(${schoolId}, ${e.date}, ${e.scheduleTypeId}, ${e.note})`,
+        (e) =>
+          Prisma.sql`(${schoolId}, ${e.date}, ${e.scheduleTypeId}, ${e.note})`,
       ),
     );
     const rows = await prisma.$queryRaw<{ inserted: boolean }[]>(
@@ -144,11 +184,19 @@ router.patch(
         where: { id: Number(req.body.scheduleTypeId), schoolId },
       });
       if (!scheduleType) {
-        res.status(422).json({ message: `Schedule type ${req.body.scheduleTypeId} not found for this school` });
+        res
+          .status(422)
+          .json({
+            message: `Schedule type ${req.body.scheduleTypeId} not found for this school`,
+          });
         return;
       }
       if (scheduleType.deletedAt !== null) {
-        res.status(422).json({ message: `Schedule type ${req.body.scheduleTypeId} has been deleted` });
+        res
+          .status(422)
+          .json({
+            message: `Schedule type ${req.body.scheduleTypeId} has been deleted`,
+          });
         return;
       }
     }

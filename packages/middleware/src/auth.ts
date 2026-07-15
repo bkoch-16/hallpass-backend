@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Request, Response, NextFunction } from "express";
 import { prisma, type User } from "@hallpass/db";
+import { matchesApiKeyHeader } from "./apiKey.js";
 
 /**
  * Minimal structural view of a better-auth instance — only what session
@@ -85,6 +86,44 @@ export function createRequireAuth(auth: SessionAuth) {
     }
 
     req.user = user;
+    next();
+  };
+}
+
+/**
+ * Create a middleware that accepts either a valid better-auth session or a
+ * static API key, for endpoints exposed both to logged-in users and a
+ * trusted external caller (e.g. a voice-AI agent) that has no session.
+ * Session takes priority: when present, req.user is set as in requireAuth.
+ * When falling back to the API key, req.user is left unset — callers
+ * downstream must treat the absence of req.user as "trusted, unscoped
+ * caller" rather than "anonymous", since this middleware already rejected
+ * anonymous requests with 401.
+ */
+export function createRequireAuthOrApiKey(
+  auth: SessionAuth,
+  apiKey: string,
+  headerName = "x-api-key",
+) {
+  return async function requireAuthOrApiKey(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    const user = await resolveSessionUser(auth, req.headers);
+    if (user) {
+      req.user = user;
+      next();
+      return;
+    }
+
+    const valid = matchesApiKeyHeader(req, headerName, apiKey);
+
+    if (!valid) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
     next();
   };
 }

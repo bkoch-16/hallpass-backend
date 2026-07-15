@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Request } from "express";
 import { rateLimit, ipKeyGenerator, type Store } from "express-rate-limit";
+import type Redis from "ioredis";
+import { createRedisRateLimitStore } from "./redis.js";
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
@@ -126,5 +128,51 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
     ...storeOverrides(options),
+  });
+}
+
+export interface IpRateLimiterOptions {
+  /** Redis client used to build the default store. Ignored when `store` is provided. */
+  redis: Redis;
+  /** Key prefix passed to createRedisRateLimitStore, e.g. `${env.REDIS_PREFIX}:rl:passes-api:parent-lookup:`. Ignored when `store` is provided. */
+  keyPrefix: string;
+  /** Window length in milliseconds. Defaults to 15 minutes. */
+  windowMs?: number;
+  /** Explicit limit override (e.g. forwarded from a call site's own options). Takes precedence over defaultLimit/testLimit. */
+  limit?: number;
+  /** Production default requests-per-window when `limit` is not given. App-specific (e.g. 10 for passes-api's PIN lookup, 60 for schools-api's public data). */
+  defaultLimit: number;
+  /** Limit used instead of defaultLimit when NODE_ENV === "test". Defaults to Number.MAX_SAFE_INTEGER so supertest suites sharing one counter per file never 429; pass an explicit `limit` to exercise rate limiting in tests. */
+  testLimit?: number;
+  /** Skip counting successful (2xx) responses toward quota. Defaults to false (count every request). */
+  skipSuccessfulRequests?: boolean;
+  /** External store override, e.g. a FakeStore in unit tests — bypasses redis/keyPrefix. */
+  store?: Store;
+}
+
+/**
+ * Shared IP-keyed rate limiter for public, unauthenticated endpoints (PIN
+ * lookup, public school data). Keys purely by IP — callers needing
+ * session-aware keying should use createGeneralLimiter/createAuthLimiter
+ * instead.
+ *
+ * Default (passOnStoreError: false) already fails closed — a store error
+ * throws and propagates to the app's error handler as a 500, rather than
+ * silently letting unlimited traffic through.
+ */
+export function createIpRateLimiter(options: IpRateLimiterOptions) {
+  const isTest = process.env.NODE_ENV === "test";
+  const resolvedDefault = isTest
+    ? options.testLimit ?? Number.MAX_SAFE_INTEGER
+    : options.defaultLimit;
+
+  return rateLimit({
+    windowMs: options.windowMs ?? FIFTEEN_MINUTES_MS,
+    limit: options.limit ?? resolvedDefault,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    ...(options.skipSuccessfulRequests ? { skipSuccessfulRequests: true } : {}),
+    keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ""),
+    store: options.store ?? createRedisRateLimitStore(options.redis, options.keyPrefix),
   });
 }

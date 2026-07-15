@@ -75,16 +75,23 @@ Common to `user-api` and `schools-api`:
 | `BETTER_AUTH_URL` | `http://localhost:3001` | No |
 | `CORS_ORIGIN` | — | Yes |
 | `PORT` | `3001` | No |
-| `REDIS_URL` | — | No — rate-limit store; falls back to in-memory when unset |
-| `REDIS_PREFIX` | — | Required only when `REDIS_URL` is set (`dev`/`prod`; `local` in docker-compose) |
 
-When `REDIS_URL` is set the rate limiters use a shared-Redis store keyed
-`<REDIS_PREFIX>:rl:<service>:<general|auth>:` so counters aggregate across
-instances and survive cold starts; unset, they use express-rate-limit's in-memory
-store (fine for local `pnpm dev` and tests). The active store is logged at boot
-(`rate-limit store: redis|in-memory`). `passes-api` additionally **requires**
-`REDIS_URL`/`REDIS_PREFIX` (see its section) since it also uses Redis for slot
-counters and the socket.io adapter.
+`REDIS_URL`/`REDIS_PREFIX` are **optional** for `user-api` (falls back to
+express-rate-limit's in-memory store when unset) but **required** for
+`schools-api` (its public, no-session calendar/schedule-type endpoints — see
+below — need Redis-backed limits that hold across cold starts/instances, not
+per-instance in-memory counters). When `REDIS_URL` is set the rate limiters use
+a shared-Redis store keyed `<REDIS_PREFIX>:rl:<service>:<general|auth|...>:` so
+counters aggregate across instances and survive cold starts. The active store
+is logged at boot (`rate-limit store: redis|in-memory`). `passes-api`
+additionally **requires** `REDIS_URL`/`REDIS_PREFIX` (see its section) since it
+also uses Redis for slot counters and the socket.io adapter.
+
+`schools-api` additionally **requires** `PARENT_TOOL_API_KEY` — the same key
+`passes-api` uses for its `parent-lookup` endpoint (see below), accepted as an
+alternative to a session on `GET /api/schools/:schoolId/calendar` and
+`GET /api/schools/:schoolId/schedule-types` so the parent-tool voice AI can
+read school calendar/schedule-type data without a session.
 
 ## Architecture
 
@@ -230,11 +237,14 @@ Recipe (per environment; dev secrets carry a `_DEV` suffix, prod secrets are uns
 
 ### Redis-backed rate limiting on user-api / schools-api (one-time)
 
-These two services now use a Redis rate-limit store **when `REDIS_URL` is set**
-(optional — they fall back to in-memory otherwise, so this is safe to run before or
-after the deploy; the extra env is ignored by the current revision until the new code
-ships). No IAM grant needed — they run as the compute SA, which already has
-`secretAccessor` on `REDIS_URL`/`REDIS_URL_DEV`.
+`user-api` uses a Redis rate-limit store **when `REDIS_URL` is set** (optional —
+it falls back to in-memory otherwise, so this is safe to run before or after the
+deploy; the extra env is ignored by the current revision until the new code
+ships). `schools-api` now **requires** `REDIS_URL`/`REDIS_PREFIX` (no in-memory
+fallback — see "schools-api: PARENT_TOOL_API_KEY" below), so its update must run
+before deploying that change or the revision fails to boot. No IAM grant needed
+for either — they run as the compute SA, which already has `secretAccessor` on
+`REDIS_URL`/`REDIS_URL_DEV`.
 
 ```bash
 # dev
@@ -251,6 +261,27 @@ gcloud run services update schools-api --region us-west1 \
 
 Verify: boot log shows `rate-limit store: redis`; Upstash shows
 `<prefix>:rl:user-api:*` / `<prefix>:rl:schools-api:*` keys.
+
+### schools-api: PARENT_TOOL_API_KEY (one-time)
+
+`schools-api` now requires `REDIS_URL`/`REDIS_PREFIX` (no more in-memory
+fallback — see above) and a new `PARENT_TOOL_API_KEY` secret, reusing the same
+value already stored in the `PARENT_TOOL_API_KEY`/`PARENT_TOOL_API_KEY_DEV`
+secrets used by `passes-api`. Run before deploying this change, or the
+revision fails to boot with a ZodError:
+
+```bash
+# dev
+gcloud run services update schools-api-dev --region us-west1 \
+  --set-secrets=PARENT_TOOL_API_KEY=PARENT_TOOL_API_KEY_DEV:latest
+# prod
+gcloud run services update schools-api --region us-west1 \
+  --set-secrets=PARENT_TOOL_API_KEY=PARENT_TOOL_API_KEY:latest
+```
+
+Verify: `/health` returns 200 on both services after deploy; a request to
+`GET /api/schools/:schoolId/calendar` with `x-api-key: <key>` and no session
+cookie returns 200.
 
 ### passes-api prod (Phase B — run after the first `main` deploy creates the service)
 

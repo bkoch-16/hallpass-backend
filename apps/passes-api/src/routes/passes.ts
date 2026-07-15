@@ -1,11 +1,20 @@
 import { Router, Request, Response } from "express";
 import { prisma, PassStatus, type Prisma } from "@hallpass/db";
-import { UserRole, type CursorPage, type PassResponse, type ParentLookupPass, type ParentLookupResponse } from "@hallpass/types";
+import {
+  UserRole,
+  type CursorPage,
+  type PassResponse,
+  type ParentLookupPass,
+  type ParentLookupResponse,
+} from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
 import { requireSchool } from "../middleware/requireSchool.js";
-import { requireMinRole, roleRank } from "@hallpass/express-middleware";
-import { createRequireApiKey } from "../middleware/apiKey.js";
+import {
+  requireMinRole,
+  roleRank,
+  createRequireApiKey,
+} from "@hallpass/express-middleware";
 import { createPinLookupLimiter } from "../middleware/pinLookupLimiter.js";
 import {
   validateBody,
@@ -75,7 +84,10 @@ function toPassResponse(pass: PassRow): PassResponse {
 
 function isUniqueViolation(err: unknown): boolean {
   return (
-    err !== null && typeof err === "object" && "code" in err && err.code === "P2002"
+    err !== null &&
+    typeof err === "object" &&
+    "code" in err &&
+    err.code === "P2002"
   );
 }
 
@@ -283,7 +295,10 @@ router.post(
               destination.maxOccupancy,
             );
           } catch (releaseErr) {
-            logger.error(releaseErr, "Failed to release slot after teacher-create error");
+            logger.error(
+              releaseErr,
+              "Failed to release slot after teacher-create error",
+            );
           }
         }
         if (isUniqueViolation(err)) {
@@ -499,9 +514,17 @@ router.post(
     } catch (err) {
       if (slotClaimed) {
         try {
-          await releasePassSlots(user.schoolId!, maxActivePasses, pass.destinationId, maxOccupancy);
+          await releasePassSlots(
+            user.schoolId!,
+            maxActivePasses,
+            pass.destinationId,
+            maxOccupancy,
+          );
         } catch (releaseErr) {
-          logger.error(releaseErr, "Failed to release slot after approve DB error");
+          logger.error(
+            releaseErr,
+            "Failed to release slot after approve DB error",
+          );
         }
       }
       throw err;
@@ -511,16 +534,27 @@ router.post(
       // Another request transitioned this pass first — give back the slot we claimed
       if (slotClaimed) {
         try {
-          await releasePassSlots(user.schoolId!, maxActivePasses, pass.destinationId, maxOccupancy);
+          await releasePassSlots(
+            user.schoolId!,
+            maxActivePasses,
+            pass.destinationId,
+            maxOccupancy,
+          );
         } catch (releaseErr) {
-          logger.error(releaseErr, "Failed to release slot after lost approve race");
+          logger.error(
+            releaseErr,
+            "Failed to release slot after lost approve race",
+          );
         }
       }
       res.status(409).json({ message: "Pass is no longer PENDING" });
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
+    const updated = await prisma.pass.findUniqueOrThrow({
+      where: { id },
+      select: PASS_SELECT,
+    });
 
     if (updated.status === PassStatus.ACTIVE) {
       emitPassEvent(updated, "pass:approved");
@@ -576,7 +610,10 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
+    const updated = await prisma.pass.findUniqueOrThrow({
+      where: { id },
+      select: PASS_SELECT,
+    });
 
     emitPassEvent(updated, "pass:denied");
 
@@ -628,16 +665,26 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
+    const updated = await prisma.pass.findUniqueOrThrow({
+      where: { id },
+      select: PASS_SELECT,
+    });
 
     emitPassEvent(updated, "pass:returned");
 
     // The return already succeeded — a slot bookkeeping failure must not turn
     // the response into a 500; reconcile-expiry recovers the counter
     try {
-      await releaseAndPromote(pass.schoolId, pass.destinationId, pass.destination.maxOccupancy);
+      await releaseAndPromote(
+        pass.schoolId,
+        pass.destinationId,
+        pass.destination.maxOccupancy,
+      );
     } catch (err) {
-      logger.error(err, "Failed to release/promote after return — will be recovered by reconcile");
+      logger.error(
+        err,
+        "Failed to release/promote after return — will be recovered by reconcile",
+      );
     }
 
     res.json(toPassResponse(updated));
@@ -690,7 +737,10 @@ router.post(
       return;
     }
 
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id }, select: PASS_SELECT });
+    const updated = await prisma.pass.findUniqueOrThrow({
+      where: { id },
+      select: PASS_SELECT,
+    });
 
     emitPassEvent(updated, "pass:cancelled");
 
