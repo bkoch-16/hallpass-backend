@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-14T19:48:20.499Z — 18 files indexed_
+_Generated: 2026-07-15T00:38:45.153Z — 18 files indexed_
 
 ## File Summaries
 
@@ -62,7 +62,7 @@ Defines Zod validation schemas for user-related API endpoints. Exports `userIdSc
 
 ### `docker-compose.yml`
 
-Defines the local development stack for the Hallpass platform with four services: PostgreSQL 16 (database), Redis 7 (rate-limit/caching store), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy Postgres and Redis containers and share a common database URL pattern. Environment variables like BETTER_AUTH_SECRET and CORS_ORIGIN can be overridden via a .env file or shell environment. A named volume `postgres_data` persists database data across container restarts. Developers should note that both APIs share the same Postgres database and Redis instance, and the build context for both is the repo root (monorepo pattern with per-app Dockerfiles).
+Defines the local development infrastructure for the HallPass application, orchestrating four services: PostgreSQL 16, Redis 7, a user-api (port 3001), and a schools-api (port 3002). Both API services depend on healthy Postgres and Redis instances and share the same database (`hallpass`) and Redis, differentiated by configuration. Environment variables include BetterAuth settings, CORS origins, Redis URL/prefix, and a `PARENT_TOOL_API_KEY` specific to schools-api; several support overrides via `${VAR:-default}` syntax. Both API Dockerfiles are built with the repo root as context (monorepo pattern), and Postgres data is persisted via a named volume (`postgres_data`). Developers modifying this file should ensure health checks remain aligned with service readiness, and note that `BETTER_AUTH_SECRET` must be provided externally (no default).
 
 ### `package.json`
 
