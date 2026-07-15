@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { fakeRedisRateLimitCall } from "@hallpass/express-middleware";
 
 /**
  * The public GET routes (calendar, schedule-types) run behind
@@ -9,9 +10,5 @@ import { vi } from "vitest";
  * publicSchoolDataLimiter.test.ts.
  */
 export function createMockRedisCall() {
-  return vi.fn((command: string) => {
-    if (command === "SCRIPT") return Promise.resolve("fakesha");
-    if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
-    return Promise.resolve(undefined);
-  });
+  return vi.fn(fakeRedisRateLimitCall);
 }

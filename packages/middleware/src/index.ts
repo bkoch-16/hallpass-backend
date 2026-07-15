@@ -23,6 +23,6 @@ export {
   type IpRateLimiterOptions,
 } from "./rateLimit.js";
 export { baseEnvSchema, rateLimitEnvSchema } from "./env.js";
-export { createRateLimitRedis, createRedisRateLimitStore } from "./redis.js";
+export { createRateLimitRedis, createRedisRateLimitStore, createRequiredRedis } from "./redis.js";
 export { parseCorsOrigins, corsOptions } from "./cors.js";
-export { createTestServer, type TestServerHandle } from "./testing.js";
+export { createTestServer, type TestServerHandle, fakeRedisRateLimitCall } from "./testing.js";

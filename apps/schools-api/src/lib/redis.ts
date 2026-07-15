@@ -1,12 +1,4 @@
-import Redis from "ioredis";
-import { logger } from "@hallpass/logger";
+import { createRequiredRedis } from "@hallpass/express-middleware";
 import { env } from "../env.js";
 
-export const redis = new Redis(env.REDIS_URL, {
-  lazyConnect: true,
-  maxRetriesPerRequest: 3,
-});
-
-redis.on("error", (err) => {
-  logger.error(err, "[redis] connection error");
-});
+export const redis = createRequiredRedis(env.REDIS_URL);

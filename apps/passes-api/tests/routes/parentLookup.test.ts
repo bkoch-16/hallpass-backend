@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { passStatusMock } from "../utils/passStatusMock.js";
+// Must be imported after passStatusMock: @hallpass/express-middleware
+// transitively imports @hallpass/db (via its health-route module), which is
+// mocked below. vi.mock factories run when that transitive import is first
+// resolved, so importing this before passStatusMock would evaluate the
+// "@hallpass/db" mock factory (which references passStatusMock) before the
+// passStatusMock import itself has finished initializing.
+import { fakeRedisRateLimitCall } from "@hallpass/express-middleware";
 
 // SCRIPT LOAD runs once per script at RedisStore construction and must return
 // a string; EVALSHA runs on every increment and must return [count, ttl] — a
@@ -10,12 +17,16 @@ import { passStatusMock } from "../utils/passStatusMock.js";
 // `import app` time below — before any beforeEach has run.
 const { mockGetSession, mockRedisCall } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockRedisCall: vi.fn((command: string) => {
-    if (command === "SCRIPT") return Promise.resolve("fakesha");
-    if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
-    return Promise.resolve(undefined);
-  }),
+  mockRedisCall: vi.fn(),
 }));
+
+// vi.hoisted() factories run immediately/eagerly (before this file's own
+// import statements resolve), so referencing the `fakeRedisRateLimitCall`
+// import directly inside the vi.hoisted() factory above throws "Cannot
+// access ... before initialization". Setting the default implementation
+// here instead — plain top-level code, not itself hoisted — runs in normal
+// import order, after fakeRedisRateLimitCall has resolved.
+mockRedisCall.mockImplementation(fakeRedisRateLimitCall);
 
 // The parent-lookup route runs behind the pin-lookup rate limiter, whose
 // RedisStore (rate-limit-redis) sends raw commands via redis.call. Mock the
@@ -107,11 +118,7 @@ beforeEach(() => {
   // SCRIPT LOAD runs once per script at RedisStore construction and must
   // return a string; EVALSHA runs on every increment and must return
   // [count, ttl] — a count of 1 keeps every request under the limit.
-  mockRedisCall.mockImplementation((command: string) => {
-    if (command === "SCRIPT") return Promise.resolve("fakesha");
-    if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
-    return Promise.resolve(undefined);
-  });
+  mockRedisCall.mockImplementation(fakeRedisRateLimitCall);
 });
 
 describe("GET /api/passes/parent-lookup", () => {

@@ -2,6 +2,17 @@ import Redis from "ioredis";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { logger } from "@hallpass/logger";
 
+export function createRequiredRedis(url: string): Redis {
+  const redis = new Redis(url, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 3,
+  });
+  redis.on("error", (err) => {
+    logger.error(err, "[redis] connection error");
+  });
+  return redis;
+}
+
 /**
  * Rate-limit store client. Returns null when REDIS_URL is unset (local
  * `pnpm dev`, tests), in which case limiters fall back to express-rate-limit's
@@ -11,14 +22,7 @@ import { logger } from "@hallpass/logger";
  */
 export function createRateLimitRedis(env: { REDIS_URL?: string }): Redis | null {
   if (!env.REDIS_URL) return null;
-  const redis = new Redis(env.REDIS_URL, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 3,
-  });
-  redis.on("error", (err) => {
-    logger.error(err, "[redis] connection error");
-  });
-  return redis;
+  return createRequiredRedis(env.REDIS_URL);
 }
 
 /**
