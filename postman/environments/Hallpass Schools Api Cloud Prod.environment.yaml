@@ -3,3 +3,6 @@ values:
   - key: Base
     value: 'https://schools-api-509242588558.us-west1.run.app'
     enabled: true
+  - key: ParentToolApiKey
+    value: ''
+    enabled: true

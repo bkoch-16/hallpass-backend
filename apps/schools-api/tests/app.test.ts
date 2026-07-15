@@ -66,8 +66,9 @@ describe("app rate-limit store wiring", () => {
 
   // The general limiter's store is conditional on NODE_ENV/REDIS_URL (falls
   // back to in-memory), but the public-school-data limiter (calendar,
-  // schedule-types) always constructs a RedisStore regardless of NODE_ENV —
-  // it requires Redis unconditionally, same as passes-api's pinLookupLimiter.
+  // schedule-types, periods) always constructs a RedisStore regardless of
+  // NODE_ENV — it requires Redis unconditionally, same as passes-api's
+  // pinLookupLimiter.
   // These assertions scope to the general limiter's prefix so they don't
   // depend on how many other limiters exist in the import graph.
   function generalLimiterCalls() {
@@ -106,10 +107,10 @@ describe("app rate-limit store wiring", () => {
     const calls = mockRedisStore.mock.calls.filter(([options]) =>
       (options as { prefix: string }).prefix.includes(":public-school-data:"),
     );
-    // One RedisStore per route file (calendar.ts, scheduleType.ts) that
-    // instantiates the limiter, sharing the same Redis-backed bucket via
+    // One RedisStore per route file (calendar.ts, scheduleType.ts, period.ts)
+    // that instantiates the limiter, sharing the same Redis-backed bucket via
     // the identical prefix.
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     for (const [options] of calls) {
       expect((options as { prefix: string }).prefix).toBe("test:rl:schools-api:public-school-data:");
     }

@@ -11,6 +11,15 @@ const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
+// The public GET route (periods) runs behind publicSchoolDataLimiter, whose
+// RedisStore (rate-limit-redis) sends raw commands via redis.call. Mock the
+// ioredis client so this suite doesn't depend on a live Redis (CI has none);
+// an unmocked call rejects and the limiter fails closed with a 500.
+vi.mock("../../src/lib/redis.js", async () => {
+  const { createMockRedisCall } = await import("../utils/redisMock.js");
+  return { redis: { call: createMockRedisCall() } };
+});
+
 vi.mock("@hallpass/auth", () => ({
   createAuth: vi.fn(() => ({
     api: { getSession: mockGetSession },

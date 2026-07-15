@@ -2,11 +2,17 @@ import { Router, Request, Response } from "express";
 import { prisma } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { PeriodResponse } from "@hallpass/types";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAuthOrApiKey } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
 import { validateBody, validateParams } from "@hallpass/express-middleware";
-import { requireSchoolAccess } from "../middleware/schoolScope.js";
+import {
+  requireSchoolAccess,
+  requireSchoolAccessIfSession,
+} from "../middleware/schoolScope.js";
+import { createPublicSchoolDataLimiter } from "../middleware/publicSchoolDataLimiter.js";
 import { createPeriodSchema, periodIdSchema, updatePeriodSchema } from "../schemas/period.js";
+
+const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
 const router = Router({ mergeParams: true });
 
@@ -25,27 +31,33 @@ function toPeriodResponse(p: PeriodRow): PeriodResponse {
   return { id: p.id, scheduleTypeId: p.scheduleTypeId, name: p.name, startTime: p.startTime, endTime: p.endTime, order: p.order };
 }
 
-router.get("/", requireAuth, requireSchoolAccess, async (req: Request, res: Response) => {
-  const schoolId = Number(req.params.schoolId);
-  const scheduleTypeId = Number(req.params.scheduleTypeId);
+router.get(
+  "/",
+  requireAuthOrApiKey,
+  requireSchoolAccessIfSession,
+  (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
+  async (req: Request, res: Response) => {
+    const schoolId = Number(req.params.schoolId);
+    const scheduleTypeId = Number(req.params.scheduleTypeId);
 
-  const scheduleType = await prisma.scheduleType.findFirst({
-    where: { id: scheduleTypeId, schoolId, deletedAt: null },
-  });
+    const scheduleType = await prisma.scheduleType.findFirst({
+      where: { id: scheduleTypeId, schoolId, deletedAt: null },
+    });
 
-  if (!scheduleType) {
-    res.status(404).json({ message: "Schedule type not found" });
-    return;
-  }
+    if (!scheduleType) {
+      res.status(404).json({ message: "Schedule type not found" });
+      return;
+    }
 
-  const periods = await prisma.period.findMany({
-    where: { scheduleTypeId, deletedAt: null },
-    orderBy: { order: "asc" },
-    select: PERIOD_SELECT,
-  });
+    const periods = await prisma.period.findMany({
+      where: { scheduleTypeId, deletedAt: null },
+      orderBy: { order: "asc" },
+      select: PERIOD_SELECT,
+    });
 
-  res.json(periods.map(toPeriodResponse));
-});
+    res.json(periods.map(toPeriodResponse));
+  },
+);
 
 router.post(
   "/",
