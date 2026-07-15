@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import express from "express";
 import request from "supertest";
-import { createRequireApiKey } from "../../src/middleware/apiKey.js";
+import { createRequireApiKey } from "../src/apiKey.js";
 
 const EXPECTED_KEY = "correct-key";
 
@@ -9,7 +9,9 @@ function buildApp(headerName?: string) {
   const app = express();
   app.get(
     "/protected",
-    headerName ? createRequireApiKey(EXPECTED_KEY, headerName) : createRequireApiKey(EXPECTED_KEY),
+    headerName
+      ? createRequireApiKey(EXPECTED_KEY, headerName)
+      : createRequireApiKey(EXPECTED_KEY),
     (_req, res) => {
       res.status(200).json({ ok: true });
     },
@@ -30,7 +32,9 @@ describe("createRequireApiKey", () => {
   it("returns 401 when the key is wrong", async () => {
     const app = buildApp();
 
-    const res = await request(app).get("/protected").set("x-api-key", "wrong-key");
+    const res = await request(app)
+      .get("/protected")
+      .set("x-api-key", "wrong-key");
 
     expect(res.status).toBe(401);
   });
@@ -48,7 +52,9 @@ describe("createRequireApiKey", () => {
   it("returns 200 when the key is correct", async () => {
     const app = buildApp();
 
-    const res = await request(app).get("/protected").set("x-api-key", EXPECTED_KEY);
+    const res = await request(app)
+      .get("/protected")
+      .set("x-api-key", EXPECTED_KEY);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
@@ -57,7 +63,9 @@ describe("createRequireApiKey", () => {
   it("honors a custom header name", async () => {
     const app = buildApp("x-parent-tool-key");
 
-    const wrongHeader = await request(app).get("/protected").set("x-api-key", EXPECTED_KEY);
+    const wrongHeader = await request(app)
+      .get("/protected")
+      .set("x-api-key", EXPECTED_KEY);
     expect(wrongHeader.status).toBe(401);
 
     const rightHeader = await request(app)

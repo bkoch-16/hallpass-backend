@@ -29,3 +29,18 @@ export function createTestServer(app: RequestListener): TestServerHandle {
       }),
   };
 }
+
+/**
+ * Fakes rate-limit-redis's RedisStore SCRIPT LOAD / EVALSHA sequence, sent to
+ * ioredis via redis.call: SCRIPT LOAD must resolve to a script sha, and
+ * EVALSHA must resolve to [count, ttl] — a count of 1 keeps every request
+ * under the limit. Wrap this in vi.fn(fakeRedisRateLimitCall) (or pass it
+ * directly to vi.fn(...)) to fake an ioredis client's `call` method in tests
+ * for routes that sit behind a Redis-backed rate limiter, so they don't
+ * depend on a live Redis.
+ */
+export function fakeRedisRateLimitCall(command: string): Promise<unknown> {
+  if (command === "SCRIPT") return Promise.resolve("fakesha");
+  if (command === "EVALSHA") return Promise.resolve([1, 15 * 60 * 1000]);
+  return Promise.resolve(undefined);
+}

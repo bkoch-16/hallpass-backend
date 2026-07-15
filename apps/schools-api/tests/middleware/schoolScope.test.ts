@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
-import { requireSchoolAccess } from "../../src/middleware/schoolScope.js";
+import { requireSchoolAccess, requireSchoolAccessIfSession } from "../../src/middleware/schoolScope.js";
 
 function mockRes() {
   const res = {} as Response;
@@ -99,5 +99,50 @@ describe("requireSchoolAccess", () => {
     requireSchoolAccess(req, res, next);
 
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe("requireSchoolAccessIfSession", () => {
+  let res: Response;
+  let next: NextFunction;
+
+  beforeEach(() => {
+    res = mockRes();
+    next = vi.fn();
+  });
+
+  it("calls next() without enforcing school scope when req.user is unset (API-key caller)", () => {
+    const req = {
+      params: { schoolId: "1" },
+    } as unknown as Request;
+
+    requireSchoolAccessIfSession(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("enforces requireSchoolAccess when req.user is set (session caller)", () => {
+    const req = {
+      user: { schoolId: 2, role: "TEACHER" },
+      params: { schoolId: "1" },
+    } as unknown as Request;
+
+    requireSchoolAccessIfSession(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("calls next() for a session caller with matching schoolId", () => {
+    const req = {
+      user: { schoolId: 1, role: "TEACHER" },
+      params: { schoolId: "1" },
+    } as unknown as Request;
+
+    requireSchoolAccessIfSession(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

@@ -15,11 +15,14 @@ export const baseEnvSchema = z.object({
 });
 
 /**
- * Optional Redis rate-limit env fields shared by user-api and schools-api.
- * REDIS_URL is optional: when set the limiters use a shared-Redis store; when
- * unset they fall back to express-rate-limit's in-memory store. REDIS_PREFIX
- * namespaces keys on the shared Upstash DB and is required only alongside a URL.
- * Passes-api does NOT use this (its Redis is required, not optional).
+ * Optional Redis rate-limit env fields, currently used only by user-api
+ * (via rateLimitEnvSchema below). REDIS_URL is optional: when set the
+ * limiters use a shared-Redis store; when unset they fall back to
+ * express-rate-limit's in-memory store. REDIS_PREFIX namespaces keys on the
+ * shared Upstash DB and is required only alongside a URL.
+ * Passes-api and schools-api do NOT use this — passes-api's Redis is
+ * required (not optional), and schools-api has its own required-Redis
+ * schema in apps/schools-api/src/env.ts.
  */
 const optionalRedisEnvShape = {
   REDIS_URL: z.string().url().optional(),
@@ -35,11 +38,13 @@ function requireRedisPrefixWithUrl<T extends { REDIS_URL?: string; REDIS_PREFIX?
 const REDIS_PREFIX_REFINE_MESSAGE = "REDIS_PREFIX is required when REDIS_URL is set";
 
 /**
- * Env schema for apps with optional Redis rate limiting (user-api, schools-api).
- * REDIS_URL is optional: when set (Cloud Run, or docker-compose locally) the rate
- * limiters use a shared-Redis store; when unset (plain `pnpm dev`, tests) they fall
- * back to express-rate-limit's in-memory store. REDIS_PREFIX namespaces keys on the
- * shared Upstash DB and is required only alongside a URL.
+ * Env schema for apps with optional Redis rate limiting. Currently used
+ * only by user-api. REDIS_URL is optional: when set (Cloud Run, or
+ * docker-compose locally) the rate limiters use a shared-Redis store; when
+ * unset (plain `pnpm dev`, tests) they fall back to express-rate-limit's
+ * in-memory store. REDIS_PREFIX namespaces keys on the shared Upstash DB
+ * and is required only alongside a URL. schools-api now uses its own
+ * required-Redis schema (apps/schools-api/src/env.ts) instead of this one.
  */
 export const rateLimitEnvSchema = baseEnvSchema
   .extend(optionalRedisEnvShape)

@@ -6,6 +6,16 @@ const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
+// The public GET route (schedule-types) runs behind publicSchoolDataLimiter,
+// whose RedisStore (rate-limit-redis) sends raw commands via redis.call. Mock
+// the ioredis client so route tests don't depend on a live Redis (CI has
+// none); an unmocked call rejects and the limiter fails closed with a 500.
+// See publicSchoolDataLimiter.test.ts.
+vi.mock("../../src/lib/redis.js", async () => {
+  const { createMockRedisCall } = await import("../utils/redisMock.js");
+  return { redis: { call: createMockRedisCall() } };
+});
+
 vi.mock("@hallpass/db", () => ({
   prisma: {
     user: { findFirst: vi.fn() },
@@ -110,12 +120,34 @@ beforeAll(start);
 afterAll(stop);
 
 describe("GET /api/schools/:schoolId/schedule-types", () => {
-  it("returns 401 when not authenticated", async () => {
+  it("returns 401 when not authenticated and no API key", async () => {
     mockGetSession.mockResolvedValue(null);
 
     const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when the API key is wrong and there is no session", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await request(server)
+      .get("/api/schools/1/schedule-types")
+      .set("x-api-key", "wrong-key");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns schedule types for a valid API key with no session, bypassing school scoping", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockPrisma.scheduleType.findMany.mockResolvedValue([fakeScheduleType]);
+
+    const res = await request(server)
+      .get("/api/schools/999/schedule-types")
+      .set("x-api-key", "test-parent-tool-api-key");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
   });
 
   it("returns 403 when user is from a different school", async () => {
