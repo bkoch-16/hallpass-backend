@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-14T20:12:49.025Z",
+  "generatedAt": "2026-07-15T00:44:34.384Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "ef6d76ebe43866883a585dca25bd19f128265bb8",
@@ -43,8 +43,8 @@
       "summary": "Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm@10. Uses layer caching by copying package manifests first and running pnpm install before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all dependent workspace packages in dependency order. Uses a custom docker-entrypoint.sh script as ENTRYPOINT and exposes port 3001. Developers modifying this must update the COPY and build filter steps if new workspace packages are added as dependencies."
     },
     "docker-compose.yml": {
-      "blobSha": "9e8de7ff5a7e78f204c2ffa13877f24b4ef473ba",
-      "summary": "Docker Compose configuration for local development defining four services: postgres (16-alpine), redis (7-alpine), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy postgres and redis containers, with DATABASE_URL and REDIS_URL wired to the internal Docker network. Environment variables like BETTER_AUTH_SECRET are expected from the host environment or .env file. A named volume 'postgres_data' persists database state across restarts."
+      "blobSha": "9f902056153e90be9641aa73333d0af370d22940",
+      "summary": "Defines the local development infrastructure for the HallPass application, orchestrating four services: PostgreSQL 16 (database), Redis 7 (caching/sessions), user-api (port 3001), and schools-api (port 3002). Both API services are built from Dockerfiles within their respective `apps/` directories using the repo root as build context, and depend on healthy Postgres and Redis instances. Environment variables include database connection strings, Better Auth configuration (secret/URL), CORS origins, and Redis settings, with several values configurable via `.env` file or defaults. A named volume `postgres_data` provides persistent storage for the database. Developers should note that both APIs share the same Postgres database (`hallpass`) and Redis instance, and that `BETTER_AUTH_SECRET` must be set externally (no default). The schools-api additionally requires a `PARENT_TOOL_API_KEY` environment variable."
     },
     ".github/workflows/deploy.yml": {
       "blobSha": "b9833493f379f8dab555c9909e251fb450028637",

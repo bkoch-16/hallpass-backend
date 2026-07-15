@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-14T20:12:49.025Z — 18 files indexed_
+_Generated: 2026-07-15T00:44:34.384Z — 18 files indexed_
 
 ## File Summaries
 
@@ -62,7 +62,7 @@ Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (v
 
 ### `docker-compose.yml`
 
-Docker Compose configuration for local development defining four services: postgres (16-alpine), redis (7-alpine), user-api (port 3001), and schools-api (port 3002). Both API services depend on healthy postgres and redis containers, with DATABASE_URL and REDIS_URL wired to the internal Docker network. Environment variables like BETTER_AUTH_SECRET are expected from the host environment or .env file. A named volume 'postgres_data' persists database state across restarts.
+Defines the local development infrastructure for the HallPass application, orchestrating four services: PostgreSQL 16 (database), Redis 7 (caching/sessions), user-api (port 3001), and schools-api (port 3002). Both API services are built from Dockerfiles within their respective `apps/` directories using the repo root as build context, and depend on healthy Postgres and Redis instances. Environment variables include database connection strings, Better Auth configuration (secret/URL), CORS origins, and Redis settings, with several values configurable via `.env` file or defaults. A named volume `postgres_data` provides persistent storage for the database. Developers should note that both APIs share the same Postgres database (`hallpass`) and Redis instance, and that `BETTER_AUTH_SECRET` must be set externally (no default). The schools-api additionally requires a `PARENT_TOOL_API_KEY` environment variable.
 
 ### `package.json`
 
