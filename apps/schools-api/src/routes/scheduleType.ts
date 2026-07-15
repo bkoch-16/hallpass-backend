@@ -50,7 +50,7 @@ router.get(
   "/",
   requireAuthOrApiKey,
   requireSchoolAccessIfSession,
-  publicSchoolDataLimiter,
+  (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
     const types = await prisma.scheduleType.findMany({
