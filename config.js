@@ -380,23 +380,16 @@ const CONFIG = {
               "method": "GET",
               "url": "{{Base}}/api/schools/:schoolId/schedule-types",
               "description": "List all schedule types for a school. Requires school membership.",
-              "headers": [],
-              "pathVariables": [
-                {
-                  "key": "schoolId",
-                  "value": "1"
-                }
-              ],
-              "queryParams": [
-                {
-                  "key": "cursor",
-                  "value": ""
-                },
-                {
-                  "key": "limit",
-                  "value": "50"
-                }
-              ],
+              "headers": {
+                "X-Api-Key": "{{ParentToolApiKey}}"
+              },
+              "pathVariables": {
+                "schoolId": "1"
+              },
+              "queryParams": {
+                "cursor": "",
+                "limit": "50"
+              },
               "body": null
             },
             {
@@ -467,17 +460,13 @@ const CONFIG = {
               "method": "GET",
               "url": "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods",
               "description": "List all periods for a schedule type. Requires school membership.",
-              "headers": [],
-              "pathVariables": [
-                {
-                  "key": "schoolId",
-                  "value": "1"
-                },
-                {
-                  "key": "scheduleTypeId",
-                  "value": "1"
-                }
-              ],
+              "headers": {
+                "X-Api-Key": "{{ParentToolApiKey}}"
+              },
+              "pathVariables": {
+                "schoolId": "1",
+                "scheduleTypeId": "1"
+              },
               "queryParams": [],
               "body": null
             },
@@ -561,23 +550,16 @@ const CONFIG = {
               "method": "GET",
               "url": "{{Base}}/api/schools/:schoolId/calendar",
               "description": "List calendar entries for a school, optionally filtered by date range. Requires school membership.",
-              "headers": [],
-              "pathVariables": [
-                {
-                  "key": "schoolId",
-                  "value": "1"
-                }
-              ],
-              "queryParams": [
-                {
-                  "key": "from",
-                  "value": ""
-                },
-                {
-                  "key": "to",
-                  "value": ""
-                }
-              ],
+              "headers": {
+                "X-Api-Key": "{{ParentToolApiKey}}"
+              },
+              "pathVariables": {
+                "schoolId": "1"
+              },
+              "queryParams": {
+                "from": "",
+                "to": ""
+              },
               "body": null
             },
             {
@@ -902,25 +884,28 @@ const CONFIG = {
           "method": "GET",
           "url": "{{Base}}/api/passes/parent-lookup",
           "description": "External voice-AI parent tool endpoint. Looks up a student by PIN and returns their pass history. Auth is an X-Api-Key header (PARENT_TOOL_API_KEY), not a session — set ParentToolApiKey in the environment. Rate-limited by IP to throttle PIN guessing. Query params — pin (required, the student's PIN), cursor (pagination cursor from previous response), limit (default 50, max 100). Returns {student, passes, nextCursor}; 400 missing pin, 401 bad key, 404 no student matches the pin, 429 too many attempts.",
-          "headers": [
-            {
-              "key": "X-Api-Key",
-              "value": "{{ParentToolApiKey}}"
-            }
-          ],
+          "headers": {
+            "X-Api-Key": "{{ParentToolApiKey}}"
+          },
           "pathVariables": [],
           "queryParams": [
             {
               "key": "pin",
-              "value": "1234"
+              "value": "482913",
+              "disabled": false,
+              "description": ""
             },
             {
               "key": "cursor",
-              "value": ""
+              "value": "",
+              "disabled": false,
+              "description": ""
             },
             {
               "key": "limit",
-              "value": "50"
+              "value": "50",
+              "disabled": false,
+              "description": ""
             }
           ],
           "body": null
