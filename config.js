@@ -13,6 +13,17 @@ const CONFIG = {
       "subgroups": null,
       "endpoints": [
         {
+          "name": "Health",
+          "order": 100,
+          "method": "GET",
+          "url": "{{Base}}/health",
+          "description": "Check user-api health. Verifies the service is running and can reach the database. Run this first — services scale to zero, so the first request warms a cold instance.",
+          "headers": [],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": null
+        },
+        {
           "name": "Get Me",
           "order": 500,
           "method": "GET",
@@ -176,6 +187,22 @@ const CONFIG = {
           "body": "{\n  \"email\": \"admin@hallpass.dev\",\n  \"password\": \"password\"\n}"
         },
         {
+          "name": "Change Password",
+          "order": 2500,
+          "method": "POST",
+          "url": "{{Base}}/api/auth/change-password",
+          "description": "Change the current user's password. Requires an active session (sign in first). Set revokeOtherSessions to true to invalidate all other sessions after the change.",
+          "headers": [
+            {
+              "key": "Origin",
+              "value": "{{Base}}"
+            }
+          ],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": "{\n  \"currentPassword\": \"password\",\n  \"newPassword\": \"new-password\",\n  \"revokeOtherSessions\": true\n}"
+        },
+        {
           "name": "Sign Out",
           "order": 3000,
           "method": "POST",
@@ -200,6 +227,23 @@ const CONFIG = {
         "Prod": "https://schools-api-509242588558.us-west1.run.app"
       },
       "subgroups": [
+        {
+          "name": "Health",
+          "order": 100,
+          "endpoints": [
+            {
+              "name": "Health",
+              "order": 100,
+              "method": "GET",
+              "url": "{{Base}}/health",
+              "description": "Check schools-api health. Verifies the service is running and can reach the database. Run this first — services scale to zero, so the first request warms a cold instance.",
+              "headers": [],
+              "pathVariables": [],
+              "queryParams": [],
+              "body": null
+            }
+          ]
+        },
         {
           "name": "Districts",
           "order": 1000,
@@ -748,6 +792,17 @@ const CONFIG = {
       "subgroups": null,
       "endpoints": [
         {
+          "name": "Health",
+          "order": 100,
+          "method": "GET",
+          "url": "{{Base}}/health",
+          "description": "Check passes-api health. Verifies the service is running and can reach the database. Run this first — services scale to zero, so the first request warms a cold instance.",
+          "headers": [],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": null
+        },
+        {
           "name": "Create Pass",
           "order": 1000,
           "method": "POST",
@@ -908,27 +963,6 @@ const CONFIG = {
               "description": ""
             }
           ],
-          "body": null
-        }
-      ]
-    },
-    {
-      "name": "No group",
-      "order": 9999,
-      "baseUrls": {
-        "Prod": "https://user-api-509242588558.us-west1.run.app"
-      },
-      "subgroups": null,
-      "endpoints": [
-        {
-          "name": "Health",
-          "order": 3000,
-          "method": "GET",
-          "url": "{{Base}}/health",
-          "description": "Check service health. Verifies the API is running and can reach the database.",
-          "headers": [],
-          "pathVariables": [],
-          "queryParams": [],
           "body": null
         }
       ]
