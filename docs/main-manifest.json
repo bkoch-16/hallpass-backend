@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-15T00:44:34.384Z",
+  "generatedAt": "2026-07-17T21:43:22.776Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "ef6d76ebe43866883a585dca25bd19f128265bb8",
-      "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Core models include District, School, User (with roles: STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE), Session, Account, ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with lifecycle statuses: PENDING, WAITING, ACTIVE, COMPLETED, CANCELLED, DENIED, EXPIRED). The Pass model has a critical partial unique index (`one_active_pass_per_student`) enforcing one active pass per student that exists only in a migration SQL file—Prisma cannot express it declaratively, so developers must manually remove any auto-generated `DROP INDEX` for it in new migrations. Soft-delete via `deletedAt` is used on most models except Pass, which relies on terminal statuses. The User model has multiple named relations to Pass (student, requester, approver, denier, canceller) and a unique `pinCode` field for student lookup. Key indexes exist on Pass for schoolId, studentId, status, and a composite (destinationId, status)."
+      "blobSha": "c99f6c4db14aa36c2ee4193320dfb13d5cde9706",
+      "summary": "Defines the complete PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User (with Role enum: STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus lifecycle: PENDING→WAITING→ACTIVE→COMPLETED/CANCELLED/DENIED/EXPIRED). Authentication is handled via better-auth with Session and Account models using Int autoincrement IDs (required by better-auth's `generateId: \"serial\"` config). The Pass model has a critical partial unique index (`one_active_pass_per_student`) that enforces one active pass per student — this index exists only in a migration file and cannot be expressed in Prisma schema, so developers must manually delete any auto-generated `DROP INDEX` for it when creating new migrations. Passes intentionally have no `deletedAt` field as they use terminal statuses instead of soft-deletion. Key relationships include multi-role User references on Pass (student, requester, approver, denier, canceller) and school-scoped indexing on most models."
     },
     "apps/user-api/src/app.ts": {
       "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
