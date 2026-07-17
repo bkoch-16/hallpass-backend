@@ -82,8 +82,11 @@ model User {
   cancelledPasses Pass[] @relation("CancellerPasses")
 }
 
+// better-auth is configured with generateId: "serial", which requires Int
+// autoincrement ids on every table it manages (Session, Account, and any
+// future plugin tables) — a String id here breaks where-by-id queries.
 model Session {
-  id        String   @id @default(cuid())
+  id        Int      @id @default(autoincrement())
   userId    Int
   token     String   @unique
   expiresAt DateTime
@@ -96,7 +99,7 @@ model Session {
 }
 
 model Account {
-  id            String    @id @default(cuid())
+  id            Int       @id @default(autoincrement())
   userId        Int
   accountId     String
   providerId    String
