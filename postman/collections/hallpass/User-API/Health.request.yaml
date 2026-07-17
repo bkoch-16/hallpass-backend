@@ -1,0 +1,5 @@
+$kind: http-request
+url: "{{Base}}/health"
+method: GET
+description: Check user-api health. Verifies the service is running and can reach the database. Run this first — services scale to zero, so the first request warms a cold instance.
+order: 100
