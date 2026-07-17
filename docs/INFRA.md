@@ -172,7 +172,7 @@ pnpm --filter @hallpass/db exec prisma studio
 - General endpoints: 100 req / 15 min
 - Auth endpoints: 10 req / 15 min
 
-**ID strategy:** All domain models (`District`, `School`, `User`, `ScheduleType`, `Period`, `SchoolCalendar`, `Destination`, `PassPolicy`) use `Int @id @default(autoincrement())`. Auth-infrastructure tables (`Session`, `Account`) use `String` (cuid) IDs — these are generated and managed by better-auth and are not part of the domain schema.
+**ID strategy:** Every table uses `Int @id @default(autoincrement())` — domain models (`District`, `School`, `User`, `ScheduleType`, `Period`, `SchoolCalendar`, `Destination`, `PassPolicy`) and auth-infrastructure tables (`Session`, `Account`) alike. better-auth is configured with `generateId: "serial"`, which requires numeric DB-generated ids on every table it manages; any future better-auth plugin tables must also use `Int` serial ids.
 
 ## Deployment
 

@@ -152,6 +152,53 @@ describe("Real auth flow (integration)", () => {
     expect(dbUser).toBeNull();
   });
 
+  it("change password works for sign-in and revokes other sessions", async () => {
+    await createUserWithCredential(auth, {
+      email: "changepass@test.com",
+      password: "password123",
+      name: "Change Pass",
+    });
+
+    const agent = request.agent(app);
+    const signIn = await agent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "changepass@test.com", password: "password123" });
+    expect(signIn.status).toBe(200);
+
+    // A second signed-in session that revokeOtherSessions should kill.
+    const otherAgent = request.agent(app);
+    const otherSignIn = await otherAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "changepass@test.com", password: "password123" });
+    expect(otherSignIn.status).toBe(200);
+    expect((await otherAgent.get("/api/users/me")).status).toBe(200);
+
+    const change = await agent
+      .post("/api/auth/change-password")
+      .send({
+        currentPassword: "password123",
+        newPassword: "newpassword456",
+        revokeOtherSessions: true,
+      });
+    expect(change.status).toBe(200);
+
+    // The session that changed the password survives; the other is revoked.
+    expect((await agent.get("/api/users/me")).status).toBe(200);
+    expect((await otherAgent.get("/api/users/me")).status).toBe(401);
+
+    const oldPasswordAgent = request.agent(app);
+    const oldSignIn = await oldPasswordAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "changepass@test.com", password: "password123" });
+    expect(oldSignIn.status).toBe(401);
+
+    const newPasswordAgent = request.agent(app);
+    const newSignIn = await newPasswordAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "changepass@test.com", password: "newpassword456" });
+    expect(newSignIn.status).toBe(200);
+  });
+
   it("sign in with wrong password returns 401", async () => {
     await createUserWithCredential(auth, {
       email: "wrongpass@test.com",
