@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-15T00:38:45.153Z — 18 files indexed_
+_Generated: 2026-07-17T21:39:31.785Z — 18 files indexed_
 
 ## File Summaries
 
@@ -74,4 +74,4 @@ Shared authentication package that wraps `better-auth` to create a configured au
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the complete PostgreSQL database schema for the HallPass application using Prisma ORM. Models include District, School, User, Session, Account, ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass, representing a school hall-pass management system. Key enums are Role (STUDENT through SERVICE), PolicyInterval (DAY/WEEK/MONTH), and PassStatus (PENDING through EXPIRED). The Pass model has multiple named relations to User (student, requester, approver, denier, canceller) and a critical partial unique index (`one_active_pass_per_student`) that exists only in a migration SQL, not expressible in Prisma schema — developers must manually delete any auto-generated DROP of this index in new migrations. Passes intentionally lack a `deletedAt` field; their lifecycle terminates via status and corresponding timestamps. Soft-delete via `deletedAt` is used on District, School, User, ScheduleType, Period, and Destination.
+Defines the full PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User (with Role enum: STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus lifecycle: PENDING→WAITING→ACTIVE→COMPLETED/CANCELLED/DENIED/EXPIRED). Authentication is handled via better-auth with Session and Account models using integer autoincrement IDs (required by better-auth's `generateId: "serial"` config). The Pass model has a critical partial unique index (`one_active_pass_per_student`) that exists only in migrations — Prisma cannot express partial indexes, so developers must manually remove any generated `DROP INDEX` statements for this index in new migrations. Passes are intentionally never soft-deleted; they terminate in a final status with a corresponding timestamp. Key relationships include multi-role User→Pass relations (student, requester, approver, denier, canceller), School as the central tenant entity, and a one-to-one PassPolicy per school governing rate limits via interval-based constraints.
