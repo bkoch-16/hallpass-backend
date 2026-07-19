@@ -113,6 +113,19 @@ model Account {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// better-auth verification tokens (password reset). Rows are short-lived:
+// better-auth deletes them on use and purges expired rows opportunistically.
+model Verification {
+  id         Int      @id @default(autoincrement())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
 model ScheduleType {
   id          Int       @id @default(autoincrement())
   schoolId    Int

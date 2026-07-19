@@ -8,15 +8,10 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🔴 Forgot password is non-functional — no email infrastructure exists
-`packages/auth/src/index.ts` configures `emailAndPassword` with no `sendResetPassword` callback, so `POST /api/auth/request-password-reset` cannot deliver a token. No mailer dependency or provider exists anywhere in the repo (`docs/ONBOARDING.md:121` acknowledges this). Ironically the reset routes are already rate-limited (`apps/user-api/src/app.ts:64-73`) — anticipated but dead.
-
-**Fix:** pick an email provider (Resend fits the free-tier posture), wire `sendResetPassword` in `createAuth`, build the SPA reset page.
-
 ### 🔴 Bulk-provisioned users can never log in — temp passwords are discarded
 `POST /api/users` returns `tempPassword` once in the 201, but `POST /api/users/bulk` returns only a `{created, failed}` summary (`apps/user-api/src/routes/user.ts:272`) — the generated credentials are never surfaced to anyone. There is no invite / set-initial-password flow, temp passwords never expire, and nothing forces a change on first login.
 
-**Fix:** invite flow (signed short-lived token + public set-password endpoint — sketched in `docs/ONBOARDING.md:99-107`; needs no email provider) or transactional-email invites once the mailer above exists. Minimum: return per-user temp passwords from `/bulk`.
+**Fix:** invite flow (signed short-lived token + public set-password endpoint — sketched in `docs/ONBOARDING.md:99-107`) or transactional-email invites via `@hallpass/email` (SES, added with the password-reset flow). Minimum: return per-user temp passwords from `/bulk`.
 
 ### 🟠 Non-SUPER_ADMIN users cannot read their own school
 `GET /api/schools/:id` is `requireRole(SUPER_ADMIN)` (`apps/schools-api/src/routes/school.ts:65-68`). A student/teacher/admin client can't fetch the school's name or `timezone` — needed to render period times and pass expiry. Sub-resources are readable via `requireSchoolAccess`; the school entity itself isn't.
@@ -143,7 +138,7 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. Email provider + forgot password + invite/bulk-credential delivery (one work stream — same infrastructure).
+1. Invite/bulk-credential delivery via `@hallpass/email` (forgot password + SES infrastructure landed 2026-07-19).
 2. SPA-shaped API gaps, all small and additive: school in `/me`, current-period endpoint, pass filters, user search.
 3. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy, session revocation on delete.
 4. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.

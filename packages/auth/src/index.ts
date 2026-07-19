@@ -10,7 +10,12 @@ export function createAuth(config: {
   baseURL: string;
   secret: string;
   trustedOrigins?: string[];
+  sendResetPassword?: (data: {
+    user: { email: string; name: string };
+    token: string;
+  }) => Promise<void>;
 }) {
+  const { sendResetPassword } = config;
   return betterAuth({
     baseURL: config.baseURL,
     secret: config.secret,
@@ -28,6 +33,11 @@ export function createAuth(config: {
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
+      ...(sendResetPassword && {
+        sendResetPassword: async ({ user, token }) => {
+          await sendResetPassword({ user: { email: user.email, name: user.name }, token });
+        },
+      }),
     },
     advanced: {
       database: {

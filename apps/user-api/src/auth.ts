@@ -1,7 +1,9 @@
 import { createAuth } from "@hallpass/auth";
+import { resetPasswordEmail } from "@hallpass/email";
 import { prisma } from "@hallpass/db";
 import { parseCorsOrigins } from "@hallpass/express-middleware";
 import { env } from "./env.js";
+import { emailSender, resetPasswordUrl } from "./email.js";
 
 const origins = parseCorsOrigins(env);
 
@@ -11,4 +13,11 @@ export const auth = createAuth({
   secret: env.BETTER_AUTH_SECRET,
   // "*" (allow-all) maps to undefined — better-auth's trustedOrigins only accepts a concrete list
   trustedOrigins: Array.isArray(origins) ? origins : undefined,
+  sendResetPassword: async ({ user, token }) => {
+    const message = resetPasswordEmail({
+      name: user.name,
+      url: resetPasswordUrl(token),
+    });
+    await emailSender.send({ to: user.email, ...message });
+  },
 });
