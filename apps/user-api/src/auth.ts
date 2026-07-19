@@ -2,6 +2,7 @@ import { createAuth } from "@hallpass/auth";
 import { resetPasswordEmail } from "@hallpass/email";
 import { prisma } from "@hallpass/db";
 import { parseCorsOrigins } from "@hallpass/express-middleware";
+import { logger } from "@hallpass/logger";
 import { env } from "./env.js";
 import { emailSender, resetPasswordUrl } from "./email.js";
 
@@ -18,6 +19,10 @@ export const auth = createAuth({
       name: user.name,
       url: resetPasswordUrl(token),
     });
-    await emailSender.send({ to: user.email, ...message });
+    try {
+      await emailSender.send({ to: user.email, ...message });
+    } catch (err) {
+      logger.error(err, `[auth] failed to send password reset email to user ${user.email}`);
+    }
   },
 });
