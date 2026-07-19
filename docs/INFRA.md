@@ -161,10 +161,10 @@ pnpm --filter @hallpass/db exec prisma studio
 **Seed users (dev only):**
 | Email | Password | Role |
 |---|---|---|
-| student@hallpass.dev | password | STUDENT |
-| teacher@hallpass.dev | password | TEACHER |
-| admin@hallpass.dev | password | ADMIN |
-| superadmin@hallpass.dev | password | SUPER_ADMIN |
+| student@gohallhero.com | password | STUDENT |
+| teacher@gohallhero.com | password | TEACHER |
+| admin@gohallhero.com | password | ADMIN |
+| superadmin@gohallhero.com | password | SUPER_ADMIN |
 
 ## Authentication & Rate Limiting
 

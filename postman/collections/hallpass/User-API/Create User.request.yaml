@@ -6,7 +6,7 @@ body:
   type: json
   content: |-
     {
-      "email": "newuser@hallpass.dev",
+      "email": "newuser@gohallhero.com",
       "name": "New User",
       "role": "STUDENT"
     }
