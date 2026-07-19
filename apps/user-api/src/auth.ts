@@ -15,11 +15,11 @@ export const auth = createAuth({
   // "*" (allow-all) maps to undefined — better-auth's trustedOrigins only accepts a concrete list
   trustedOrigins: Array.isArray(origins) ? origins : undefined,
   sendResetPassword: async ({ user, token }) => {
-    const message = resetPasswordEmail({
-      name: user.name,
-      url: resetPasswordUrl(token),
-    });
     try {
+      const message = resetPasswordEmail({
+        name: user.name,
+        url: resetPasswordUrl(token),
+      });
       await emailSender.send({ to: user.email, ...message });
     } catch (err) {
       logger.error(err, `[auth] failed to send password reset email to user ${user.email}`);
