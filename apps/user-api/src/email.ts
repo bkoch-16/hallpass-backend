@@ -22,6 +22,6 @@ function sesConfig() {
 export const emailSender = createEmailSender(sesConfig());
 
 export function resetPasswordUrl(token: string): string {
-  const base = (env.WEB_APP_URL ?? "http://localhost:8080").replace(/\/+$/, "");
+  const base = (env.WEB_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
   return `${base}/reset-password.html?token=${encodeURIComponent(token)}`;
 }
