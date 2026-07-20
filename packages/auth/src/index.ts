@@ -11,7 +11,7 @@ export function createAuth(config: {
   secret: string;
   trustedOrigins?: string[];
   sendResetPassword?: (data: {
-    user: { email: string; name: string };
+    user: { email: string; name: string | null };
     token: string;
   }) => Promise<void>;
 }) {

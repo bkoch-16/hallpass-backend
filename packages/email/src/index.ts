@@ -74,10 +74,10 @@ function escapeHtml(value: string): string {
 }
 
 export function resetPasswordEmail(input: {
-  name: string;
+  name: string | null;
   url: string;
 }): Omit<EmailMessage, "to"> {
-  const name = input.name.trim() || "there";
+  const name = input.name?.trim() || "there";
   return {
     subject: "Reset your Hallpass password",
     text: [
