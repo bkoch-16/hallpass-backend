@@ -33,11 +33,13 @@ beforeEach(async () => {
   // users cascade sessions and accounts.
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
+  await prisma.verification.deleteMany();
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
+  await prisma.verification.deleteMany();
   await prisma.$disconnect();
 });
 
