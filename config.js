@@ -131,7 +131,7 @@ const CONFIG = {
           "headers": [],
           "pathVariables": [],
           "queryParams": [],
-          "body": "{\n  \"email\": \"newuser@hallpass.dev\",\n  \"name\": \"New User\",\n  \"role\": \"STUDENT\"\n}"
+          "body": "{\n  \"email\": \"newuser@gohallhero.com\",\n  \"name\": \"New User\",\n  \"role\": \"STUDENT\"\n}"
         },
         {
           "name": "Bulk Create Users",
@@ -142,7 +142,7 @@ const CONFIG = {
           "headers": [],
           "pathVariables": [],
           "queryParams": [],
-          "body": "[\n  { \"email\": \"student1@hallpass.dev\", \"name\": \"Student One\", \"role\": \"STUDENT\" },\n  { \"email\": \"student2@hallpass.dev\", \"name\": \"Student Two\", \"role\": \"STUDENT\" },\n  { \"email\": \"teacher1@hallpass.dev\", \"name\": \"Teacher One\", \"role\": \"TEACHER\" }\n]"
+          "body": "[\n  { \"email\": \"student1@gohallhero.com\", \"name\": \"Student One\", \"role\": \"STUDENT\" },\n  { \"email\": \"student2@gohallhero.com\", \"name\": \"Student Two\", \"role\": \"STUDENT\" },\n  { \"email\": \"teacher1@gohallhero.com\", \"name\": \"Teacher One\", \"role\": \"TEACHER\" }\n]"
         }
       ]
     },
@@ -175,7 +175,7 @@ const CONFIG = {
           "order": 2000,
           "method": "POST",
           "url": "{{Base}}/api/auth/sign-in/email",
-          "description": "Sign in with email and password. Sets a session cookie used by all protected endpoints. Seed accounts — student@hallpass.dev, teacher@hallpass.dev, admin@hallpass.dev, superadmin@hallpass.dev (password \"password\").",
+          "description": "Sign in with email and password. Sets a session cookie used by all protected endpoints. Seed accounts — student@gohallhero.com, teacher@gohallhero.com, admin@gohallhero.com, superadmin@gohallhero.com (password \"password\").",
           "headers": [
             {
               "key": "Origin",
@@ -184,7 +184,7 @@ const CONFIG = {
           ],
           "pathVariables": [],
           "queryParams": [],
-          "body": "{\n  \"email\": \"admin@hallpass.dev\",\n  \"password\": \"password\"\n}"
+          "body": "{\n  \"email\": \"admin@gohallhero.com\",\n  \"password\": \"password\"\n}"
         },
         {
           "name": "Change Password",
@@ -201,6 +201,38 @@ const CONFIG = {
           "pathVariables": [],
           "queryParams": [],
           "body": "{\n  \"currentPassword\": \"password\",\n  \"newPassword\": \"new-password\",\n  \"revokeOtherSessions\": true\n}"
+        },
+        {
+          "name": "Request Password Reset",
+          "order": 2600,
+          "method": "POST",
+          "url": "{{Base}}/api/auth/request-password-reset",
+          "description": "Request a password-reset email. Always returns 200 whether or not the email exists (no account enumeration). When SES is configured the message links to the demo UI's reset page; without SES the server logs the message instead. On the strict auth rate limit (10 requests / 15 min per email).",
+          "headers": [
+            {
+              "key": "Origin",
+              "value": "{{Base}}"
+            }
+          ],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": "{\n  \"email\": \"admin@gohallhero.com\"\n}"
+        },
+        {
+          "name": "Reset Password",
+          "order": 2700,
+          "method": "POST",
+          "url": "{{Base}}/api/auth/reset-password",
+          "description": "Complete a password reset with the token from the reset email (the demo UI's reset-password.html normally submits this). Tokens are single-use and expire after one hour.",
+          "headers": [
+            {
+              "key": "Origin",
+              "value": "{{Base}}"
+            }
+          ],
+          "pathVariables": [],
+          "queryParams": [],
+          "body": "{\n  \"newPassword\": \"new-password\",\n  \"token\": \"paste-token-from-email\"\n}"
         },
         {
           "name": "Sign Out",
