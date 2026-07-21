@@ -191,6 +191,18 @@ async function send() {
   };
 
   if (!noBody && bodyVal) {
+    try {
+      JSON.parse(bodyVal);
+    } catch (err) {
+      const badge = document.getElementById('status-badge');
+      badge.textContent = 'Invalid JSON';
+      badge.className = 'status-badge status-4xx';
+      document.getElementById('response-body').textContent = err.message;
+      document.getElementById('response-card').classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Send \u2192';
+      return;
+    }
     opts.headers['Content-Type'] = 'application/json';
     opts.body = bodyVal;
   }
