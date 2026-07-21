@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-17T21:43:22.776Z — 18 files indexed_
+_Generated: 2026-07-21T20:33:44.353Z — 19 files indexed_
 
 ## File Summaries
 
@@ -26,7 +26,7 @@ Keeps the `develop` branch in sync with `main` by automatically creating a merge
 
 ### `apps/user-api/Dockerfile`
 
-Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm@10. Uses layer caching by copying package manifests first and running pnpm install before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all dependent workspace packages in dependency order. Uses a custom docker-entrypoint.sh script as ENTRYPOINT and exposes port 3001. Developers modifying this must update the COPY and build filter steps if new workspace packages are added as dependencies.
+Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm 10. Uses layer caching by copying package manifests first, then running pnpm install --frozen-lockfile, before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all workspace dependencies in topological order (@hallpass/db → auth → logger → email → types → express-middleware → user-api). Uses a custom docker-entrypoint.sh script and exposes port 3001. Developers adding new workspace package dependencies must add the corresponding COPY and build steps in the correct order.
 
 ### `apps/user-api/src/app.ts`
 
@@ -34,11 +34,15 @@ Express application setup for the user-api service. Configures helmet, CORS, HTT
 
 ### `apps/user-api/src/auth.ts`
 
-Configures and exports the better-auth instance for the user-api service by calling createAuth from @hallpass/auth with the shared Prisma client, base URL, secret, and parsed CORS origins as trusted origins. The wildcard '*' origin maps to undefined (better-auth requires concrete origin lists). This auth instance is imported by route handlers and middleware throughout the service.
+Configures and exports the better-auth instance for the user-api service by calling createAuth from @hallpass/auth. Wires up the Prisma client, CORS trusted origins (parsed from env), base URL, secret, and a password-reset email sender using @hallpass/email's SES integration. The sendResetPassword callback constructs a reset URL and sends it via the configured emailSender, logging errors non-fatally. This is the single auth instance used across all user-api routes and middleware.
+
+### `apps/user-api/src/email.ts`
+
+Provides email sending infrastructure for the user-api service. Exports an emailSender created via @hallpass/email's createEmailSender, configured with AWS SES credentials from env (falls back to logging when SES is not configured). Also exports a resetPasswordUrl helper that constructs password-reset/invite links pointing to the WEB_APP_URL frontend. The sesConfig() function enforces all-or-nothing SES credential presence, returning undefined when any credential is missing.
 
 ### `apps/user-api/src/env.ts`
 
-Validates and exports the runtime environment variables for the user-api service using the rateLimitEnvSchema from @hallpass/express-middleware (which extends the base env schema with REDIS_URL and REDIS_PREFIX). The parsed env object is the single source of truth for configuration across the service. Any new environment variables must be added to the upstream schema.
+Validates and exports environment variables for the user-api service using Zod schemas. Merges rateLimitEnvSchema from @hallpass/express-middleware with a custom emailEnvSchema that enforces all-or-nothing SES configuration (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, EMAIL_FROM) and requires WEB_APP_URL when SES is enabled. Uses Zod refinements for cross-field validation. The exported env object is the single source of truth for typed environment access throughout the service.
 
 ### `apps/user-api/src/index.ts`
 
@@ -54,7 +58,7 @@ Exports a requireAuth Express middleware created via createRequireAuth from the 
 
 ### `apps/user-api/src/routes/user.ts`
 
-Comprehensive Express router implementing CRUD operations for users at /api/users. Supports GET /me, cursor-paginated listing with optional role/ids filtering, GET/:id, POST (single create with temp password and pin assignment), POST /bulk (concurrent batch creation with throttled scrypt hashing), PATCH/:id, and soft DELETE/:id. Enforces role-based access control via requireRole/requireSelfOrRole, school-scoped tenancy (non-super-admins only see their school's users), and role hierarchy checks preventing privilege escalation. Uses Zod validation middleware for body/params/query and handles duplicate email errors (both EmailInUseError and Prisma P2002).
+Express router implementing full CRUD for users with role-based access control, cursor pagination, and bulk provisioning. Exports routes: GET /me, GET / (paginated list with optional ?ids= batch lookup), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft delete). User creation flows through better-auth's createUserWithCredential, assigns PIN codes for students, and sends invite emails — all with non-fatal error handling so partial failures don't block provisioning. Enforces role hierarchy via roleRank, school-scoped access for non-SUPER_ADMIN users, and uses Zod validation middleware. Returns typed responses (UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult) from @hallpass/types.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -70,8 +74,8 @@ Root package.json for the 'hallpass-backend' monorepo using pnpm workspaces and 
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package wrapping better-auth with PostgreSQL/Prisma adapter and bearer token plugin. Exports createAuth factory (configuring email/password auth with signup disabled, serial ID generation, 7-day sessions, and HTTPS-aware cookie settings), the Auth and Session types, toNodeHandler/fromNodeHeaders utilities, and createUserWithCredential for server-side user provisioning with race-condition-safe duplicate email detection. EmailInUseError is exported for consistent error handling. The user model extends better-auth with role and schoolId additional fields. Developers adding user fields must update both additionalFields and createUserWithCredential.
+Core authentication package wrapping better-auth with Prisma adapter for PostgreSQL. Exports createAuth factory that configures email/password auth (sign-up disabled), bearer token plugin, serial ID generation, secure cookie settings for HTTPS, and optional password-reset email sending. Also exports createUserWithCredential for server-side user provisioning with race-condition-safe duplicate email detection (translates Prisma P2002 to EmailInUseError), and createSetPasswordToken for minting invite/reset tokens as Verification rows. Exposes Auth and Session types, plus toNodeHandler and fromNodeHeaders re-exports from better-auth/node. The additionalFields configuration adds role and schoolId to the user model.
 
 ### `packages/db/prisma/schema.prisma`
 
-Defines the complete PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User (with Role enum: STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus lifecycle: PENDING→WAITING→ACTIVE→COMPLETED/CANCELLED/DENIED/EXPIRED). Authentication is handled via better-auth with Session and Account models using Int autoincrement IDs (required by better-auth's `generateId: "serial"` config). The Pass model has a critical partial unique index (`one_active_pass_per_student`) that enforces one active pass per student — this index exists only in a migration file and cannot be expressed in Prisma schema, so developers must manually delete any auto-generated `DROP INDEX` for it when creating new migrations. Passes intentionally have no `deletedAt` field as they use terminal statuses instead of soft-deletion. Key relationships include multi-role User references on Pass (student, requester, approver, denier, canceller) and school-scoped indexing on most models.
+Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Models include multi-tenant hierarchy (District → School → User), authentication tables (Session, Account, Verification) compatible with better-auth's serial ID requirement, scheduling (ScheduleType, Period, SchoolCalendar), hall pass management (Pass, Destination, PassPolicy), and role-based access (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE). The Pass model has a critical partial unique index (one_active_pass_per_student) that exists only in a migration and cannot be expressed in the Prisma schema — developers must manually remove any auto-generated DROP INDEX for it in new migrations. Soft deletes use a nullable deletedAt column on most models except Pass, which uses terminal statuses instead. Key enums (Role, PassStatus, PolicyInterval) drive application logic across multiple services.

@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-17T21:43:22.776Z",
+  "generatedAt": "2026-07-21T20:33:44.353Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "c99f6c4db14aa36c2ee4193320dfb13d5cde9706",
-      "summary": "Defines the complete PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User (with Role enum: STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus lifecycle: PENDING→WAITING→ACTIVE→COMPLETED/CANCELLED/DENIED/EXPIRED). Authentication is handled via better-auth with Session and Account models using Int autoincrement IDs (required by better-auth's `generateId: \"serial\"` config). The Pass model has a critical partial unique index (`one_active_pass_per_student`) that enforces one active pass per student — this index exists only in a migration file and cannot be expressed in Prisma schema, so developers must manually delete any auto-generated `DROP INDEX` for it when creating new migrations. Passes intentionally have no `deletedAt` field as they use terminal statuses instead of soft-deletion. Key relationships include multi-role User references on Pass (student, requester, approver, denier, canceller) and school-scoped indexing on most models."
+      "blobSha": "771d3f85761d43a2408ed526d045bf02c546bff4",
+      "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Models include multi-tenant hierarchy (District → School → User), authentication tables (Session, Account, Verification) compatible with better-auth's serial ID requirement, scheduling (ScheduleType, Period, SchoolCalendar), hall pass management (Pass, Destination, PassPolicy), and role-based access (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE). The Pass model has a critical partial unique index (one_active_pass_per_student) that exists only in a migration and cannot be expressed in the Prisma schema — developers must manually remove any auto-generated DROP INDEX for it in new migrations. Soft deletes use a nullable deletedAt column on most models except Pass, which uses terminal statuses instead. Key enums (Role, PassStatus, PolicyInterval) drive application logic across multiple services."
     },
     "apps/user-api/src/app.ts": {
       "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
       "summary": "Express application setup for the user-api service. Configures helmet, CORS, HTTP logging, JSON parsing, health check endpoint (exempt from rate limiting), and Redis-backed rate limiting with separate general and auth limiters. Routes better-auth endpoints under /api/auth/* with a strict auth limiter on credential-sensitive POST routes, and mounts the user CRUD router at /api/users. Falls back to in-memory rate limiting when Redis is unavailable or in test mode. Uses middleware from @hallpass/express-middleware throughout."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "4b56fc75ad42b0712cc21ef54da2cd21098796c9",
-      "summary": "Configures and exports the better-auth instance for the user-api service by calling createAuth from @hallpass/auth with the shared Prisma client, base URL, secret, and parsed CORS origins as trusted origins. The wildcard '*' origin maps to undefined (better-auth requires concrete origin lists). This auth instance is imported by route handlers and middleware throughout the service."
+      "blobSha": "7b5a3e79e7528f1ae644bb38102f550b914abc7e",
+      "summary": "Configures and exports the better-auth instance for the user-api service by calling createAuth from @hallpass/auth. Wires up the Prisma client, CORS trusted origins (parsed from env), base URL, secret, and a password-reset email sender using @hallpass/email's SES integration. The sendResetPassword callback constructs a reset URL and sends it via the configured emailSender, logging errors non-fatally. This is the single auth instance used across all user-api routes and middleware."
     },
     "apps/user-api/src/env.ts": {
-      "blobSha": "3a58d73a90ec416d9aab3e8acd42553bf068fe23",
-      "summary": "Validates and exports the runtime environment variables for the user-api service using the rateLimitEnvSchema from @hallpass/express-middleware (which extends the base env schema with REDIS_URL and REDIS_PREFIX). The parsed env object is the single source of truth for configuration across the service. Any new environment variables must be added to the upstream schema."
+      "blobSha": "0d45bde7bf596571d32c304a7dac86eef63d687f",
+      "summary": "Validates and exports environment variables for the user-api service using Zod schemas. Merges rateLimitEnvSchema from @hallpass/express-middleware with a custom emailEnvSchema that enforces all-or-nothing SES configuration (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, EMAIL_FROM) and requires WEB_APP_URL when SES is enabled. Uses Zod refinements for cross-field validation. The exported env object is the single source of truth for typed environment access throughout the service."
     },
     "apps/user-api/src/index.ts": {
       "blobSha": "c4e0fcb6b67a339a5e32acb8a68967d401e40747",
@@ -27,20 +27,20 @@
       "summary": "Exports a requireAuth Express middleware created via createRequireAuth from the shared middleware package, bound to this service's auth instance. This middleware is used on protected routes to verify the session and populate req.user."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "05bd4918f70a065eb7ca07cc62484c891bd7ff1b",
-      "summary": "Comprehensive Express router implementing CRUD operations for users at /api/users. Supports GET /me, cursor-paginated listing with optional role/ids filtering, GET/:id, POST (single create with temp password and pin assignment), POST /bulk (concurrent batch creation with throttled scrypt hashing), PATCH/:id, and soft DELETE/:id. Enforces role-based access control via requireRole/requireSelfOrRole, school-scoped tenancy (non-super-admins only see their school's users), and role hierarchy checks preventing privilege escalation. Uses Zod validation middleware for body/params/query and handles duplicate email errors (both EmailInUseError and Prisma P2002)."
+      "blobSha": "ff05838c2ff513b0fbcbddb55f73076ea5e682a5",
+      "summary": "Express router implementing full CRUD for users with role-based access control, cursor pagination, and bulk provisioning. Exports routes: GET /me, GET / (paginated list with optional ?ids= batch lookup), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft delete). User creation flows through better-auth's createUserWithCredential, assigns PIN codes for students, and sends invite emails — all with non-fatal error handling so partial failures don't block provisioning. Enforces role hierarchy via roleRank, school-scoped access for non-SUPER_ADMIN users, and uses Zod validation middleware. Returns typed responses (UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult) from @hallpass/types."
     },
     "apps/user-api/src/schemas/user.ts": {
       "blobSha": "c15bdad7bdc31ab7b2088f0b1365bd8eb1f87e2e",
       "summary": "Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (validates route param as numeric string), `listUsersSchema` (role filter, cursor pagination, ids filter, limit with default 50), `createUserSchema` (email, name required, optional role from ASSIGNABLE_ROLES), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId support). All role fields are validated against ASSIGNABLE_ROLES from @hallpass/types."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "d2b6daa83886a5f7242ec97d045ee2345c153642",
-      "summary": "Shared authentication package wrapping better-auth with PostgreSQL/Prisma adapter and bearer token plugin. Exports createAuth factory (configuring email/password auth with signup disabled, serial ID generation, 7-day sessions, and HTTPS-aware cookie settings), the Auth and Session types, toNodeHandler/fromNodeHeaders utilities, and createUserWithCredential for server-side user provisioning with race-condition-safe duplicate email detection. EmailInUseError is exported for consistent error handling. The user model extends better-auth with role and schoolId additional fields. Developers adding user fields must update both additionalFields and createUserWithCredential."
+      "blobSha": "6c8ac490616d797a6af7a96122a653ece9ae7886",
+      "summary": "Core authentication package wrapping better-auth with Prisma adapter for PostgreSQL. Exports createAuth factory that configures email/password auth (sign-up disabled), bearer token plugin, serial ID generation, secure cookie settings for HTTPS, and optional password-reset email sending. Also exports createUserWithCredential for server-side user provisioning with race-condition-safe duplicate email detection (translates Prisma P2002 to EmailInUseError), and createSetPasswordToken for minting invite/reset tokens as Verification rows. Exposes Auth and Session types, plus toNodeHandler and fromNodeHeaders re-exports from better-auth/node. The additionalFields configuration adds role and schoolId to the user model."
     },
     "apps/user-api/Dockerfile": {
-      "blobSha": "b5c1418556d2af0362cac3a58173a6d0969d9a3e",
-      "summary": "Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm@10. Uses layer caching by copying package manifests first and running pnpm install before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all dependent workspace packages in dependency order. Uses a custom docker-entrypoint.sh script as ENTRYPOINT and exposes port 3001. Developers modifying this must update the COPY and build filter steps if new workspace packages are added as dependencies."
+      "blobSha": "c1ee77fda5b38625f4036f9620b6b104b3869524",
+      "summary": "Multi-stage Docker build for the user-api Express service, based on node:22-alpine with pnpm 10. Uses layer caching by copying package manifests first, then running pnpm install --frozen-lockfile, before copying source code. Generates the Prisma client with a dummy DATABASE_URL (no DB connection needed), then builds all workspace dependencies in topological order (@hallpass/db → auth → logger → email → types → express-middleware → user-api). Uses a custom docker-entrypoint.sh script and exposes port 3001. Developers adding new workspace package dependencies must add the corresponding COPY and build steps in the correct order."
     },
     "docker-compose.yml": {
       "blobSha": "9f902056153e90be9641aa73333d0af370d22940",
@@ -73,6 +73,10 @@
     "apps/user-api/src/lib/pin.ts": {
       "blobSha": "7e5852a77025f90de70ad70d147ffcdf031e7105",
       "summary": "Provides PIN code generation and collision-safe user creation logic for the user API. `generatePinCode()` produces a 6-digit string (100000–999999, no leading zeros) using Node's crypto `randomInt`. `createUserWithPin()` is the primary export: it wraps a user creation callback, automatically generating and assigning a pinCode for STUDENT roles while retrying up to 5 times on Prisma P2002 unique constraint violations specific to the `pinCode` field. Non-student roles receive no pin and skip retry logic. The helper `isPinCodeConflict()` distinguishes pinCode collisions from email conflicts by inspecting the P2002 error's `meta.target`, ensuring email uniqueness errors propagate unchanged to callers."
+    },
+    "apps/user-api/src/email.ts": {
+      "blobSha": "3fd3dd451d994b3968c6b0aef3f2eb55f364574a",
+      "summary": "Provides email sending infrastructure for the user-api service. Exports an emailSender created via @hallpass/email's createEmailSender, configured with AWS SES credentials from env (falls back to logging when SES is not configured). Also exports a resetPasswordUrl helper that constructs password-reset/invite links pointing to the WEB_APP_URL frontend. The sesConfig() function enforces all-or-nothing SES credential presence, returning undefined when any credential is missing."
     }
   }
 }
