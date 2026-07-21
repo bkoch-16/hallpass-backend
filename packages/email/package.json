@@ -1,0 +1,19 @@
+{
+  "name": "@hallpass/email",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "latest",
+    "@hallpass/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "^5.9.3"
+  }
+}

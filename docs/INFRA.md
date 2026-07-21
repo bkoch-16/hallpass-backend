@@ -76,6 +76,22 @@ Common to `user-api` and `schools-api`:
 | `CORS_ORIGIN` | — | Yes |
 | `PORT` | `3001` | No |
 
+`user-api` only — outbound email (password-reset messages) via Amazon SES:
+
+| Variable | Default | Required |
+|---|---|---|
+| `AWS_REGION` | — | No* |
+| `AWS_ACCESS_KEY_ID` | — | No* |
+| `AWS_SECRET_ACCESS_KEY` | — | No* |
+| `EMAIL_FROM` | — | No* |
+| `WEB_APP_URL` | — | With SES |
+
+*All-or-nothing: set all four to send real email through SES, or none to fall
+back to logging the message (local dev, tests). `WEB_APP_URL` is the origin
+reset links point at (the demo UI on GitHub Pages today) and is required
+whenever SES is configured. The IAM key should be scoped to `ses:SendEmail`
+on the verified identity only.
+
 `REDIS_URL`/`REDIS_PREFIX` are **optional** for `user-api` (falls back to
 express-rate-limit's in-memory store when unset) but **required** for
 `schools-api` (its public, no-session calendar/schedule-type endpoints — see
@@ -161,10 +177,10 @@ pnpm --filter @hallpass/db exec prisma studio
 **Seed users (dev only):**
 | Email | Password | Role |
 |---|---|---|
-| student@hallpass.dev | password | STUDENT |
-| teacher@hallpass.dev | password | TEACHER |
-| admin@hallpass.dev | password | ADMIN |
-| superadmin@hallpass.dev | password | SUPER_ADMIN |
+| student@gohallhero.com | password | STUDENT |
+| teacher@gohallhero.com | password | TEACHER |
+| admin@gohallhero.com | password | ADMIN |
+| superadmin@gohallhero.com | password | SUPER_ADMIN |
 
 ## Authentication & Rate Limiting
 

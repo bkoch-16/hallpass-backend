@@ -6,8 +6,8 @@ body:
   type: json
   content: |-
     [
-      { "email": "student1@hallpass.dev", "name": "Student One", "role": "STUDENT" },
-      { "email": "student2@hallpass.dev", "name": "Student Two", "role": "STUDENT" },
-      { "email": "teacher1@hallpass.dev", "name": "Teacher One", "role": "TEACHER" }
+      { "email": "student1@gohallhero.com", "name": "Student One", "role": "STUDENT" },
+      { "email": "student2@gohallhero.com", "name": "Student Two", "role": "STUDENT" },
+      { "email": "teacher1@gohallhero.com", "name": "Teacher One", "role": "TEACHER" }
     ]
 order: 6000

@@ -116,7 +116,31 @@ other requests ride the general limiter.
 
 ---
 
-## Realtime (passes-api / Socket.io)
+## Password reset
+
+`POST /api/auth/request-password-reset` (user-api) with `{ "email": "..." }`
+always returns 200; if the account exists, better-auth generates a single-use
+token (1-hour expiry, stored in the `Verification` table) and the
+`sendResetPassword` hook (`packages/auth/src/index.ts`, wired in
+`apps/user-api/src/auth.ts`) emails a link via `@hallpass/email` (Amazon
+SES). The link points at `WEB_APP_URL`/reset-password.html?token=…— today
+the demo UI's static page — which submits
+`POST /api/auth/reset-password` with `{ "newPassword": "...", "token": "..." }`.
+
+Without SES env configured (local dev, tests), the email is logged instead of
+sent, with the reset URL in the log line. Both endpoints ride the strict auth
+rate limiter (see note above).
+
+### Invites
+
+Provisioning (`POST /api/users` and `POST /api/users/bulk`, user-api) emails
+each successfully created user an invite via `@hallpass/email` — same
+mechanism as password reset above: a `Verification` token redeemed by the
+existing `POST /api/auth/reset-password`. The difference is the token is
+minted server-side by `createSetPasswordToken`
+(`packages/auth/src/index.ts:111`) rather than by better-auth's own
+request-password-reset flow, with a 7-day expiry instead of 1 hour. See
+`docs/ONBOARDING.md` for the full provisioning flow.
 
 Browsers cannot set an `Authorization` header on a WebSocket upgrade, so
 `socket.io-client` carries the token through its `auth` option instead, which
