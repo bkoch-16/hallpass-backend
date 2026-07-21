@@ -3,9 +3,9 @@ name: List Periods
 url: "{{Base}}/api/schools/:schoolId/schedule-types/:scheduleTypeId/periods"
 method: GET
 description: List all periods for a schedule type. Requires school membership.
-headers:
-  X-Api-Key: "{{ParentToolApiKey}}"
 pathVariables:
-  schoolId: "1"
-  scheduleTypeId: "1"
+  - key: schoolId
+    value: "1"
+  - key: scheduleTypeId
+    value: "1"
 order: 1000
