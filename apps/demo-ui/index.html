@@ -21,7 +21,7 @@
   <div class="info-panel-body" id="info-panel-body">
     <p><strong>What this is:</strong> Hallpass is a digital hall-pass system: students request passes to leave class, teachers approve them, and admins manage schedules, destinations, and policies. It's a backend portfolio project &mdash; there is no full frontend, so this tool lets you call the API endpoints directly and inspect their responses.</p>
     <p><strong>Getting started:</strong> Go to <strong>Auth &gt; Sign In</strong> and use one of the seed accounts below; the session cookie is then sent automatically with all protected requests. Each account demonstrates a different permission level. (Sharing live credentials like this is unusual, but deliberate here to keep the demo stable.)</p>
-    <p class="info-accounts">Seed accounts (password: <code>password</code>): <code>student@hallpass.dev</code> &nbsp; <code>teacher@hallpass.dev</code> &nbsp; <code>admin@hallpass.dev</code> &nbsp; <code>superadmin@hallpass.dev</code></p>
+    <p class="info-accounts">Seed accounts (password: <code>password</code>): <code>student@gohallhero.com</code> &nbsp; <code>teacher@gohallhero.com</code> &nbsp; <code>admin@gohallhero.com</code> &nbsp; <code>superadmin@gohallhero.com</code></p>
     <p><strong>Try it &mdash; create a pass:</strong> Passes can only be created during an active school period, so set that up first:</p>
     <ol class="info-notes">
       <li>As an admin, use <strong>Schools-API &gt; Calendar &gt; Upsert Calendar Entries</strong> to add an entry for today, choosing a schedule type whose periods cover the current time (in the school's timezone). Without this, creating a pass returns <em>"No active period"</em>.</li>
@@ -90,6 +90,7 @@
 </main>
 
 <script src="config.js"></script>
+<script src="config-helper.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

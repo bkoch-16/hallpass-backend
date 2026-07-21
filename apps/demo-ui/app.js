@@ -5,11 +5,6 @@
 let currentEndpoint = null;
 let sessionToken = null;
 
-function getUserApiBase() {
-  const group = CONFIG.groups.find(g => g.name === 'User-API');
-  return group?.baseUrls?.[CONFIG.stages[0]] ?? '';
-}
-
 function getBaseUrl() {
   const group = getSelectedGroup();
   return group?.baseUrls?.[CONFIG.stages[0]] ?? '';

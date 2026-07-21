@@ -23,14 +23,14 @@ const auth = createAuth({
 });
 
 const seedUsers = [
-  { email: "student@hallpass.dev", name: "Sample Student", role: "STUDENT" as const, assignSchool: true, pinCode: "482913" },
-  { email: "alex.rivera@hallpass.dev", name: "Alex Rivera", role: "STUDENT" as const, assignSchool: true, pinCode: "274859" },
-  { email: "jordan.lee@hallpass.dev", name: "Jordan Lee", role: "STUDENT" as const, assignSchool: true, pinCode: "391026" },
-  { email: "morgan.diaz@hallpass.dev", name: "Morgan Diaz", role: "STUDENT" as const, assignSchool: true, pinCode: "518734" },
-  { email: "casey.nguyen@hallpass.dev", name: "Casey Nguyen", role: "STUDENT" as const, assignSchool: true, pinCode: "629451" },
-  { email: "teacher@hallpass.dev", name: "Sample Teacher", role: "TEACHER" as const, assignSchool: true },
-  { email: "admin@hallpass.dev", name: "Sample Admin", role: "ADMIN" as const, assignSchool: true },
-  { email: "superadmin@hallpass.dev", name: "Sample Super Admin", role: "SUPER_ADMIN" as const, assignSchool: false },
+  { email: "student@gohallhero.com", name: "Sample Student", role: "STUDENT" as const, assignSchool: true, pinCode: "482913" },
+  { email: "alex.rivera@gohallhero.com", name: "Alex Rivera", role: "STUDENT" as const, assignSchool: true, pinCode: "274859" },
+  { email: "jordan.lee@gohallhero.com", name: "Jordan Lee", role: "STUDENT" as const, assignSchool: true, pinCode: "391026" },
+  { email: "morgan.diaz@gohallhero.com", name: "Morgan Diaz", role: "STUDENT" as const, assignSchool: true, pinCode: "518734" },
+  { email: "casey.nguyen@gohallhero.com", name: "Casey Nguyen", role: "STUDENT" as const, assignSchool: true, pinCode: "629451" },
+  { email: "teacher@gohallhero.com", name: "Sample Teacher", role: "TEACHER" as const, assignSchool: true },
+  { email: "admin@gohallhero.com", name: "Sample Admin", role: "ADMIN" as const, assignSchool: true },
+  { email: "superadmin@gohallhero.com", name: "Sample Super Admin", role: "SUPER_ADMIN" as const, assignSchool: false },
 ];
 
 const DEFAULT_PASSWORD = "password";
@@ -218,7 +218,7 @@ async function seedSchoolData(schoolId: number) {
 }
 
 async function seedPasses(schoolId: number) {
-  const teacher = await prisma.user.findUnique({ where: { email: "teacher@hallpass.dev" } });
+  const teacher = await prisma.user.findUnique({ where: { email: "teacher@gohallhero.com" } });
   if (!teacher) throw new Error("Teacher not seeded");
 
   const students = await prisma.user.findMany({ where: { schoolId, role: "STUDENT", deletedAt: null } });
@@ -251,34 +251,34 @@ async function seedPasses(schoolId: number) {
     status: "COMPLETED" | "DENIED" | "CANCELLED";
     scheduleType?: "Regular" | "Minimum Day";
   }[] = [
-    { date: "2026-07-13", studentEmail: "student@hallpass.dev",      periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED" },
-    { date: "2026-07-13", studentEmail: "alex.rivera@hallpass.dev",  periodName: "Period 4", destinationName: "Library",        status: "COMPLETED" },
-    { date: "2026-07-13", studentEmail: "jordan.lee@hallpass.dev",   periodName: "Period 6", destinationName: "Nurse's Office",  status: "COMPLETED" },
+    { date: "2026-07-13", studentEmail: "student@gohallhero.com",      periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-13", studentEmail: "alex.rivera@gohallhero.com",  periodName: "Period 4", destinationName: "Library",        status: "COMPLETED" },
+    { date: "2026-07-13", studentEmail: "jordan.lee@gohallhero.com",   periodName: "Period 6", destinationName: "Nurse's Office",  status: "COMPLETED" },
 
-    { date: "2026-07-14", studentEmail: "morgan.diaz@hallpass.dev",  periodName: "Period 1", destinationName: "Bathroom",       status: "COMPLETED" },
-    { date: "2026-07-14", studentEmail: "student@hallpass.dev",      periodName: "Period 5", destinationName: "Office",         status: "COMPLETED" },
-    { date: "2026-07-14", studentEmail: "casey.nguyen@hallpass.dev", periodName: "Period 3", destinationName: "Library",        status: "DENIED" },
-    { date: "2026-07-14", studentEmail: "alex.rivera@hallpass.dev",  periodName: "Period 6", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-14", studentEmail: "morgan.diaz@gohallhero.com",  periodName: "Period 1", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-14", studentEmail: "student@gohallhero.com",      periodName: "Period 5", destinationName: "Office",         status: "COMPLETED" },
+    { date: "2026-07-14", studentEmail: "casey.nguyen@gohallhero.com", periodName: "Period 3", destinationName: "Library",        status: "DENIED" },
+    { date: "2026-07-14", studentEmail: "alex.rivera@gohallhero.com",  periodName: "Period 6", destinationName: "Bathroom",       status: "COMPLETED" },
 
-    { date: "2026-07-15", studentEmail: "jordan.lee@hallpass.dev",   periodName: "Period 2", destinationName: "Nurse's Office",  status: "COMPLETED" },
-    { date: "2026-07-15", studentEmail: "casey.nguyen@hallpass.dev", periodName: "Period 4", destinationName: "Bathroom",       status: "COMPLETED" },
-    { date: "2026-07-15", studentEmail: "morgan.diaz@hallpass.dev",  periodName: "Period 6", destinationName: "Library",        status: "CANCELLED" },
+    { date: "2026-07-15", studentEmail: "jordan.lee@gohallhero.com",   periodName: "Period 2", destinationName: "Nurse's Office",  status: "COMPLETED" },
+    { date: "2026-07-15", studentEmail: "casey.nguyen@gohallhero.com", periodName: "Period 4", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-15", studentEmail: "morgan.diaz@gohallhero.com",  periodName: "Period 6", destinationName: "Library",        status: "CANCELLED" },
 
-    { date: "2026-07-16", studentEmail: "student@hallpass.dev",      periodName: "Period 1", destinationName: "Office",         status: "COMPLETED" },
-    { date: "2026-07-16", studentEmail: "alex.rivera@hallpass.dev",  periodName: "Period 3", destinationName: "Bathroom",       status: "COMPLETED" },
-    { date: "2026-07-16", studentEmail: "jordan.lee@hallpass.dev",   periodName: "Period 5", destinationName: "Nurse's Office",  status: "COMPLETED" },
-    { date: "2026-07-16", studentEmail: "casey.nguyen@hallpass.dev", periodName: "Period 6", destinationName: "Library",        status: "COMPLETED" },
+    { date: "2026-07-16", studentEmail: "student@gohallhero.com",      periodName: "Period 1", destinationName: "Office",         status: "COMPLETED" },
+    { date: "2026-07-16", studentEmail: "alex.rivera@gohallhero.com",  periodName: "Period 3", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-16", studentEmail: "jordan.lee@gohallhero.com",   periodName: "Period 5", destinationName: "Nurse's Office",  status: "COMPLETED" },
+    { date: "2026-07-16", studentEmail: "casey.nguyen@gohallhero.com", periodName: "Period 6", destinationName: "Library",        status: "COMPLETED" },
 
-    { date: "2026-07-17", studentEmail: "morgan.diaz@hallpass.dev",  periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED" },
-    { date: "2026-07-17", studentEmail: "alex.rivera@hallpass.dev",  periodName: "Period 4", destinationName: "Nurse's Office",  status: "COMPLETED" },
-    { date: "2026-07-17", studentEmail: "student@hallpass.dev",      periodName: "Period 6", destinationName: "Library",        status: "DENIED" },
-    { date: "2026-07-17", studentEmail: "casey.nguyen@hallpass.dev", periodName: "Period 1", destinationName: "Office",         status: "COMPLETED" },
+    { date: "2026-07-17", studentEmail: "morgan.diaz@gohallhero.com",  periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED" },
+    { date: "2026-07-17", studentEmail: "alex.rivera@gohallhero.com",  periodName: "Period 4", destinationName: "Nurse's Office",  status: "COMPLETED" },
+    { date: "2026-07-17", studentEmail: "student@gohallhero.com",      periodName: "Period 6", destinationName: "Library",        status: "DENIED" },
+    { date: "2026-07-17", studentEmail: "casey.nguyen@gohallhero.com", periodName: "Period 1", destinationName: "Office",         status: "COMPLETED" },
 
     // Minimum Day — only periods that fall before noon PST (Period 1-4; Lunch/Period 5+ start at or after noon).
-    { date: "2026-07-20", studentEmail: "jordan.lee@hallpass.dev",   periodName: "Period 1", destinationName: "Library",        status: "COMPLETED", scheduleType: "Minimum Day" },
-    { date: "2026-07-20", studentEmail: "casey.nguyen@hallpass.dev", periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED", scheduleType: "Minimum Day" },
-    { date: "2026-07-20", studentEmail: "morgan.diaz@hallpass.dev",  periodName: "Period 3", destinationName: "Nurse's Office",  status: "DENIED",    scheduleType: "Minimum Day" },
-    { date: "2026-07-20", studentEmail: "alex.rivera@hallpass.dev",  periodName: "Period 4", destinationName: "Office",         status: "COMPLETED", scheduleType: "Minimum Day" },
+    { date: "2026-07-20", studentEmail: "jordan.lee@gohallhero.com",   periodName: "Period 1", destinationName: "Library",        status: "COMPLETED", scheduleType: "Minimum Day" },
+    { date: "2026-07-20", studentEmail: "casey.nguyen@gohallhero.com", periodName: "Period 2", destinationName: "Bathroom",       status: "COMPLETED", scheduleType: "Minimum Day" },
+    { date: "2026-07-20", studentEmail: "morgan.diaz@gohallhero.com",  periodName: "Period 3", destinationName: "Nurse's Office",  status: "DENIED",    scheduleType: "Minimum Day" },
+    { date: "2026-07-20", studentEmail: "alex.rivera@gohallhero.com",  periodName: "Period 4", destinationName: "Office",         status: "COMPLETED", scheduleType: "Minimum Day" },
   ];
 
   let created = 0;

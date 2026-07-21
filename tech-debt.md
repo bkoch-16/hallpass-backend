@@ -1,12 +1,17 @@
 # Tech Debt
 
-Findings from the full-codebase audit (2026-07-13). Severity: 🔴 blocks or breaks a real client / exploitable, 🟠 real defect or policy gap, 🟡 friction or drift.
+Findings from the full-codebase audit (2026-07-13), updated with the web-app-readiness audit (2026-07-17). Severity: 🔴 blocks or breaks a real client / exploitable, 🟠 real defect or policy gap, 🟡 friction or drift.
 
 Known-and-accepted trade-offs are listed at the bottom so they don't get re-reported; they are documented in-code and are **not** open items.
 
 ---
 
 ## 1. Web-app blockers
+
+### 🔴 Bulk-provisioned users can never log in — temp passwords are discarded
+`POST /api/users` returns `tempPassword` once in the 201, but `POST /api/users/bulk` returns only a `{created, failed}` summary (`apps/user-api/src/routes/user.ts:272`) — the generated credentials are never surfaced to anyone. There is no invite / set-initial-password flow, temp passwords never expire, and nothing forces a change on first login.
+
+**Fix:** invite flow (signed short-lived token + public set-password endpoint — sketched in `docs/ONBOARDING.md:99-107`) or transactional-email invites via `@hallpass/email` (SES, added with the password-reset flow). Minimum: return per-user temp passwords from `/bulk`.
 
 ### 🟠 Non-SUPER_ADMIN users cannot read their own school
 `GET /api/schools/:id` is `requireRole(SUPER_ADMIN)` (`apps/schools-api/src/routes/school.ts:65-68`). A student/teacher/admin client can't fetch the school's name or `timezone` — needed to render period times and pass expiry. Sub-resources are readable via `requireSchoolAccess`; the school entity itself isn't.
@@ -17,6 +22,35 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 `PassResponse` carries `studentId`/`destinationId`/`approverId` with no names. A live pass board joins across services client-side; socket events (`emitPassEvent`) also carry the bare row, so realtime updates trigger lookup fetches.
 
 **Fix:** an `?include=` option, or denormalize `studentName`/`destinationName` into the pass payload (REST + socket).
+
+### 🟠 No "today's schedule / current period" endpoint
+The active-period resolution (calendar entry → schedule type → period windows with buffers, in the school's timezone) lives only inside `POST /api/passes` (`apps/passes-api/src/routes/passes.ts:111-170`). Any screen showing "current period" must re-implement it client-side from calendar + periods + policy — and can't even get the timezone (see school-read item above).
+
+**Fix:** expose the resolver, e.g. `GET /api/schools/:schoolId/schedule/today` returning date, scheduleType, periods, and current period.
+
+### 🟠 Pass list filtering is single-status only
+`listPassesQuery` accepts one `status` enum plus cursor (`apps/passes-api/src/schemas/passes.ts:28-31`) — no multi-status, no `studentId`, no date range. `docs/SCHEMA_PLAN.md:548` even instructs clients to reconnect with `?status=PENDING,WAITING,ACTIVE`, which the schema rejects. The teacher board (ACTIVE+WAITING in one call) and student history (date range) need these.
+
+**Fix:** multi-status, `studentId`, and `from`/`to` filters on `GET /api/passes`.
+
+### 🟠 No user search for teacher flows
+`GET /api/users` filters only by `role`/`ids` (`apps/user-api/src/schemas/user.ts:8-13`). The "create pass for a student" flow has no name/email search — the client would page the whole roster.
+
+**Fix:** a `?q=` name/email substring filter on `GET /api/users`.
+
+### 🟡 Socket event/room contract is not exported
+The 7 event names and room conventions are inline string literals in `passes.ts`/`lib/slots.ts`/`lib/expiry.ts`, documented only in `docs/SCHEMA_PLAN.md:529-546`. A frontend has nothing to import.
+
+**Fix:** export the event/room catalog as constants (and payload types) from `@hallpass/types`.
+
+### 🟡 demo-ui's auth bootstrap must not be copied by the real SPA
+demo-ui signs in with `credentials: 'include'` and then reads the token from the `get-session` JSON body (`apps/demo-ui/app.js:58-61`) — a cross-site-cookie round-trip that Safari ITP / Chrome third-party-cookie phaseout can silently break. The supported flow is capturing the `set-auth-token` response header per `docs/AUTH.md`.
+
+### 🟡 SPA deployment prerequisites (ops, not code)
+- Append the SPA origin to `CORS_ORIGIN` on **all three** Cloud Run services — the one var drives HTTP CORS, better-auth `trustedOrigins` (user-api), and Socket.io CORS (passes-api).
+- Frontend must handle two error shapes: app envelope `{ message, errors? }` vs better-auth `{ code, message }` under `/api/auth/*`.
+- No compression middleware anywhere and Cloud Run doesn't gzip; optional but list endpoints would benefit. Consider a CORS `maxAge` to cut preflights against scale-to-zero services.
+- user-api's general limiter (100 req/15 min per user) may be tight for a chatty SPA — watch, don't pre-fix.
 
 ### 🟡 Inconsistent list response shapes and id-param styles
 Users/districts/schools/passes return a `CursorPage` envelope; schedule types/periods/calendar/destinations return bare arrays. Id params: string-regex schemas (user, district, school) vs `z.coerce.number()` (everything else).
@@ -47,6 +81,8 @@ Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-i
 **Fix:** delete sessions in the DELETE handler; decide an email-reuse story.
 
 ### 🟡 Small items
+- `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:123-129`) — 10/15min shared across a school NAT for password changes.
+- Temp passwords from admin provisioning never expire and nothing forces a change on first login (see the 🔴 onboarding item in §1).
 - `INTERNAL_SECRET` only requires `min(1)` (`apps/passes-api/src/env.ts`) — enforce a real minimum length for the static bearer guarding `/internal/reconcile-expiry`.
 - ADMINs with `schoolId: null` are 403'd on reads but silently create `schoolId: null` users via `POST /api/users` and `/bulk` — users they can then never see or manage. Reject like the read paths.
 - No audit trail for admin actions (role changes, deletions). Eventually a K-12 compliance expectation; noted, not urgent.
@@ -95,12 +131,18 @@ users, districts, schools, passes — `take + 1`, slice, `nextCursor`. Extract a
 ### 🟡 Naming and ordering nits
 `requireSchool` (passes-api) vs `requireSchoolAccess` (schools-api) are different contracts with confusingly similar names; middleware order flips between routes (`validateBody` before `requireRole` on `POST /users`, after on `/bulk`).
 
+### 🟡 `docs/ONBOARDING.md` documents a dead flow
+Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 419544d) and contradicts `docs/AUTH.md` — sign-up now rejects with BAD_REQUEST. Only the temp-password path works. Update when onboarding work starts.
+
 ---
 
 ## Suggested priority
 
-1. Expose school (or embed in `/me`), cap calendar bulk, handle `districtId` P2003, align the ADMIN-peer-creation policy.
-2. DRY items opportunistically — `z.infer`-derived body types first (prevents real client bugs).
+1. Invite/bulk-credential delivery via `@hallpass/email` (forgot password + SES infrastructure landed 2026-07-19).
+2. SPA-shaped API gaps, all small and additive: school in `/me`, current-period endpoint, pass filters, user search.
+3. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy, session revocation on delete.
+4. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
+5. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
 
@@ -113,3 +155,5 @@ Documented in-code with sound reasoning; listed so future audits don't re-flag t
 - Rate limiting fails open on Redis store errors (`passOnStoreError: true`) — an Upstash outage must not take down the APIs.
 - In-process expiry timers are lost on Cloud Run scale-to-zero — the `reconcile-expiry` sweep is the backstop.
 - `express.json()` mounted before `toNodeHandler(auth)` — verified working on better-auth 1.5.4 by the real-auth integration tests.
+- `corsOptions` sets no `exposedHeaders` — not a gap: better-auth's `bearer()` plugin sets `Access-Control-Expose-Headers: set-auth-token` on the response itself (verified in 1.5.4, `plugins/bearer/index.mjs:71-73`).
+- Preflight, `trust proxy`, helmet defaults, and per-session-token rate-limit keying are all correct for a cross-origin SPA — audited 2026-07-17, no changes needed.
