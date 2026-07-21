@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "@hallpass/db";
-import type { ScheduleTodayResponse } from "@hallpass/types";
+import type { ScheduleTodayResponse, ScheduleTypeResponse, PeriodResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { validateParams } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
@@ -38,21 +38,8 @@ router.get(
 
     // No calendar entry (or one with no schedule type) is a normal "no school
     // today" day, not a missing-resource error — respond 200 with an empty schedule.
-    let scheduleType: {
-      id: number;
-      schoolId: number;
-      name: string;
-      startBuffer: number;
-      endBuffer: number;
-    } | null = null;
-    let periods: {
-      id: number;
-      scheduleTypeId: number;
-      name: string;
-      startTime: string;
-      endTime: string;
-      order: number;
-    }[] = [];
+    let scheduleType: ScheduleTypeResponse | null = null;
+    let periods: PeriodResponse[] = [];
 
     if (calendarEntry?.scheduleTypeId != null) {
       scheduleType = await prisma.scheduleType.findFirst({
