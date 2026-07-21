@@ -328,8 +328,11 @@ router.get(
   validateQuery(listPassesQuery),
   async (req: Request, res: Response) => {
     const user = req.user!;
-    const { status, cursor, limit } = req.query as unknown as {
-      status?: string;
+    const { status, studentId, from, to, cursor, limit } = req.query as unknown as {
+      status?: PassStatus[];
+      studentId?: number;
+      from?: Date;
+      to?: Date;
       cursor?: string;
       limit: number;
     };
@@ -337,7 +340,19 @@ router.get(
     const isStudent = user.role === UserRole.STUDENT;
     const where: Record<string, unknown> = {
       schoolId: user.schoolId!,
-      ...(status ? { status } : {}),
+      ...(status && status.length > 0
+        ? { status: status.length === 1 ? status[0] : { in: status } }
+        : {}),
+      ...(studentId !== undefined ? { studentId } : {}),
+      ...(from || to
+        ? {
+            requestedAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          }
+        : {}),
+      // Overrides any studentId query param — students may only ever see their own passes.
       ...(isStudent ? { studentId: user.id } : {}),
     };
 

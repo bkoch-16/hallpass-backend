@@ -25,10 +25,24 @@ const cursorPaginationFields = {
   limit: z.coerce.number().int().min(1).max(100).default(50),
 };
 
-export const listPassesQuery = z.object({
-  status: z.nativeEnum(PassStatus).optional(),
-  ...cursorPaginationFields,
-});
+// Comma-separated list of PassStatus values — a single value (no comma) stays valid.
+const passStatusList = z
+  .string()
+  .transform((val) => val.split(",").map((s) => s.trim()).filter((s) => s.length > 0))
+  .pipe(z.array(z.nativeEnum(PassStatus)).min(1));
+
+export const listPassesQuery = z
+  .object({
+    status: passStatusList.optional(),
+    studentId: z.coerce.number().int().positive().optional(),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    ...cursorPaginationFields,
+  })
+  .refine((data) => !data.from || !data.to || data.from <= data.to, {
+    message: "from must not be after to",
+    path: ["from"],
+  });
 
 // Deliberately loose — NO format regex. A wrong-format PIN must be
 // indistinguishable from a non-matching one (no enumeration signal).
