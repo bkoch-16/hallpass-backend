@@ -8,11 +8,6 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🔴 Bulk-provisioned users can never log in — temp passwords are discarded
-`POST /api/users` returns `tempPassword` once in the 201, but `POST /api/users/bulk` returns only a `{created, failed}` summary (`apps/user-api/src/routes/user.ts:272`) — the generated credentials are never surfaced to anyone. There is no invite / set-initial-password flow, temp passwords never expire, and nothing forces a change on first login.
-
-**Fix:** invite flow (signed short-lived token + public set-password endpoint — sketched in `docs/ONBOARDING.md:99-107`) or transactional-email invites via `@hallpass/email` (SES, added with the password-reset flow). Minimum: return per-user temp passwords from `/bulk`.
-
 ### 🟠 Non-SUPER_ADMIN users cannot read their own school
 `GET /api/schools/:id` is `requireRole(SUPER_ADMIN)` (`apps/schools-api/src/routes/school.ts:65-68`). A student/teacher/admin client can't fetch the school's name or `timezone` — needed to render period times and pass expiry. Sub-resources are readable via `requireSchoolAccess`; the school entity itself isn't.
 
@@ -82,7 +77,7 @@ Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-i
 
 ### 🟡 Small items
 - `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:123-129`) — 10/15min shared across a school NAT for password changes.
-- Temp passwords from admin provisioning never expire and nothing forces a change on first login (see the 🔴 onboarding item in §1).
+- Provisioning now emails a 7-day set-password invite link (`apps/user-api/src/routes/user.ts:56-59`), but the `tempPassword` returned in the response itself still never expires and nothing forces a change on first login.
 - `INTERNAL_SECRET` only requires `min(1)` (`apps/passes-api/src/env.ts`) — enforce a real minimum length for the static bearer guarding `/internal/reconcile-expiry`.
 - ADMINs with `schoolId: null` are 403'd on reads but silently create `schoolId: null` users via `POST /api/users` and `/bulk` — users they can then never see or manage. Reject like the read paths.
 - No audit trail for admin actions (role changes, deletions). Eventually a K-12 compliance expectation; noted, not urgent.
@@ -138,11 +133,10 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. Invite/bulk-credential delivery via `@hallpass/email` (forgot password + SES infrastructure landed 2026-07-19).
-2. SPA-shaped API gaps, all small and additive: school in `/me`, current-period endpoint, pass filters, user search.
-3. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy, session revocation on delete.
-4. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
-5. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
+1. SPA-shaped API gaps, all small and additive: school in `/me`, current-period endpoint, pass filters, user search.
+2. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy, session revocation on delete.
+3. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
+4. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
 

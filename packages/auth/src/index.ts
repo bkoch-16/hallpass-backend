@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
+import { randomBytes } from "node:crypto";
 
 type PrismaLike = Parameters<typeof prismaAdapter>[0];
 
@@ -102,4 +103,18 @@ export async function createUserWithCredential(
     password: hash,
   });
   return { ...user, id: Number(user.id) };
+}
+
+// Mints a better-auth reset-password token server-side (same Verification row
+// shape better-auth's own POST /api/auth/reset-password flow consumes), so an
+// invite is just a longer-lived reset token redeemed by the existing endpoint.
+export async function createSetPasswordToken(auth: Auth, userId: number, expiresInSeconds: number): Promise<string> {
+  const ctx = await auth.$context;
+  const token = randomBytes(18).toString("base64url");
+  await ctx.internalAdapter.createVerificationValue({
+    value: String(userId),
+    identifier: `reset-password:${token}`,
+    expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
+  });
+  return token;
 }

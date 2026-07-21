@@ -98,3 +98,30 @@ export function resetPasswordEmail(input: {
     ].join("\n"),
   };
 }
+
+export function inviteEmail(input: {
+  name: string | null;
+  url: string;
+  expiresInDays: number;
+}): Omit<EmailMessage, "to"> {
+  const name = input.name?.trim() || "there";
+  const expiryText = `The link expires in ${input.expiresInDays} day${input.expiresInDays === 1 ? "" : "s"}.`;
+  return {
+    subject: "You've been invited to Hallpass",
+    text: [
+      `Hi ${name},`,
+      "",
+      "An account was created for you on Hallpass. Open the link below to set your password:",
+      "",
+      input.url,
+      "",
+      expiryText,
+    ].join("\n"),
+    html: [
+      `<p>Hi ${escapeHtml(name)},</p>`,
+      "<p>An account was created for you on Hallpass. Click the link below to set your password:</p>",
+      `<p><a href="${escapeHtml(input.url)}">Set your password</a></p>`,
+      `<p>${expiryText}</p>`,
+    ].join("\n"),
+  };
+}

@@ -131,6 +131,17 @@ Without SES env configured (local dev, tests), the email is logged instead of
 sent, with the reset URL in the log line. Both endpoints ride the strict auth
 rate limiter (see note above).
 
+### Invites
+
+Provisioning (`POST /api/users` and `POST /api/users/bulk`, user-api) emails
+each successfully created user an invite via `@hallpass/email` — same
+mechanism as password reset above: a `Verification` token redeemed by the
+existing `POST /api/auth/reset-password`. The difference is the token is
+minted server-side by `createSetPasswordToken`
+(`packages/auth/src/index.ts:111`) rather than by better-auth's own
+request-password-reset flow, with a 7-day expiry instead of 1 hour. See
+`docs/ONBOARDING.md` for the full provisioning flow.
+
 Browsers cannot set an `Authorization` header on a WebSocket upgrade, so
 `socket.io-client` carries the token through its `auth` option instead, which
 works on every transport including `websocket`:
