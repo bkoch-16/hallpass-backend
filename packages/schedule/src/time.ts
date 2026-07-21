@@ -1,8 +1,6 @@
-// Pure timezone/time-string helpers backing the schedule resolver. These are
-// intentionally self-contained copies of the equivalent helpers in
-// apps/passes-api/src/lib/time.ts (which also has unrelated calendar/interval
-// helpers that resolveSchedule does not need) — this package must stay
-// DB-free and dependency-free, and both variants take an injectable `now`.
+// Pure timezone/time-string helpers backing the schedule resolver. This package is
+// the single source of these helpers — apps/passes-api re-exports them from here.
+// Must stay DB-free and dependency-free; all helpers take an injectable `now`.
 
 /** School-local calendar date ("YYYY-MM-DD") for a given instant. */
 export function getTodayInTimezone(timezone: string, now: Date = new Date()): string {
