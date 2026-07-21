@@ -56,7 +56,8 @@ const INVITE_TOKEN_TTL_SECONDS = 7 * 24 * 3600;
 async function sendInviteEmail(user: { id: number; email: string; name: string | null }): Promise<void> {
   const token = await createSetPasswordToken(auth, user.id, INVITE_TOKEN_TTL_SECONDS);
   const url = resetPasswordUrl(token);
-  await emailSender.send({ to: user.email, ...inviteEmail({ name: user.name, url }) });
+  const expiresInDays = INVITE_TOKEN_TTL_SECONDS / 86400;
+  await emailSender.send({ to: user.email, ...inviteEmail({ name: user.name, url, expiresInDays }) });
 }
 
 // role/schoolId are better-auth additionalFields — present at runtime (the helper
