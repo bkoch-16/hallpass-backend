@@ -2,7 +2,8 @@ import { Router, Request, Response } from "express";
 import { randomBytes } from "node:crypto";
 import { logger } from "@hallpass/logger";
 import { prisma } from "@hallpass/db";
-import { createUserWithCredential, EmailInUseError } from "@hallpass/auth";
+import { createUserWithCredential, createSetPasswordToken, EmailInUseError } from "@hallpass/auth";
+import { inviteEmail } from "@hallpass/email";
 import { UserRole } from "@hallpass/types";
 import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
 import { auth } from "../auth.js";
@@ -10,6 +11,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createUserWithPin } from "../lib/pin.js";
+import { emailSender, resetPasswordUrl } from "../email.js";
 import {
   bulkCreateSchema,
   createUserSchema,
@@ -43,6 +45,18 @@ async function assignPin(userId: number, role: UserRole): Promise<void> {
     if (!pinCode) return;
     await prisma.user.update({ where: { id: userId }, data: { pinCode } });
   });
+}
+
+// Invite link expiry — a better-auth reset-password token minted server-side.
+const INVITE_TOKEN_TTL_SECONDS = 7 * 24 * 3600;
+
+// Mints a set-password token and emails it as an invite. Callers wrap this in
+// a try/catch (see assignPin above): the user row is already committed, so an
+// email failure must not turn an already-created account into a 500.
+async function sendInviteEmail(user: { id: number; email: string; name: string | null }): Promise<void> {
+  const token = await createSetPasswordToken(auth, user.id, INVITE_TOKEN_TTL_SECONDS);
+  const url = resetPasswordUrl(token);
+  await emailSender.send({ to: user.email, ...inviteEmail({ name: user.name, url }) });
 }
 
 // role/schoolId are better-auth additionalFields — present at runtime (the helper
@@ -199,6 +213,14 @@ router.post(
         // duplicate-email guard below — log and continue without a pin.
         logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
       }
+      try {
+        await sendInviteEmail(user);
+      } catch (emailErr: unknown) {
+        // Same reasoning as the pin catch above — the account already exists
+        // and tempPassword is still returned below, so email delivery never
+        // blocks provisioning.
+        logger.error(emailErr, `[users] failed to send invite email to user ${user.id}`);
+      }
       res.status(201).json({ ...toUserResponse(provisionedToRow(user)), tempPassword } satisfies ProvisionUserResponse);
     } catch (err: unknown) {
       if (isDuplicateEmailError(err)) {
@@ -250,6 +272,12 @@ router.post(
             // already committed, so a pin failure must not report an
             // otherwise-successful creation as a failed PromiseSettledResult.
             logger.error(pinErr, `[users] failed to assign pinCode to user ${user.id}`);
+          }
+          try {
+            await sendInviteEmail(user);
+          } catch (emailErr: unknown) {
+            // Same non-fatal handling as the pin catch above.
+            logger.error(emailErr, `[users] failed to send invite email to user ${user.id}`);
           }
           return user;
         }),

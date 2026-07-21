@@ -79,16 +79,29 @@ until changed.
 
 ---
 
-## Open problem — bulk student delivery
+## Bulk student delivery
 
 You can't ask hundreds of students to self-register and then reconcile them
-against a roster. The server-side credential creation this needs now exists:
-`POST /api/users/bulk` provisions login-capable `User` + `Account` rows and
-returns a per-item result. What's still unsolved is **delivery** — the bulk
-route returns a `created`/`failed` summary, not the individual temp passwords,
-so there is no mechanism to get a credential into each student's hands. Pick a
-delivery mechanism from the options below (set-password link or transactional
-email) when the feature is actually on the table.
+against a roster. `POST /api/users/bulk` provisions login-capable `User` +
+`Account` rows and returns a per-item result; **delivery** now happens
+automatically alongside creation.
+
+Both `POST /api/users` and `POST /api/users/bulk` email each successfully
+created user an invite via `@hallpass/email`
+(`apps/user-api/src/routes/user.ts:56-59`). The invite carries a set-password
+link built from a better-auth reset-password `Verification` token, minted
+server-side by `createSetPasswordToken`
+(`packages/auth/src/index.ts:111`) with a 7-day expiry (vs. 1 hour for a
+self-service reset). The link is consumed by the existing public
+`POST /api/auth/reset-password` endpoint — no new endpoint was needed, since
+an invite is just a longer-lived reset token redeemed the normal way.
+
+Email failures are logged and never fail provisioning — the `User`/`Account`
+rows are already committed by the time the send is attempted, so a bad send
+just means the admin has to resend a link. Response shapes are unchanged:
+single create still returns `tempPassword`; bulk still returns
+`{ created, failed }`. Without SES env configured, the email is logged
+instead of sent, same as the password-reset flow.
 
 ---
 
@@ -96,15 +109,13 @@ email) when the feature is actually on the table.
 
 Deferred until a concrete need appears. Ordered lightest-first.
 
-### 1. `signUpEmail` + set-password link (no email)
+### 1. `signUpEmail` + set-password link (no email) — built
 
-Same creation, but instead of returning a password, return a signed,
-short-lived token as a `/set-password?token=...` link. The user sets their own
-password via a new public endpoint. This is the correct onboarding primitive and
-is forward-compatible with email invites (swap "return link" for "email link").
-
-- **Pro:** user owns the password; token expires; upgrade path to real invites.
-- **Con:** a new public endpoint + token verification to build and secure.
+Landed as the reset-token mechanism above: a short-lived, server-minted token
+lets the user set their own password. It ended up simpler than sketched —
+no new public endpoint was needed, since the token is a better-auth
+reset-password `Verification` row redeemed by the existing
+`POST /api/auth/reset-password`.
 
 ### 2. better-auth admin plugin (`createUser`)
 
@@ -116,8 +127,9 @@ User + Account **and** sets role/school in one atomic call.
   our `Role` enum) plus `banned`/`banReason`/`banExpires` columns and endpoints
   we don't need — solves problems we don't have yet.
 
-### 3. Transactional email
+### 3. Transactional email — built
 
-Password-reset email now exists: `@hallpass/email` sends via Amazon SES
-(wired into `sendResetPassword`, see `docs/AUTH.md`). Invite emails for bulk
-student onboarding (option 1) can reuse that package when built.
+Invite emails for bulk student onboarding now reuse the `@hallpass/email`
+package the password-reset flow added, delivering the option 1 set-password
+link automatically on creation. See "Bulk student delivery" above and
+`docs/AUTH.md`.
