@@ -198,6 +198,19 @@ describe("resolveSchedule — start/end buffers", () => {
     expect(result.currentPeriod?.id).toBe(1);
   });
 
+  it("clamps the end buffer at 23:59 instead of wrapping past midnight", () => {
+    const result = resolveSchedule({
+      calendarEntry,
+      scheduleType: buffered, // endBuffer: 5
+      periods: [period({ startTime: "23:00", endTime: "23:58" })],
+      timezone: "UTC",
+      now: new Date("2026-07-21T23:58:00Z"),
+    });
+
+    expect(result.periods[0].windowEnd).toBe("23:59");
+    expect(result.currentPeriod?.id).toBe(1);
+  });
+
   it("picks the earliest-starting period when buffered windows overlap, regardless of input order", () => {
     const first = period({ id: 1, startTime: "08:00", endTime: "09:05", order: 0 });
     const second = period({ id: 2, startTime: "09:00", endTime: "10:00", order: 1 });

@@ -31,23 +31,17 @@ export function getCurrentTimeInTimezone(timezone: string, now: Date = new Date(
   }
 }
 
-/** Add minutes to a zero-padded "HH:MM" string. Wraps at 24 h. */
-export function addMinutesToTime(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  const clampedH = ((Math.floor(total / 60) % 24) + 24) % 24;
-  const clampedM = ((total % 60) + 60) % 60;
-  return `${String(clampedH).padStart(2, "0")}:${String(clampedM).padStart(2, "0")}`;
-}
-
 /**
- * Add minutes to a zero-padded "HH:MM" string, clamping at "00:00" instead of
- * wrapping. Use for buffered window STARTS — wrapping a start past midnight
- * (e.g. "00:05" − 10 min → "23:55") produces a window that can never match.
+ * Add minutes to a zero-padded "HH:MM" string, clamping to the same day
+ * ("00:00".."23:59") instead of wrapping. Wrapping produces buffered windows
+ * that can never match: a window START before midnight would wrap to "23:xx"
+ * (e.g. "00:05" - 10 min), and a window END past midnight would wrap to
+ * "00:xx" (e.g. "23:55" + 10 min) — both make windowStart <= t <= windowEnd
+ * unsatisfiable for every in-period time.
  */
 export function addMinutesToTimeClamped(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
-  const total = Math.max(0, h * 60 + m + minutes);
+  const total = Math.min(23 * 60 + 59, Math.max(0, h * 60 + m + minutes));
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 

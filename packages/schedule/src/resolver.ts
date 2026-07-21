@@ -1,7 +1,6 @@
 import {
   getTodayInTimezone,
   getCurrentTimeInTimezone,
-  addMinutesToTime,
   addMinutesToTimeClamped,
 } from "./time.js";
 
@@ -26,7 +25,7 @@ export interface PeriodInput {
 
 export interface PeriodWindow extends PeriodInput {
   windowStart: string; // startTime, buffered by scheduleType.startBuffer, clamped at "00:00"
-  windowEnd: string; // endTime, buffered by scheduleType.endBuffer, wraps at 24h
+  windowEnd: string; // endTime, buffered by scheduleType.endBuffer, clamped at "23:59"
 }
 
 export interface ResolvedSchedule {
@@ -73,10 +72,11 @@ export function resolveSchedule(input: ResolveScheduleInput): ResolvedSchedule {
 
   const periods: PeriodWindow[] = input.periods.map((p) => ({
     ...p,
-    // Clamped, not wrapped: a period starting just after midnight must yield
-    // a "00:00" window start, not wrap to "23:xx" and never match.
+    // Clamped, not wrapped: a start buffer crossing midnight must yield
+    // "00:00" (not wrap to "23:xx") and an end buffer crossing midnight must
+    // yield "23:59" (not wrap to "00:xx") — a wrapped bound can never match.
     windowStart: addMinutesToTimeClamped(p.startTime, -startBuffer),
-    windowEnd: addMinutesToTime(p.endTime, endBuffer),
+    windowEnd: addMinutesToTimeClamped(p.endTime, endBuffer),
   }));
 
   // Buffer windows of adjacent periods overlap — order so the earliest
