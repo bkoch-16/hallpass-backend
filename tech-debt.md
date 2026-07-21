@@ -13,11 +13,6 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 **Fix:** an `?include=` option, or denormalize `studentName`/`destinationName` into the pass payload (REST + socket).
 
-### 🟠 No "today's schedule / current period" endpoint
-The active-period resolution (calendar entry → schedule type → period windows with buffers, in the school's timezone) lives only inside `POST /api/passes` (`apps/passes-api/src/routes/passes.ts:111-170`). Any screen showing "current period" must re-implement it client-side from calendar + periods + policy.
-
-**Fix:** expose the resolver, e.g. `GET /api/schools/:schoolId/schedule/today` returning date, scheduleType, periods, and current period.
-
 ### 🟠 Pass list filtering is single-status only
 `listPassesQuery` accepts one `status` enum plus cursor (`apps/passes-api/src/schemas/passes.ts:28-31`) — no multi-status, no `studentId`, no date range. `docs/SCHEMA_PLAN.md:548` even instructs clients to reconnect with `?status=PENDING,WAITING,ACTIVE`, which the schema rejects. The teacher board (ACTIVE+WAITING in one call) and student history (date range) need these.
 
@@ -119,7 +114,7 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. SPA-shaped API gaps, all small and additive: current-period endpoint, pass filters.
+1. SPA-shaped API gaps, all small and additive: pass filters.
 2. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy.
 3. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
 4. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.

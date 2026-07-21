@@ -109,6 +109,18 @@ export interface SchoolCalendarResponse {
   note: string | null;
 }
 
+export interface PeriodWindowResponse extends PeriodResponse {
+  windowStart: string;
+  windowEnd: string;
+}
+
+export interface ScheduleTodayResponse {
+  date: string; // school-local "YYYY-MM-DD"
+  scheduleType: ScheduleTypeResponse | null;
+  periods: PeriodWindowResponse[];
+  currentPeriod: PeriodWindowResponse | null;
+}
+
 export interface DestinationResponse {
   id: number;
   schoolId: number;

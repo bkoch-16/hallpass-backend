@@ -41,12 +41,10 @@ import { paginate } from "../lib/pagination.js";
 import {
   periodEndDate,
   getTodayInTimezone,
-  getCurrentTimeInTimezone,
   getIntervalStart,
-  addMinutesToTime,
-  addMinutesToTimeClamped,
   calendarDate,
 } from "../lib/time.js";
+import { resolveSchedule } from "@hallpass/schedule";
 import { env } from "../env.js";
 
 const router = Router({ mergeParams: true });
@@ -91,11 +89,6 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-// Works because "HH:MM" strings are zero-padded and equal-length.
-function timeLeq(a: string, b: string): boolean {
-  return a <= b;
-}
-
 // POST /passes — students create their own pass (PENDING); TEACHER+ create a
 // pass on behalf of a student (auto-approved: ACTIVE, or WAITING when full)
 router.post(
@@ -133,10 +126,8 @@ router.post(
       return;
     }
 
-    // 4. Get current time in school timezone
-    const currentTime = getCurrentTimeInTimezone(timezone);
-
-    // 5. Find a Period matching the schedule type and current time window
+    // 4. Find a Period matching the schedule type and current time window,
+    //    via the shared resolver (also backs GET /schools/:schoolId/schedule/today).
     const periods = await prisma.period.findMany({
       where: {
         scheduleTypeId: calendar.scheduleTypeId,
@@ -144,24 +135,30 @@ router.post(
         deletedAt: null,
       },
       include: { scheduleType: true },
-      // Buffer windows of adjacent periods overlap — order so the earliest match wins deterministically
       orderBy: { startTime: "asc" },
     });
 
-    const activePeriod = periods.find((p) => {
-      // Clamped, not wrapped: a period starting just after midnight must yield
-      // a "00:00" window start, not wrap to "23:xx" and never match
-      const windowStart = addMinutesToTimeClamped(
-        p.startTime,
-        -(p.scheduleType?.startBuffer ?? 0),
-      );
-      const windowEnd = addMinutesToTime(
-        p.endTime,
-        p.scheduleType?.endBuffer ?? 0,
-      );
-      return (
-        timeLeq(windowStart, currentTime) && timeLeq(currentTime, windowEnd)
-      );
+    const scheduleType = periods[0]?.scheduleType ?? null;
+
+    const { currentPeriod: activePeriod } = resolveSchedule({
+      calendarEntry: { scheduleTypeId: calendar.scheduleTypeId },
+      scheduleType: scheduleType
+        ? {
+            id: scheduleType.id,
+            startBuffer: scheduleType.startBuffer,
+            endBuffer: scheduleType.endBuffer,
+          }
+        : null,
+      periods: periods.map((p) => ({
+        id: p.id,
+        scheduleTypeId: p.scheduleTypeId,
+        name: p.name,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        order: p.order,
+      })),
+      timezone,
+      now: new Date(),
     });
 
     if (!activePeriod) {
@@ -314,7 +311,7 @@ router.post(
       pass.id,
       periodEndDate(
         activePeriod.endTime,
-        activePeriod.scheduleType?.endBuffer ?? 0,
+        scheduleType?.endBuffer ?? 0,
         timezone,
       ),
     );
