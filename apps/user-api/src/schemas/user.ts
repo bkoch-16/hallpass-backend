@@ -10,6 +10,7 @@ export const listUsersSchema = z.object({
   cursor: z.string().regex(/^[1-9]\d*$/, "cursor must be a positive integer").optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   ids: z.string().optional(),
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export const createUserSchema = z.object({

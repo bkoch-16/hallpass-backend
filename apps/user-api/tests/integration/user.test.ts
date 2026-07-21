@@ -88,8 +88,10 @@ function authenticateAs(user: { id: number; role: string }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
 
-async function seedSchool() {
-  return prisma.school.create({ data: { name: "Test School" } });
+async function seedSchool(overrides: Partial<{ name: string; deletedAt: Date | null }> = {}) {
+  return prisma.school.create({
+    data: { name: overrides.name ?? "Test School", deletedAt: overrides.deletedAt ?? null },
+  });
 }
 
 async function seedUser(overrides: Partial<{
@@ -142,6 +144,38 @@ describe("GET /api/users/me (integration)", () => {
     const res = await request(server).get("/api/users/me");
 
     expect(res.status).toBe(401);
+  });
+
+  it("embeds the user's school for a school-scoped user", async () => {
+    const school = await seedSchool();
+    const user = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(user);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toEqual({ id: school.id, name: school.name, timezone: school.timezone });
+  });
+
+  it("returns a null school for a SUPER_ADMIN with no school", async () => {
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    authenticateAs(superAdmin);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toBeNull();
+  });
+
+  it("returns a null school when the user's school is soft-deleted", async () => {
+    const school = await seedSchool({ deletedAt: new Date() });
+    const user = await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(user);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toBeNull();
   });
 });
 
@@ -215,6 +249,19 @@ describe("GET /api/users (integration)", () => {
     expect(res.body.data[0].id).toBe(a.id);
   });
 
+  it("?ids= returns the ids regardless of ?q= (q not applied)", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const a = await seedUser({ role: "STUDENT", schoolId: school.id, name: "Zoe Zimmer" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get(`/api/users?ids=${a.id}&q=nonexistentquery`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].id).toBe(a.id);
+  });
+
   it("returns 400 when ?ids= contains id=0", async () => {
     const school = await seedSchool();
     const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
@@ -244,6 +291,60 @@ describe("GET /api/users (integration)", () => {
     const res = await request(server).get("/api/users?cursor=0");
 
     expect(res.status).toBe(400);
+  });
+
+  it("?q= matches a partial, case-insensitive substring of name", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, name: "Alice Anderson" });
+    await seedUser({ role: "STUDENT", schoolId: school.id, name: "Bob Baker" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get("/api/users?q=ALICE");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].name).toBe("Alice Anderson");
+  });
+
+  it("?q= matches a partial, case-insensitive substring of email", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, email: "carol@example.com" });
+    await seedUser({ role: "STUDENT", schoolId: school.id, email: "dave@example.com" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get("/api/users?q=CAROL");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].email).toBe("carol@example.com");
+  });
+
+  it("?q= composes with ?role=", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, name: "Alice Student" });
+    await seedUser({ role: "TEACHER", schoolId: school.id, name: "Alice Teacher" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get("/api/users?q=alice&role=STUDENT");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].name).toBe("Alice Student");
+  });
+
+  it("?q= with no matches returns an empty page", async () => {
+    const school = await seedSchool();
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    await seedUser({ role: "STUDENT", schoolId: school.id, name: "Zoe Zimmer" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get("/api/users?q=nonexistentquery");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
   });
 });
 

@@ -72,6 +72,10 @@ export interface SchoolResponse {
   updatedAt: Date;
 }
 
+export interface MeResponse extends UserResponse {
+  school: Pick<SchoolResponse, "id" | "name" | "timezone"> | null;
+}
+
 export interface PassPolicyResponse {
   id: number;
   schoolId: number;

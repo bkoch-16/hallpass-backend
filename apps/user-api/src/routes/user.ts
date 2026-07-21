@@ -5,7 +5,7 @@ import { prisma } from "@hallpass/db";
 import { createUserWithCredential, createSetPasswordToken, EmailInUseError } from "@hallpass/auth";
 import { inviteEmail } from "@hallpass/email";
 import { UserRole } from "@hallpass/types";
-import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult } from "@hallpass/types";
+import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult, MeResponse } from "@hallpass/types";
 import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
@@ -89,8 +89,15 @@ function isDuplicateEmailError(err: unknown): boolean {
 }
 
 // GET /me — must come before /:id
-router.get("/me", requireAuth, (req: Request, res: Response) => {
-  res.json(toUserResponse(req.user!));
+router.get("/me", requireAuth, async (req: Request, res: Response) => {
+  const schoolId = req.user!.schoolId;
+  const school = schoolId
+    ? await prisma.school.findFirst({
+        where: { id: schoolId, deletedAt: null },
+        select: { id: true, name: true, timezone: true },
+      })
+    : null;
+  res.json({ ...toUserResponse(req.user!), school } satisfies MeResponse);
 });
 
 // GET / — cursor-paginated list; ?ids= replaces the former /batch endpoint
@@ -100,11 +107,12 @@ router.get(
   requireRole(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateQuery(listUsersSchema),
   async (req: Request, res: Response) => {
-    const { role, cursor, ids, limit } = req.query as unknown as {
+    const { role, cursor, ids, limit, q } = req.query as unknown as {
       role?: string;
       cursor?: string;
       ids?: string;
       limit: number;
+      q?: string;
     };
     const take = limit;
 
@@ -116,6 +124,8 @@ router.get(
     }
 
     if (ids) {
+      // Explicit id lookup — role/q are intentionally not applied here; the
+      // caller is asking for these specific IDs regardless of other filters.
       const rawIds = ids.split(",").map((id) => id.trim()).filter(Boolean);
       if (rawIds.length > 100) {
         res.status(400).json({ message: "Too many IDs (max 100)" });
@@ -136,6 +146,12 @@ router.get(
     const where: Record<string, unknown> = { deletedAt: null };
     if (!isSuperAdmin) where.schoolId = req.user!.schoolId;
     if (role) where.role = role;
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ];
+    }
 
     const users = await prisma.user.findMany({
       where,
@@ -399,6 +415,18 @@ router.delete(
       where: { id: userId },
       data: { deletedAt: new Date() },
     });
+
+    // The soft-delete above doesn't touch better-auth's Session rows — without
+    // this, a deleted user's existing session keeps working against
+    // /api/auth/* (see tech-debt.md §2).
+    try {
+      await prisma.session.deleteMany({ where: { userId } });
+    } catch (sessionErr: unknown) {
+      // Same reasoning as the pin/email catches above — the soft-delete is
+      // already committed, so a session-cleanup failure must not turn an
+      // otherwise-successful deletion into a 500.
+      logger.error(sessionErr, `[users] failed to revoke sessions for deleted user ${userId}`);
+    }
 
     res.status(204).send();
   },

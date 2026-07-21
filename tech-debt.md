@@ -8,18 +8,13 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🟠 Non-SUPER_ADMIN users cannot read their own school
-`GET /api/schools/:id` is `requireRole(SUPER_ADMIN)` (`apps/schools-api/src/routes/school.ts:65-68`). A student/teacher/admin client can't fetch the school's name or `timezone` — needed to render period times and pass expiry. Sub-resources are readable via `requireSchoolAccess`; the school entity itself isn't.
-
-**Fix:** allow school-scoped reads on `GET /:id`, or embed the school in `GET /api/users/me`.
-
 ### 🟠 Pass responses are ID-only with no expansion mechanism
 `PassResponse` carries `studentId`/`destinationId`/`approverId` with no names. A live pass board joins across services client-side; socket events (`emitPassEvent`) also carry the bare row, so realtime updates trigger lookup fetches.
 
 **Fix:** an `?include=` option, or denormalize `studentName`/`destinationName` into the pass payload (REST + socket).
 
 ### 🟠 No "today's schedule / current period" endpoint
-The active-period resolution (calendar entry → schedule type → period windows with buffers, in the school's timezone) lives only inside `POST /api/passes` (`apps/passes-api/src/routes/passes.ts:111-170`). Any screen showing "current period" must re-implement it client-side from calendar + periods + policy — and can't even get the timezone (see school-read item above).
+The active-period resolution (calendar entry → schedule type → period windows with buffers, in the school's timezone) lives only inside `POST /api/passes` (`apps/passes-api/src/routes/passes.ts:111-170`). Any screen showing "current period" must re-implement it client-side from calendar + periods + policy.
 
 **Fix:** expose the resolver, e.g. `GET /api/schools/:schoolId/schedule/today` returning date, scheduleType, periods, and current period.
 
@@ -27,11 +22,6 @@ The active-period resolution (calendar entry → schedule type → period window
 `listPassesQuery` accepts one `status` enum plus cursor (`apps/passes-api/src/schemas/passes.ts:28-31`) — no multi-status, no `studentId`, no date range. `docs/SCHEMA_PLAN.md:548` even instructs clients to reconnect with `?status=PENDING,WAITING,ACTIVE`, which the schema rejects. The teacher board (ACTIVE+WAITING in one call) and student history (date range) need these.
 
 **Fix:** multi-status, `studentId`, and `from`/`to` filters on `GET /api/passes`.
-
-### 🟠 No user search for teacher flows
-`GET /api/users` filters only by `role`/`ids` (`apps/user-api/src/schemas/user.ts:8-13`). The "create pass for a student" flow has no name/email search — the client would page the whole roster.
-
-**Fix:** a `?q=` name/email substring filter on `GET /api/users`.
 
 ### 🟡 Socket event/room contract is not exported
 The 7 event names and room conventions are inline string literals in `passes.ts`/`lib/slots.ts`/`lib/expiry.ts`, documented only in `docs/SCHEMA_PLAN.md:529-546`. A frontend has nothing to import.
@@ -70,12 +60,8 @@ Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-i
 
 **Fix:** decide the policy; if lateral escalation is unintended, make create/promote checks `>=` at the ADMIN tier. If intended, comment it.
 
-### 🟡 Soft-deleting a user doesn't revoke better-auth sessions
-`resolveSessionUser` filters `deletedAt` so the APIs 401, but the live session still works against `/api/auth/*` (change-password, get-session), and the email row is occupied forever — the user can never be re-provisioned (409).
-
-**Fix:** delete sessions in the DELETE handler; decide an email-reuse story.
-
 ### 🟡 Small items
+- Soft-deleting a user now revokes its better-auth sessions on `DELETE /api/users/:id`, but the email row is still occupied forever — the user can never be re-provisioned (409). Email-reuse story is still undecided.
 - `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:123-129`) — 10/15min shared across a school NAT for password changes.
 - Provisioning now emails a 7-day set-password invite link (`apps/user-api/src/routes/user.ts:56-59`), but the `tempPassword` returned in the response itself still never expires and nothing forces a change on first login.
 - `INTERNAL_SECRET` only requires `min(1)` (`apps/passes-api/src/env.ts`) — enforce a real minimum length for the static bearer guarding `/internal/reconcile-expiry`.
@@ -133,8 +119,8 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. SPA-shaped API gaps, all small and additive: school in `/me`, current-period endpoint, pass filters, user search.
-2. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy, session revocation on delete.
+1. SPA-shaped API gaps, all small and additive: current-period endpoint, pass filters.
+2. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy.
 3. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
 4. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
