@@ -118,6 +118,6 @@ User + Account **and** sets role/school in one atomic call.
 
 ### 3. Transactional email
 
-An invite / password-reset email flow (Resend, SES, etc.) is the eventual
-polished UX, but no email provider exists in the repo today. Add it when bulk
-student onboarding (option 1) or general password-reset justifies the cost.
+Password-reset email now exists: `@hallpass/email` sends via Amazon SES
+(wired into `sendResetPassword`, see `docs/AUTH.md`). Invite emails for bulk
+student onboarding (option 1) can reuse that package when built.

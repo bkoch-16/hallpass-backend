@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-17T21:39:31.785Z",
+  "generatedAt": "2026-07-21T00:02:01.925Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
-      "blobSha": "c99f6c4db14aa36c2ee4193320dfb13d5cde9706",
-      "summary": "Defines the full PostgreSQL database schema for a school hall-pass management system using Prisma ORM. Core domain models include District, School, User (with Role enum: STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass (with PassStatus lifecycle: PENDING→WAITING→ACTIVE→COMPLETED/CANCELLED/DENIED/EXPIRED). Authentication is handled via better-auth with Session and Account models using integer autoincrement IDs (required by better-auth's `generateId: \"serial\"` config). The Pass model has a critical partial unique index (`one_active_pass_per_student`) that exists only in migrations — Prisma cannot express partial indexes, so developers must manually remove any generated `DROP INDEX` statements for this index in new migrations. Passes are intentionally never soft-deleted; they terminate in a final status with a corresponding timestamp. Key relationships include multi-role User→Pass relations (student, requester, approver, denier, canceller), School as the central tenant entity, and a one-to-one PassPolicy per school governing rate limits via interval-based constraints."
+      "blobSha": "771d3f85761d43a2408ed526d045bf02c546bff4",
+      "summary": "Defines the full PostgreSQL database schema for the HallPass application using Prisma ORM. Models include District, School, User, Session, Account, Verification (for better-auth), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass. Key enums are Role (STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), PolicyInterval, and PassStatus (lifecycle states). The schema uses integer autoincrement IDs throughout (required by better-auth's `generateId: \"serial\"` config), soft deletes via `deletedAt` on most models (but notably not Pass, which uses terminal statuses instead), and relational integrity via foreign keys. Critical caveat: a partial unique index `one_active_pass_per_student` exists only in a migration and not in this schema—any new migration will generate a DROP for it that must be manually removed before applying. The Pass model has multiple named relations to User (student, requester, approver, denier, canceller) and strategic composite/single-column indexes."
     },
     "apps/user-api/src/app.ts": {
       "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
       "summary": "Main Express application setup for the user-api service. Configures middleware in order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), Redis-backed rate limiters (general + stricter auth-specific), better-auth handler for `/api/auth/*`, user routes at `/api/users`, and error handling. Rate limiting uses Redis when available (namespaced by REDIS_PREFIX) and falls back to in-memory stores in test or when REDIS_URL is unset; each limiter requires its own RedisStore instance. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Developers modifying this file should note the middleware ordering matters (e.g., health route before limiter), and that the auth limiter only applies to specific POST credential endpoints while GET session requests use the general limiter."
     },
     "apps/user-api/src/auth.ts": {
-      "blobSha": "4b56fc75ad42b0712cc21ef54da2cd21098796c9",
-      "summary": "Creates and exports the better-auth instance for the user-api service. Uses `createAuth` from `@hallpass/auth` configured with the shared Prisma client, base URL, secret, and trusted origins parsed from environment variables. Trusted origins are passed as a concrete array or undefined (for allow-all), since better-auth's `trustedOrigins` doesn't accept wildcard strings. Depends on `@hallpass/db` for the Prisma instance and `@hallpass/express-middleware` for CORS origin parsing."
+      "blobSha": "7b5a3e79e7528f1ae644bb38102f550b914abc7e",
+      "summary": "Initializes and exports the better-auth instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Configures the auth system with Prisma, base URL, secret, trusted CORS origins, and a password-reset email callback that uses the `@hallpass/email` package via SES. Trusted origins are derived from `parseCorsOrigins` and only passed as a concrete array (not wildcard). Errors during reset email sending are logged but not re-thrown, preventing auth flow disruption."
     },
     "apps/user-api/src/env.ts": {
-      "blobSha": "3a58d73a90ec416d9aab3e8acd42553bf068fe23",
-      "summary": "Parses and validates environment variables for the user-api service using the `rateLimitEnvSchema` Zod schema from `@hallpass/express-middleware`. Exports a single typed `env` object used throughout the app for configuration. Any new environment variables needed by this service that relate to rate limiting or shared middleware config should be added to the upstream schema; service-specific vars may require extending it."
+      "blobSha": "0d45bde7bf596571d32c304a7dac86eef63d687f",
+      "summary": "Validates and exports environment variables for the user-api service using Zod schemas. Combines `rateLimitEnvSchema` from `@hallpass/express-middleware` with a custom `emailEnvSchema` that enforces all-or-nothing SES configuration (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, EMAIL_FROM must all be present or all absent). A second refinement requires WEB_APP_URL when SES is configured. The parsed and validated env object is exported directly, making it the single source of truth for environment configuration in the user-api app."
     },
     "apps/user-api/src/index.ts": {
       "blobSha": "c4e0fcb6b67a339a5e32acb8a68967d401e40747",
@@ -35,8 +35,8 @@
       "summary": "Defines Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with cursor pagination, optional role filter, and comma-separated ids), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId). Role fields are constrained to `ASSIGNABLE_ROLES` from `@hallpass/types`. The `limit` field uses `z.coerce.number()` for query string parsing with a default of 50."
     },
     "packages/auth/src/index.ts": {
-      "blobSha": "d2b6daa83886a5f7242ec97d045ee2345c153642",
-      "summary": "Shared authentication package that wraps `better-auth` to create a configured auth instance via `createAuth()`, using Prisma as the PostgreSQL adapter with serial ID generation and the bearer token plugin. Exports the `Auth` and `Session` types inferred from the auth instance, plus `toNodeHandler` and `fromNodeHeaders` re-exports for Express integration. Defines `createUserWithCredential()` which programmatically provisions a user with hashed password and linked credential account, supporting custom `role` and `schoolId` additional fields; it pre-checks for duplicate emails and translates concurrent Prisma P2002 unique-constraint violations into the exported `EmailInUseError` class. Key configuration: public sign-up is disabled (`disableSignUp: true`), sessions expire in 7 days with daily refresh, and HTTPS deployments get `sameSite: 'none'` secure cookies. Developers modifying this file should be aware that `additionalFields` (role, schoolId) are set to `input: false` so they cannot be supplied via the public API, only via internal adapter calls."
+      "blobSha": "4aba8e5e81b01f5d0db3151ddf773c4013d258a4",
+      "summary": "Shared authentication package wrapping better-auth for use across services. Exports `createAuth` which configures better-auth with Prisma adapter (PostgreSQL), bearer token plugin, email/password auth (sign-up disabled), serial ID generation, and configurable session expiry (7 days, refresh after 1 day). When baseURL is HTTPS, cookies are set with `sameSite: none` and `secure: true` for cross-origin support. Also exports `createUserWithCredential` for programmatic user creation with password hashing via better-auth internals, handling race conditions on unique email via P2002 error translation to `EmailInUseError`. Key types exported include `Auth`, `Session`, and re-exports `toNodeHandler`/`fromNodeHeaders` from better-auth/node. The user model extends better-auth with `role` and `schoolId` additional fields (read-only, not settable via auth input)."
     },
     "apps/user-api/Dockerfile": {
       "blobSha": "b5c1418556d2af0362cac3a58173a6d0969d9a3e",
@@ -73,6 +73,10 @@
     "apps/user-api/src/lib/pin.ts": {
       "blobSha": "7e5852a77025f90de70ad70d147ffcdf031e7105",
       "summary": "Handles generation and collision-safe assignment of 6-digit PIN codes for student users, used by an external parent voice tool. Exports `generatePinCode()` (produces a random 6-digit string with no leading zero via `crypto.randomInt`) and `createUserWithPin<T>()` which wraps a creation callback, retrying up to 5 times on Prisma P2002 unique constraint violations specifically on the `pinCode` field. Non-STUDENT roles skip pin generation entirely (callback receives `undefined`). The `isPinCodeConflict` helper distinguishes pinCode collisions from email conflicts by inspecting Prisma error metadata, ensuring email uniqueness errors propagate unchanged."
+    },
+    "apps/user-api/src/email.ts": {
+      "blobSha": "3fd3dd451d994b3968c6b0aef3f2eb55f364574a",
+      "summary": "Provides email infrastructure for the user-api service: creates an email sender (SES-backed or logging fallback) and generates password reset URLs. The `sesConfig()` function returns AWS SES configuration only when all required env vars (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, EMAIL_FROM) are present; otherwise returns undefined, triggering the fallback logger sender. The `resetPasswordUrl` function constructs a reset link pointing to the web app's static HTML page with a URL-encoded token parameter. Depends on `@hallpass/email` for sender creation and `./env.ts` for validated environment variables."
     }
   }
 }
