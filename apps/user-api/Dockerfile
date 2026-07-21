@@ -9,6 +9,7 @@ COPY packages/auth/package.json packages/auth/
 COPY packages/logger/package.json packages/logger/
 COPY packages/types/package.json packages/types/
 COPY packages/middleware/package.json packages/middleware/
+COPY packages/email/package.json packages/email/
 COPY apps/user-api/package.json apps/user-api/
 
 RUN pnpm install --frozen-lockfile
@@ -26,6 +27,7 @@ RUN DATABASE_URL=postgresql://build:build@localhost/build \
 RUN pnpm --filter @hallpass/db build && \
     pnpm --filter @hallpass/auth build && \
     pnpm --filter @hallpass/logger build && \
+    pnpm --filter @hallpass/email build && \
     pnpm --filter @hallpass/types build && \
     pnpm --filter @hallpass/express-middleware build && \
     pnpm --filter @hallpass/user-api build
