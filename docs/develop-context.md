@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-21T16:30:04.823Z — 19 files indexed_
+_Generated: 2026-07-21T17:35:54.299Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,7 +58,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router defining the full CRUD REST API for user management, mounted under a `/users` prefix. Exports a default Router with endpoints: GET /me, GET / (cursor-paginated list with optional `ids` batch filter), GET /:id, POST / (single create with temp password), POST /bulk (batched creation with concurrency-limited scrypt hashing), PATCH /:id, and DELETE /:id (soft delete via `deletedAt`). Enforces role-based access control via `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with school-scoped data isolation for non-SUPER_ADMIN users using `roleRank` comparisons. Relies on `@hallpass/auth`'s `createUserWithCredential` for user provisioning (including duplicate-email detection via `EmailInUseError` and P2002), assigns student PIN codes post-creation via `createUserWithPin`, and uses Zod-based validation middleware from `@hallpass/express-middleware`. When modifying, note the careful ordering of middleware (validation before authorization), the non-fatal pin assignment error handling, and that `USER_SELECT` controls the Prisma projection for all read queries.
+Express router implementing full CRUD for user management in a multi-tenant school system. Exports a default Router with endpoints: GET /me, GET / (cursor-paginated list with optional ?ids= batch lookup), GET /:id, POST / (single create), POST /bulk (batched create with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft-delete via deletedAt). Enforces role-based access control using requireAuth, requireRole, and requireSelfOrRole middleware, with school-scoping for non-SUPER_ADMIN users and role-rank checks preventing privilege escalation. User creation provisions accounts via better-auth's createUserWithCredential with a server-generated temp password, assigns student pin codes, and sends invite emails — both pin and email failures are logged but non-fatal. Relies on shared packages (@hallpass/db for Prisma, @hallpass/auth, @hallpass/express-middleware for validation/RBAC, @hallpass/types for response types) and local schema validators from ../schemas/user.js. Key conventions: all list queries exclude soft-deleted rows (deletedAt: null), responses are normalized through toUserResponse(), and duplicate-email errors (EmailInUseError or Prisma P2002) are caught and returned as 409.
 
 ### `apps/user-api/src/schemas/user.ts`
 
@@ -74,7 +74,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package wrapping better-auth for use across services. Exports `createAuth` which configures better-auth with Prisma adapter (PostgreSQL), bearer token plugin, email/password auth (sign-up disabled), serial ID generation, and configurable session expiry (7 days, refresh after 1 day). When baseURL is HTTPS, cookies are set with `sameSite: none` and `secure: true` for cross-origin support. Also exports `createUserWithCredential` for programmatic user creation with password hashing via better-auth internals, handling race conditions on unique email via P2002 error translation to `EmailInUseError`. Key types exported include `Auth`, `Session`, and re-exports `toNodeHandler`/`fromNodeHeaders` from better-auth/node. The user model extends better-auth with `role` and `schoolId` additional fields (read-only, not settable via auth input).
+Shared authentication package wrapping better-auth with project-specific configuration for the HallPass platform. Exports createAuth() factory that configures better-auth with PostgreSQL/Prisma adapter, bearer token plugin, serial ID generation, custom session TTL (7 days), and additional user fields (role, schoolId) that are not user-settable (input: false). Sign-up is disabled (disableSignUp: true); user creation is handled exclusively through the exported createUserWithCredential() helper, which performs email uniqueness checking, password hashing, and account linking, translating race-condition P2002 errors into the exported EmailInUseError class. Also exports createSetPasswordToken() which mints better-auth-compatible reset-password verification tokens server-side, used for invite flows with configurable expiry. Key exports include the Auth and Session types, toNodeHandler/fromNodeHeaders for Express integration, and EmailInUseError. When baseURL is HTTPS, cookies are configured with sameSite:'none' and secure:true for cross-origin deployments.
 
 ### `packages/db/prisma/schema.prisma`
 
