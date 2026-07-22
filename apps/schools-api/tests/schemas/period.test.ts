@@ -77,6 +77,18 @@ describe("createPeriodSchema", () => {
       createPeriodSchema.safeParse({ name: "P1", startTime: "00:00", endTime: "23:59", order: 1 }).success,
     ).toBe(true);
   });
+
+  it("rejects startTime equal to endTime", () => {
+    expect(
+      createPeriodSchema.safeParse({ name: "P1", startTime: "08:00", endTime: "08:00", order: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects startTime after endTime", () => {
+    expect(
+      createPeriodSchema.safeParse({ name: "P1", startTime: "10:00", endTime: "09:00", order: 0 }).success,
+    ).toBe(false);
+  });
 });
 
 describe("updatePeriodSchema", () => {

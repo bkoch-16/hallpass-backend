@@ -115,6 +115,14 @@ router.patch(
       return;
     }
 
+    const mergedStartTime = req.body.startTime ?? existing.startTime;
+    const mergedEndTime = req.body.endTime ?? existing.endTime;
+
+    if (mergedStartTime >= mergedEndTime) {
+      res.status(400).json({ message: "startTime must be before endTime" });
+      return;
+    }
+
     const updated = await prisma.period.update({
       where: { id },
       data: req.body,

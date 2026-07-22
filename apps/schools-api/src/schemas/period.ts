@@ -8,12 +8,17 @@ export const periodIdSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-export const createPeriodSchema = z.object({
-  name: z.string().min(1, "name is required"),
-  startTime: timeString,
-  endTime: timeString,
-  order: z.number().int().min(0),
-});
+export const createPeriodSchema = z
+  .object({
+    name: z.string().min(1, "name is required"),
+    startTime: timeString,
+    endTime: timeString,
+    order: z.number().int().min(0),
+  })
+  .refine((data) => data.startTime < data.endTime, {
+    message: "startTime must be before endTime",
+    path: ["endTime"],
+  });
 
 export const updatePeriodSchema = z
   .object({
