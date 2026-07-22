@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-21T20:33:44.353Z — 19 files indexed_
+_Generated: 2026-07-22T00:22:46.195Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,11 +58,11 @@ Exports a requireAuth Express middleware created via createRequireAuth from the 
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for users with role-based access control, cursor pagination, and bulk provisioning. Exports routes: GET /me, GET / (paginated list with optional ?ids= batch lookup), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft delete). User creation flows through better-auth's createUserWithCredential, assigns PIN codes for students, and sends invite emails — all with non-fatal error handling so partial failures don't block provisioning. Enforces role hierarchy via roleRank, school-scoped access for non-SUPER_ADMIN users, and uses Zod validation middleware. Returns typed responses (UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult) from @hallpass/types.
+Defines the Express router for all user CRUD operations including GET /me, GET / (cursor-paginated list with optional id-batch and search), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency), PATCH /:id, and DELETE /:id (soft-delete). Enforces role-based and school-scoped authorization using requireAuth, requireRole, requireSelfOrRole, and roleRank utilities; super admins bypass school scoping. User provisioning generates a temporary password via createUserWithCredential, assigns a student pinCode, and sends an invite email—pin and email failures are intentionally non-fatal so the already-committed user row is never lost. Uses Prisma for persistence with a consistent USER_SELECT projection and a toUserResponse mapper for the API contract. Bulk creation caps concurrency at 8 to limit scrypt hashing pressure and returns partial-success results. Deletion soft-deletes the user row and best-effort revokes all better-auth sessions.
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (validates route param as numeric string), `listUsersSchema` (role filter, cursor pagination, ids filter, limit with default 50), `createUserSchema` (email, name required, optional role from ASSIGNABLE_ROLES), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId support). All role fields are validated against ASSIGNABLE_ROLES from @hallpass/types.
+Zod validation schemas for user-related API endpoints: userIdSchema (path param), listUsersSchema (query params with cursor pagination, role filter, id-batch, and search), createUserSchema (email + name + optional role), bulkCreateSchema (array of createUserSchema, 1-100 items), and updateUserSchema (partial update requiring at least one field, including nullable schoolId). Roles are constrained to the ASSIGNABLE_ROLES enum imported from @hallpass/types. The listUsersSchema coerces limit to a number with a default of 50 and max of 100. These schemas are consumed by validateBody, validateParams, and validateQuery middleware in the route file.
 
 ### `docker-compose.yml`
 
