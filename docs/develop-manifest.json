@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-22T00:17:45.455Z",
+  "generatedAt": "2026-07-22T19:13:07.394Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "771d3f85761d43a2408ed526d045bf02c546bff4",
       "summary": "Defines the full PostgreSQL database schema for the HallPass application using Prisma ORM. Models include District, School, User, Session, Account, Verification (for better-auth), ScheduleType, Period, SchoolCalendar, Destination, PassPolicy, and Pass. Key enums are Role (STUDENT/TEACHER/ADMIN/SUPER_ADMIN/SERVICE), PolicyInterval, and PassStatus (lifecycle states). The schema uses integer autoincrement IDs throughout (required by better-auth's `generateId: \"serial\"` config), soft deletes via `deletedAt` on most models (but notably not Pass, which uses terminal statuses instead), and relational integrity via foreign keys. Critical caveat: a partial unique index `one_active_pass_per_student` exists only in a migration and not in this schema—any new migration will generate a DROP for it that must be manually removed before applying. The Pass model has multiple named relations to User (student, requester, approver, denier, canceller) and strategic composite/single-column indexes."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
-      "summary": "Main Express application setup for the user-api service. Configures middleware in order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), Redis-backed rate limiters (general + stricter auth-specific), better-auth handler for `/api/auth/*`, user routes at `/api/users`, and error handling. Rate limiting uses Redis when available (namespaced by REDIS_PREFIX) and falls back to in-memory stores in test or when REDIS_URL is unset; each limiter requires its own RedisStore instance. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Developers modifying this file should note the middleware ordering matters (e.g., health route before limiter), and that the auth limiter only applies to specific POST credential endpoints while GET session requests use the general limiter."
+      "blobSha": "9eb6f2f6a3b27f026ce0f5d1812bf8be675eb802",
+      "summary": "Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and a multi-layered rate-limiting strategy (general, auth per-IP+email, and auth per-account) backed by Redis in production or in-memory in test. Auth routes under `/api/auth/*` are delegated to better-auth via `toNodeHandler`, while `/api/users` routes use a dedicated router. Rate limiting is carefully split: email-based auth routes get both an IP+email limiter and an account-level limiter (with skip-successful-requests), while password-reset gets a separate account limiter that counts all requests since the endpoint always returns 200. Relies on shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`) and local modules (`auth`, `env`, `routes/user`). Developers modifying this file should understand the intentional ordering of middleware (health before rate limiters, auth limiters before the auth handler) and the anti-enumeration design decisions documented in comments."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "7b5a3e79e7528f1ae644bb38102f550b914abc7e",

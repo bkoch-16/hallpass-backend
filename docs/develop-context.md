@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-22T00:17:45.455Z — 19 files indexed_
+_Generated: 2026-07-22T19:13:07.394Z — 19 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Main Express application setup for the user-api service. Configures middleware in order: helmet, CORS, HTTP logging, JSON parsing, health check (before rate limiting), Redis-backed rate limiters (general + stricter auth-specific), better-auth handler for `/api/auth/*`, user routes at `/api/users`, and error handling. Rate limiting uses Redis when available (namespaced by REDIS_PREFIX) and falls back to in-memory stores in test or when REDIS_URL is unset; each limiter requires its own RedisStore instance. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Developers modifying this file should note the middleware ordering matters (e.g., health route before limiter), and that the auth limiter only applies to specific POST credential endpoints while GET session requests use the general limiter.
+Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and a multi-layered rate-limiting strategy (general, auth per-IP+email, and auth per-account) backed by Redis in production or in-memory in test. Auth routes under `/api/auth/*` are delegated to better-auth via `toNodeHandler`, while `/api/users` routes use a dedicated router. Rate limiting is carefully split: email-based auth routes get both an IP+email limiter and an account-level limiter (with skip-successful-requests), while password-reset gets a separate account limiter that counts all requests since the endpoint always returns 200. Relies on shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`) and local modules (`auth`, `env`, `routes/user`). Developers modifying this file should understand the intentional ordering of middleware (health before rate limiters, auth limiters before the auth handler) and the anti-enumeration design decisions documented in comments.
 
 ### `apps/user-api/src/auth.ts`
 
