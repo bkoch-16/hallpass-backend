@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-21T17:35:54.299Z — 19 files indexed_
+_Generated: 2026-07-22T00:17:45.455Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,11 +58,11 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for user management in a multi-tenant school system. Exports a default Router with endpoints: GET /me, GET / (cursor-paginated list with optional ?ids= batch lookup), GET /:id, POST / (single create), POST /bulk (batched create with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft-delete via deletedAt). Enforces role-based access control using requireAuth, requireRole, and requireSelfOrRole middleware, with school-scoping for non-SUPER_ADMIN users and role-rank checks preventing privilege escalation. User creation provisions accounts via better-auth's createUserWithCredential with a server-generated temp password, assigns student pin codes, and sends invite emails — both pin and email failures are logged but non-fatal. Relies on shared packages (@hallpass/db for Prisma, @hallpass/auth, @hallpass/express-middleware for validation/RBAC, @hallpass/types for response types) and local schema validators from ../schemas/user.js. Key conventions: all list queries exclude soft-deleted rows (deletedAt: null), responses are normalized through toUserResponse(), and duplicate-email errors (EmailInUseError or Prisma P2002) are caught and returned as 409.
+Express router implementing full CRUD for users with role-based access control, cursor-paginated listing, bulk creation, and soft-delete. Exports a default Router with endpoints: GET /me, GET / (list with optional ?ids= batch lookup and ?q= search), GET /:id, POST / (single create), POST /bulk (throttled concurrent creation), PATCH /:id, and DELETE /:id. User provisioning uses `createUserWithCredential` from @hallpass/auth with a server-generated temp password, assigns a student pinCode via `createUserWithPin`, and sends an invite email—both pin and email failures are logged but non-fatal to avoid rolling back committed user rows. Enforces hierarchical role authorization via `roleRank`, school-scoping for non-super-admins, and `requireSelfOrRole` for self-access paths. Soft-deletes set `deletedAt` and revoke better-auth sessions. Depends on Prisma, Zod validation middleware, and shared packages (@hallpass/auth, @hallpass/email, @hallpass/express-middleware, @hallpass/types).
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Defines Zod validation schemas for user-related API endpoints. Exports `userIdSchema` (path param), `listUsersSchema` (query params with cursor pagination, optional role filter, and comma-separated ids), `createUserSchema` (email, name, optional role), `bulkCreateSchema` (array of 1-100 create schemas), and `updateUserSchema` (partial update requiring at least one field, with nullable schoolId). Role fields are constrained to `ASSIGNABLE_ROLES` from `@hallpass/types`. The `limit` field uses `z.coerce.number()` for query string parsing with a default of 50.
+Zod validation schemas for user-related API endpoints, used with `validateBody`, `validateParams`, and `validateQuery` middleware. Exports `userIdSchema` (route param with numeric string id), `listUsersSchema` (query params: role filter, cursor pagination with configurable limit 1-100 defaulting to 50, comma-separated ids, and search query q), `createUserSchema` (email, name required; optional assignable role), `bulkCreateSchema` (array of 1-100 createUserSchema entries), and `updateUserSchema` (partial update requiring at least one field, with optional nullable schoolId). Uses `ASSIGNABLE_ROLES` from @hallpass/types to constrain role enums, ensuring only permitted roles can be specified by clients.
 
 ### `docker-compose.yml`
 
