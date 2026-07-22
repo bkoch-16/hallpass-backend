@@ -158,6 +158,15 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
  * 15-minute window) so legitimate users who sign in from multiple networks
  * (e.g. home + mobile data) aren't penalized for normal behavior — it's meant
  * to catch distributed abuse, not everyday multi-IP usage.
+ *
+ * Only failed attempts count toward this budget (skipSuccessfulRequests) so
+ * a correct sign-in doesn't erode it. This narrows, but does not eliminate,
+ * the residual self-DoS: an attacker who front-loads `limit` failed attempts
+ * from rotating IPs still causes the account owner's very next attempt to be
+ * blocked, since express-rate-limit's block decision precedes knowledge of
+ * that request's own outcome. Raises attacker cost (must supply `limit`
+ * genuinely-failed requests, not just `limit` requests of any kind) rather
+ * than closing the lockout class entirely — see tech-debt.md.
  */
 export function createAuthAccountLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
@@ -166,6 +175,19 @@ export function createAuthAccountLimiter(options: RateLimiterOptions = {}) {
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: { message: "Too many requests" },
+    // Only failed (>= 400) responses count toward the shared per-email
+    // budget; a real successful sign-in/sign-up is refunded afterward so it
+    // can't itself erode the backstop's budget (previously ANY request,
+    // success or failure, counted permanently). This does NOT eliminate the
+    // residual lockout window: express-rate-limit decides to block *before*
+    // it knows whether the current request would succeed (store.increment()
+    // runs, then totalHits is compared to limit, then next()/handler() is
+    // chosen — see index.cjs:845-942), so once an attacker's own failed
+    // attempts have already pushed the counter to `limit`, the very next
+    // request against this key — including the real owner's, even if it
+    // would have succeeded — is still blocked pre-flight. See the docstring
+    // above for the residual-risk framing.
+    skipSuccessfulRequests: true,
     keyGenerator: (req: Request) => {
       const email = normalizedEmail(req);
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");

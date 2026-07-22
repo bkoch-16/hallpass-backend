@@ -69,7 +69,14 @@ app.use(limiter);
 // Two-layer defense: authLimiter caps attempts per (email, IP) so a single
 // source can't grief a victim's account into lockout, while
 // authAccountLimiter is a looser pure-email backstop that still caps the
-// aggregate across an attacker rotating source IPs.
+// aggregate across an attacker rotating source IPs. authAccountLimiter is
+// scoped to only the routes that carry req.body.email — reset-password
+// ({ newPassword, token }) and change-password ({ currentPassword,
+// newPassword }) never do, so its keyGenerator would fall back to the same
+// per-IP key authLimiter already uses, and authLimiter's stricter 10-request
+// cap runs first and always blocks before authAccountLimiter's looser
+// 30-request cap could ever bind — making it dead weight (a redundant Redis
+// round-trip) on those two routes.
 app.post(
   [
     "/api/auth/sign-in/email",
@@ -79,6 +86,13 @@ app.post(
     "/api/auth/change-password",
   ],
   authLimiter,
+);
+app.post(
+  [
+    "/api/auth/sign-in/email",
+    "/api/auth/sign-up/email",
+    "/api/auth/request-password-reset",
+  ],
   authAccountLimiter,
 );
 app.all("/api/auth/*splat", toNodeHandler(auth));

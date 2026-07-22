@@ -47,7 +47,11 @@ function authAccountApp(options?: LimiterOptions) {
   app.set("trust proxy", 1);
   app.use(express.json());
   app.use(createAuthAccountLimiter(options));
-  app.post("/login", (_req, res) => {
+  app.post("/login", (req, res) => {
+    if (req.body?.fail) {
+      res.status(401).json({ ok: false });
+      return;
+    }
     res.json({ ok: true });
   });
   return app;
@@ -342,14 +346,14 @@ describe("createAuthAccountLimiter", () => {
     const first = await request(app)
       .post("/login")
       .set("X-Forwarded-For", "1.1.1.1")
-      .send({ email: "  User@Example.com " });
-    expect(first.status).toBe(200);
+      .send({ email: "  User@Example.com ", fail: true });
+    expect(first.status).toBe(401);
 
     // Same email after normalization, DIFFERENT IP — still shares the counter
     const second = await request(app)
       .post("/login")
       .set("X-Forwarded-For", "2.2.2.2")
-      .send({ email: "user@example.com" });
+      .send({ email: "user@example.com", fail: true });
     expect(second.status).toBe(429);
     expect(second.body).toEqual({ message: "Too many requests" });
   });
@@ -358,10 +362,10 @@ describe("createAuthAccountLimiter", () => {
     const app = authAccountApp({ limit: 1 });
 
     expect(
-      (await request(app).post("/login").send({ email: "a@example.com" })).status,
-    ).toBe(200);
+      (await request(app).post("/login").send({ email: "a@example.com", fail: true })).status,
+    ).toBe(401);
     expect(
-      (await request(app).post("/login").send({ email: "a@example.com" })).status,
+      (await request(app).post("/login").send({ email: "a@example.com", fail: true })).status,
     ).toBe(429);
     expect(
       (await request(app).post("/login").send({ email: "b@example.com" })).status,
@@ -371,8 +375,8 @@ describe("createAuthAccountLimiter", () => {
   it("falls back to IP keying when email is absent", async () => {
     const app = authAccountApp({ limit: 1 });
 
-    expect((await request(app).post("/login").send({})).status).toBe(200);
-    expect((await request(app).post("/login").send({})).status).toBe(429);
+    expect((await request(app).post("/login").send({ fail: true })).status).toBe(401);
+    expect((await request(app).post("/login").send({ fail: true })).status).toBe(429);
 
     // Email-keyed request from the exhausted IP is unaffected
     expect(
@@ -384,15 +388,15 @@ describe("createAuthAccountLimiter", () => {
     const app = authAccountApp();
 
     for (let i = 0; i < 30; i++) {
-      const res = await request(app).post("/login").send({ email: "d@example.com" });
-      expect(res.status).toBe(200);
+      const res = await request(app).post("/login").send({ email: "d@example.com", fail: true });
+      expect(res.status).toBe(401);
       // Pins the app defaults: limit 30 (q=30), windowMs 15 * 60 * 1000 (w=900s)
       expect(res.headers["ratelimit-policy"]).toMatch(/q=30;\s*w=900/);
     }
 
     const limited = await request(app)
       .post("/login")
-      .send({ email: "d@example.com" });
+      .send({ email: "d@example.com", fail: true });
     expect(limited.status).toBe(429);
     expect(limited.body).toEqual({ message: "Too many requests" });
     expect(limited.headers["ratelimit"]).toBeDefined();
@@ -432,10 +436,32 @@ describe("createAuthAccountLimiter", () => {
       const res = await request(app)
         .post("/login")
         .set("X-Forwarded-For", ip)
-        .send({ email: "victim@example.com" });
+        .send({ email: "victim@example.com", fail: true });
       statuses.push(res.status);
     }
 
-    expect(statuses).toEqual([200, 200, 200, 429]);
+    expect(statuses).toEqual([401, 401, 401, 429]);
+  });
+
+  it("does not count successful (2xx) responses toward the shared per-email budget, but failed attempts still count", async () => {
+    const app = authAccountApp({ limit: 1 });
+
+    // Five real successful sign-ins for the same email never trip the limiter.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).post("/login").send({ email: "owner@example.com" });
+      expect(res.status).toBe(200);
+    }
+
+    // A failed attempt (e.g. a credential-stuffing guess) still consumes the budget...
+    const failed = await request(app)
+      .post("/login")
+      .send({ email: "owner@example.com", fail: true });
+    expect(failed.status).toBe(401);
+
+    // ...and the very next request against that key is blocked, whether or not
+    // it would itself have succeeded (the residual risk called out in the
+    // rateLimit.ts docstring/comment).
+    const blocked = await request(app).post("/login").send({ email: "owner@example.com" });
+    expect(blocked.status).toBe(429);
   });
 });
