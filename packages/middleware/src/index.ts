@@ -21,6 +21,7 @@ export {
   createAuthAccountLimiter,
   createIpRateLimiter,
   type RateLimiterOptions,
+  type AuthAccountLimiterOptions,
   type IpRateLimiterOptions,
 } from "./rateLimit.js";
 export { baseEnvSchema, rateLimitEnvSchema } from "./env.js";
