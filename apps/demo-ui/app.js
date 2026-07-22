@@ -164,6 +164,19 @@ function buildUrl(ep) {
 // Send
 // ---------------------------------------------------------------------------
 
+function showResponse(statusLabel, cssClass, bodyText) {
+  const badge = document.getElementById('status-badge');
+  badge.textContent = statusLabel;
+  badge.className = 'status-badge ' + cssClass;
+  document.getElementById('response-body').textContent = bodyText;
+  document.getElementById('response-card').classList.remove('hidden');
+}
+
+function resetSendButton(btn) {
+  btn.disabled = false;
+  btn.textContent = 'Send \u2192';
+}
+
 async function send() {
   const ep = currentEndpoint;
   if (!ep) return;
@@ -194,13 +207,8 @@ async function send() {
     try {
       JSON.parse(bodyVal);
     } catch (err) {
-      const badge = document.getElementById('status-badge');
-      badge.textContent = 'Invalid JSON';
-      badge.className = 'status-badge status-4xx';
-      document.getElementById('response-body').textContent = err.message;
-      document.getElementById('response-card').classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = 'Send \u2192';
+      showResponse('Invalid JSON', 'status-4xx', err.message);
+      resetSendButton(btn);
       return;
     }
     opts.headers['Content-Type'] = 'application/json';
@@ -225,15 +233,9 @@ async function send() {
     bodyText = err.message;
   }
 
-  const badge = document.getElementById('status-badge');
-  badge.textContent = statusLabel;
   const cls = status >= 500 ? 'status-5xx' : status >= 400 ? 'status-4xx' : status >= 300 ? 'status-3xx' : 'status-2xx';
-  badge.className = 'status-badge ' + (status ? cls : 'status-4xx');
-  document.getElementById('response-body').textContent = bodyText;
-  document.getElementById('response-card').classList.remove('hidden');
-
-  btn.disabled = false;
-  btn.textContent = 'Send \u2192';
+  showResponse(statusLabel, status ? cls : 'status-4xx', bodyText);
+  resetSendButton(btn);
 
   if (ep.url.includes('/auth/')) {
     await fetchMe();
