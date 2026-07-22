@@ -143,6 +143,19 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
   });
 }
 
+export interface AuthAccountLimiterOptions extends RateLimiterOptions {
+  /**
+   * Whether a successful (2xx) response is excluded from the shared per-email
+   * budget. Defaults to true: for sign-in/sign-up, success is a real signal
+   * (the request was legitimate) so it shouldn't erode the backstop. Pass
+   * false for routes whose handler always returns 2xx by design regardless of
+   * outcome (e.g. request-password-reset's anti-enumeration response), where
+   * a "successful" response carries no signal and must count toward the
+   * budget like everything else, or the cap never engages.
+   */
+  skipSuccessfulRequests?: boolean;
+}
+
 /**
  * Auth account limiter: keys purely on the target account (req.body.email,
  * normalized the same way as createAuthLimiter), falling back to per-IP
@@ -159,16 +172,17 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
  * (e.g. home + mobile data) aren't penalized for normal behavior — it's meant
  * to catch distributed abuse, not everyday multi-IP usage.
  *
- * Only failed attempts count toward this budget (skipSuccessfulRequests) so
- * a correct sign-in doesn't erode it. This narrows, but does not eliminate,
- * the residual self-DoS: an attacker who front-loads `limit` failed attempts
- * from rotating IPs still causes the account owner's very next attempt to be
- * blocked, since express-rate-limit's block decision precedes knowledge of
- * that request's own outcome. Raises attacker cost (must supply `limit`
- * genuinely-failed requests, not just `limit` requests of any kind) rather
- * than closing the lockout class entirely — see tech-debt.md.
+ * Only failed attempts count toward this budget by default
+ * (skipSuccessfulRequests) so a correct sign-in doesn't erode it. This
+ * narrows, but does not eliminate, the residual self-DoS: an attacker who
+ * front-loads `limit` failed attempts from rotating IPs still causes the
+ * account owner's very next attempt to be blocked, since express-rate-limit's
+ * block decision precedes knowledge of that request's own outcome. Raises
+ * attacker cost (must supply `limit` genuinely-failed requests, not just
+ * `limit` requests of any kind) rather than closing the lockout class
+ * entirely — see tech-debt.md.
  */
-export function createAuthAccountLimiter(options: RateLimiterOptions = {}) {
+export function createAuthAccountLimiter(options: AuthAccountLimiterOptions = {}) {
   return rateLimit({
     windowMs: options.windowMs ?? FIFTEEN_MINUTES_MS,
     limit: options.limit ?? 30,
@@ -176,18 +190,22 @@ export function createAuthAccountLimiter(options: RateLimiterOptions = {}) {
     legacyHeaders: false,
     message: { message: "Too many requests" },
     // Only failed (>= 400) responses count toward the shared per-email
-    // budget; a real successful sign-in/sign-up is refunded afterward so it
-    // can't itself erode the backstop's budget (previously ANY request,
-    // success or failure, counted permanently). This does NOT eliminate the
-    // residual lockout window: express-rate-limit decides to block *before*
-    // it knows whether the current request would succeed (store.increment()
-    // runs, then totalHits is compared to limit, then next()/handler() is
-    // chosen — see index.cjs:845-942), so once an attacker's own failed
-    // attempts have already pushed the counter to `limit`, the very next
-    // request against this key — including the real owner's, even if it
-    // would have succeeded — is still blocked pre-flight. See the docstring
-    // above for the residual-risk framing.
-    skipSuccessfulRequests: true,
+    // budget by default; a real successful sign-in/sign-up is refunded
+    // afterward so it can't itself erode the backstop's budget (previously
+    // ANY request, success or failure, counted permanently). This does NOT
+    // eliminate the residual lockout window: express-rate-limit decides to
+    // block *before* it knows whether the current request would succeed
+    // (store.increment() runs, then totalHits is compared to limit, then
+    // next()/handler() is chosen — see index.cjs:845-942), so once an
+    // attacker's own failed attempts have already pushed the counter to
+    // `limit`, the very next request against this key — including the real
+    // owner's, even if it would have succeeded — is still blocked pre-flight.
+    // See the docstring above for the residual-risk framing. See
+    // AuthAccountLimiterOptions.skipSuccessfulRequests for the opt-out used
+    // by routes whose handler always returns 2xx (e.g.
+    // request-password-reset's anti-enumeration design, where a "successful"
+    // response carries no signal about whether the request was legitimate).
+    skipSuccessfulRequests: options.skipSuccessfulRequests ?? true,
     keyGenerator: (req: Request) => {
       const email = normalizedEmail(req);
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");

@@ -8,6 +8,7 @@ import {
 } from "../src/rateLimit";
 
 type LimiterOptions = Parameters<typeof createGeneralLimiter>[0];
+type AuthAccountLimiterOptions = Parameters<typeof createAuthAccountLimiter>[0];
 
 /**
  * Builds an app that applies the general limiter directly. The limiter keys by
@@ -42,7 +43,7 @@ function authApp(options?: LimiterOptions) {
 }
 
 /** Same wiring as authApp, but with the pure-email account limiter instead. */
-function authAccountApp(options?: LimiterOptions) {
+function authAccountApp(options?: AuthAccountLimiterOptions) {
   const app = express();
   app.set("trust proxy", 1);
   app.use(express.json());
@@ -463,5 +464,24 @@ describe("createAuthAccountLimiter", () => {
     // rateLimit.ts docstring/comment).
     const blocked = await request(app).post("/login").send({ email: "owner@example.com" });
     expect(blocked.status).toBe(429);
+  });
+
+  it("counts successful (2xx) responses toward the shared per-email budget when skipSuccessfulRequests is false (e.g. request-password-reset's always-200 anti-enumeration response)", async () => {
+    const app = authAccountApp({ limit: 1, skipSuccessfulRequests: false });
+
+    // Mirrors a real endpoint that always returns 200 regardless of outcome
+    // (better-auth's request-password-reset) — success carries no signal
+    // here, so it must still count toward the shared per-email budget or the
+    // cap never engages against reset-spam.
+    const first = await request(app)
+      .post("/login")
+      .send({ email: "reset@example.com" });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post("/login")
+      .send({ email: "reset@example.com" });
+    expect(second.status).toBe(429);
+    expect(second.body).toEqual({ message: "Too many requests" });
   });
 });
