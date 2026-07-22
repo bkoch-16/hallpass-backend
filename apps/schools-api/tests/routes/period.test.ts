@@ -272,7 +272,7 @@ describe(`PATCH ${BASE}/:id`, () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when merged startTime is not before existing endTime", async () => {
+  it("returns 422 when merged startTime is not before existing endTime", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
 
@@ -280,11 +280,11 @@ describe(`PATCH ${BASE}/:id`, () => {
       .patch(`${BASE}/1`)
       .send({ startTime: "09:30" });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when merged endTime is not after existing startTime", async () => {
+  it("returns 422 when merged endTime is not after existing startTime", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
 
@@ -292,11 +292,11 @@ describe(`PATCH ${BASE}/:id`, () => {
       .patch(`${BASE}/1`)
       .send({ endTime: "07:00" });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when both fields are provided out of order", async () => {
+  it("returns 422 when both fields are provided out of order", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
 
@@ -304,7 +304,7 @@ describe(`PATCH ${BASE}/:id`, () => {
       .patch(`${BASE}/1`)
       .send({ startTime: "10:00", endTime: "09:00" });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
   });
 

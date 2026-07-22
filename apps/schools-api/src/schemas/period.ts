@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const timeString = z.string().regex(/^\d{2}:\d{2}$/, "must be HH:MM format");
 
+export const PERIOD_TIME_ORDER_MESSAGE = "startTime must be before endTime";
+
+export function isValidTimeRange(startTime: string, endTime: string): boolean {
+  return startTime < endTime;
+}
+
 export const periodIdSchema = z.object({
   schoolId: z.coerce.number().int().positive(),
   scheduleTypeId: z.coerce.number().int().positive(),
@@ -15,8 +21,8 @@ export const createPeriodSchema = z
     endTime: timeString,
     order: z.number().int().min(0),
   })
-  .refine((data) => data.startTime < data.endTime, {
-    message: "startTime must be before endTime",
+  .refine((data) => isValidTimeRange(data.startTime, data.endTime), {
+    message: PERIOD_TIME_ORDER_MESSAGE,
     path: ["endTime"],
   });
 

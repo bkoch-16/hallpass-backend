@@ -10,7 +10,13 @@ import {
   requireSchoolAccessIfSession,
 } from "../middleware/schoolScope.js";
 import { createPublicSchoolDataLimiter } from "../middleware/publicSchoolDataLimiter.js";
-import { createPeriodSchema, periodIdSchema, updatePeriodSchema } from "../schemas/period.js";
+import {
+  createPeriodSchema,
+  isValidTimeRange,
+  PERIOD_TIME_ORDER_MESSAGE,
+  periodIdSchema,
+  updatePeriodSchema,
+} from "../schemas/period.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -118,8 +124,8 @@ router.patch(
     const mergedStartTime = req.body.startTime ?? existing.startTime;
     const mergedEndTime = req.body.endTime ?? existing.endTime;
 
-    if (mergedStartTime >= mergedEndTime) {
-      res.status(400).json({ message: "startTime must be before endTime" });
+    if (!isValidTimeRange(mergedStartTime, mergedEndTime)) {
+      res.status(422).json({ message: PERIOD_TIME_ORDER_MESSAGE });
       return;
     }
 
