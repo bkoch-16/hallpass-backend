@@ -106,12 +106,25 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   });
 }
 
+/** Normalizes req.body.email (trim + lowercase) the same way for both auth limiters, else "". */
+function normalizedEmail(req: Request): string {
+  return typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+}
+
 /**
- * Auth endpoint limiter: keys per target account (req.body.email, lowercased
- * and trimmed) so credential-stuffing against one account can't be spread
- * across IPs, falling back to per-IP keying when no email is present.
- * Requires express.json() to run first. Defaults to 10 requests per
- * 15-minute window per key.
+ * Auth endpoint limiter: keys per (target account, source IP) pair so a
+ * single IP spraying credential-stuffing attempts at one account is capped,
+ * falling back to per-IP keying when no email is present. Requires
+ * express.json() to run first. Defaults to 10 requests per 15-minute window
+ * per key.
+ *
+ * Previously keyed on email alone, which let an attacker submit junk
+ * credentials for a victim's email from anywhere and 429-lock that victim's
+ * own sign-in attempts (account-lockout griefing) — see tech-debt.md. Keying
+ * on (email, IP) means a griefer only exhausts their own IP's bucket for that
+ * email; the victim's legitimate attempts from their own IP get an
+ * independent counter. See createAuthAccountLimiter for the complementary
+ * pure-email backstop against an attacker who rotates source IPs.
  */
 export function createAuthLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
@@ -121,10 +134,40 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
     legacyHeaders: false,
     message: { message: "Too many requests" },
     keyGenerator: (req: Request) => {
-      const email =
-        typeof req.body?.email === "string"
-          ? req.body.email.trim().toLowerCase()
-          : "";
+      const email = normalizedEmail(req);
+      return email
+        ? `email:${email}|ip:${ipKeyGenerator(req.ip ?? "")}`
+        : ipKeyGenerator(req.ip ?? "");
+    },
+    ...storeOverrides(options),
+  });
+}
+
+/**
+ * Auth account limiter: keys purely on the target account (req.body.email,
+ * normalized the same way as createAuthLimiter), falling back to per-IP
+ * keying when no email is present. Requires express.json() to run first.
+ *
+ * This is the distributed-attack backstop for createAuthLimiter's per-(email,
+ * IP) bucket: an attacker rotating source IPs gets a fresh per-IP counter
+ * from createAuthLimiter each time, but still shares this single per-email
+ * counter across all of those IPs, capping the aggregate attempts against one
+ * account regardless of how many IPs are used.
+ *
+ * Intentionally LOOSER than createAuthLimiter's default (30 vs. 10 per
+ * 15-minute window) so legitimate users who sign in from multiple networks
+ * (e.g. home + mobile data) aren't penalized for normal behavior — it's meant
+ * to catch distributed abuse, not everyday multi-IP usage.
+ */
+export function createAuthAccountLimiter(options: RateLimiterOptions = {}) {
+  return rateLimit({
+    windowMs: options.windowMs ?? FIFTEEN_MINUTES_MS,
+    limit: options.limit ?? 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { message: "Too many requests" },
+    keyGenerator: (req: Request) => {
+      const email = normalizedEmail(req);
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
     ...storeOverrides(options),

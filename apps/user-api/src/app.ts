@@ -9,6 +9,7 @@ import {
   createErrorHandler,
   createGeneralLimiter,
   createAuthLimiter,
+  createAuthAccountLimiter,
   corsOptions,
   createRateLimitRedis,
   createRedisRateLimitStore,
@@ -55,12 +56,20 @@ const authLimiter = createAuthLimiter(
   useRedisStore ? { store: redisStore("auth"), passOnStoreError: true } : {},
 );
 
+const authAccountLimiter = createAuthAccountLimiter(
+  useRedisStore ? { store: redisStore("auth-account"), passOnStoreError: true } : {},
+);
+
 logger.info(`rate-limit store: ${useRedisStore ? "redis" : "in-memory"}`);
 
 app.use(limiter);
 // Strict auth limiter applies only to credential-sensitive better-auth
 // endpoints; GET /api/auth/get-session and everything else ride the general
 // limiter above, keyed per session rather than a shared-NAT IP bucket.
+// Two-layer defense: authLimiter caps attempts per (email, IP) so a single
+// source can't grief a victim's account into lockout, while
+// authAccountLimiter is a looser pure-email backstop that still caps the
+// aggregate across an attacker rotating source IPs.
 app.post(
   [
     "/api/auth/sign-in/email",
@@ -70,6 +79,7 @@ app.post(
     "/api/auth/change-password",
   ],
   authLimiter,
+  authAccountLimiter,
 );
 app.all("/api/auth/*splat", toNodeHandler(auth));
 

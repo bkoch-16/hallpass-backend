@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
-import { createGeneralLimiter, createAuthLimiter } from "../src/rateLimit";
+import {
+  createGeneralLimiter,
+  createAuthLimiter,
+  createAuthAccountLimiter,
+} from "../src/rateLimit";
 
 type LimiterOptions = Parameters<typeof createGeneralLimiter>[0];
 
@@ -22,12 +26,27 @@ function generalApp(options?: LimiterOptions) {
 
 /**
  * Mirrors user-api wiring: express.json() runs before the auth limiter, so
- * the limiter can key off req.body.email.
+ * the limiter can key off req.body.email. trust proxy is enabled so tests can
+ * simulate distinct source IPs via X-Forwarded-For (matches user-api, which
+ * sets `app.set("trust proxy", 1)`).
  */
 function authApp(options?: LimiterOptions) {
   const app = express();
+  app.set("trust proxy", 1);
   app.use(express.json());
   app.use(createAuthLimiter(options));
+  app.post("/login", (_req, res) => {
+    res.json({ ok: true });
+  });
+  return app;
+}
+
+/** Same wiring as authApp, but with the pure-email account limiter instead. */
+function authAccountApp(options?: LimiterOptions) {
+  const app = express();
+  app.set("trust proxy", 1);
+  app.use(express.json());
+  app.use(createAuthAccountLimiter(options));
   app.post("/login", (_req, res) => {
     res.json({ ok: true });
   });
@@ -210,7 +229,7 @@ describe("createGeneralLimiter", () => {
 });
 
 describe("createAuthLimiter", () => {
-  it("keys by normalized (lowercased/trimmed) req.body.email", async () => {
+  it("keys by normalized (lowercased/trimmed) req.body.email plus IP", async () => {
     const app = authApp({ limit: 1 });
 
     const first = await request(app)
@@ -218,7 +237,7 @@ describe("createAuthLimiter", () => {
       .send({ email: "  User@Example.com " });
     expect(first.status).toBe(200);
 
-    // Same email after normalization — shares the counter
+    // Same email (after normalization) AND same IP — shares the counter
     const second = await request(app)
       .post("/login")
       .send({ email: "user@example.com" });
@@ -238,6 +257,29 @@ describe("createAuthLimiter", () => {
     expect(
       (await request(app).post("/login").send({ email: "b@example.com" })).status,
     ).toBe(200);
+  });
+
+  it("gives the same email independent counters across different IPs, so a griefer on one IP cannot lock out the victim's own IP", async () => {
+    const app = authApp({ limit: 1 });
+
+    // Attacker on 1.1.1.1 exhausts their own (email, IP) bucket for the victim's email
+    const attacker1 = await request(app)
+      .post("/login")
+      .set("X-Forwarded-For", "1.1.1.1")
+      .send({ email: "victim@example.com" });
+    expect(attacker1.status).toBe(200);
+    const attacker2 = await request(app)
+      .post("/login")
+      .set("X-Forwarded-For", "1.1.1.1")
+      .send({ email: "victim@example.com" });
+    expect(attacker2.status).toBe(429);
+
+    // Victim's own request for the same email from a different IP is unaffected
+    const victim = await request(app)
+      .post("/login")
+      .set("X-Forwarded-For", "2.2.2.2")
+      .send({ email: "victim@example.com" });
+    expect(victim.status).toBe(200);
   });
 
   it("falls back to IP keying when email is absent", async () => {
@@ -290,5 +332,110 @@ describe("createAuthLimiter", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
     expect(store.increment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createAuthAccountLimiter", () => {
+  it("keys by normalized (lowercased/trimmed) req.body.email alone, ignoring IP", async () => {
+    const app = authAccountApp({ limit: 1 });
+
+    const first = await request(app)
+      .post("/login")
+      .set("X-Forwarded-For", "1.1.1.1")
+      .send({ email: "  User@Example.com " });
+    expect(first.status).toBe(200);
+
+    // Same email after normalization, DIFFERENT IP — still shares the counter
+    const second = await request(app)
+      .post("/login")
+      .set("X-Forwarded-For", "2.2.2.2")
+      .send({ email: "user@example.com" });
+    expect(second.status).toBe(429);
+    expect(second.body).toEqual({ message: "Too many requests" });
+  });
+
+  it("gives different emails independent counters", async () => {
+    const app = authAccountApp({ limit: 1 });
+
+    expect(
+      (await request(app).post("/login").send({ email: "a@example.com" })).status,
+    ).toBe(200);
+    expect(
+      (await request(app).post("/login").send({ email: "a@example.com" })).status,
+    ).toBe(429);
+    expect(
+      (await request(app).post("/login").send({ email: "b@example.com" })).status,
+    ).toBe(200);
+  });
+
+  it("falls back to IP keying when email is absent", async () => {
+    const app = authAccountApp({ limit: 1 });
+
+    expect((await request(app).post("/login").send({})).status).toBe(200);
+    expect((await request(app).post("/login").send({})).status).toBe(429);
+
+    // Email-keyed request from the exhausted IP is unaffected
+    expect(
+      (await request(app).post("/login").send({ email: "c@example.com" })).status,
+    ).toBe(200);
+  });
+
+  it("defaults to 30 requests per 15-minute window with the pinned 429 response", async () => {
+    const app = authAccountApp();
+
+    for (let i = 0; i < 30; i++) {
+      const res = await request(app).post("/login").send({ email: "d@example.com" });
+      expect(res.status).toBe(200);
+      // Pins the app defaults: limit 30 (q=30), windowMs 15 * 60 * 1000 (w=900s)
+      expect(res.headers["ratelimit-policy"]).toMatch(/q=30;\s*w=900/);
+    }
+
+    const limited = await request(app)
+      .post("/login")
+      .send({ email: "d@example.com" });
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many requests" });
+    expect(limited.headers["ratelimit"]).toBeDefined();
+    expect(limited.headers["x-ratelimit-limit"]).toBeUndefined();
+  });
+
+  it("uses a custom store when provided", async () => {
+    const store = stubStore(1);
+    const app = authAccountApp({ store } as LimiterOptions);
+
+    const res = await request(app).post("/login").send({ email: "e@example.com" });
+
+    expect(res.status).toBe(200);
+    expect(store.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails open (200) when the store errors and passOnStoreError is true", async () => {
+    const store = erroringStore();
+    const app = authAccountApp({ store, passOnStoreError: true } as LimiterOptions);
+
+    const res = await request(app).post("/login").send({ email: "f@example.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(store.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps the same email in aggregate across several different source IPs (distributed-attack backstop)", async () => {
+    const app = authAccountApp({ limit: 3 });
+
+    // Each request comes from a distinct IP, so a per-(email,IP) limiter
+    // (createAuthLimiter) would treat every one as its own fresh bucket —
+    // but the pure-email account limiter counts them all together.
+    const ips = ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"];
+    const statuses: number[] = [];
+    for (const ip of ips) {
+      const res = await request(app)
+        .post("/login")
+        .set("X-Forwarded-For", ip)
+        .send({ email: "victim@example.com" });
+      statuses.push(res.status);
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
   });
 });

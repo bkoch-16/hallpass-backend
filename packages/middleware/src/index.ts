@@ -18,6 +18,7 @@ export {
 export {
   createGeneralLimiter,
   createAuthLimiter,
+  createAuthAccountLimiter,
   createIpRateLimiter,
   type RateLimiterOptions,
   type IpRateLimiterOptions,
