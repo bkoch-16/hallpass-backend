@@ -121,12 +121,16 @@ router.patch(
       return;
     }
 
-    const mergedStartTime = req.body.startTime ?? existing.startTime;
-    const mergedEndTime = req.body.endTime ?? existing.endTime;
+    const isChangingTimes = req.body.startTime !== undefined || req.body.endTime !== undefined;
 
-    if (!isValidTimeRange(mergedStartTime, mergedEndTime)) {
-      res.status(422).json({ message: PERIOD_TIME_ORDER_MESSAGE });
-      return;
+    if (isChangingTimes) {
+      const mergedStartTime = req.body.startTime ?? existing.startTime;
+      const mergedEndTime = req.body.endTime ?? existing.endTime;
+
+      if (!isValidTimeRange(mergedStartTime, mergedEndTime)) {
+        res.status(422).json({ message: PERIOD_TIME_ORDER_MESSAGE });
+        return;
+      }
     }
 
     const updated = await prisma.period.update({

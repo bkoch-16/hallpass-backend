@@ -321,6 +321,21 @@ describe(`PATCH ${BASE}/:id`, () => {
     expect(res.status).toBe(200);
     expect(mockPrisma.period.update).toHaveBeenCalled();
   });
+
+  it("updates unrelated field when existing row already has an invalid time range", async () => {
+    authenticateAs(fakeAdmin);
+    const invalidPeriod = { ...fakePeriod, startTime: "10:00", endTime: "09:00" };
+    const updated = { ...invalidPeriod, name: "Updated Period" };
+    mockPrisma.period.findFirst.mockResolvedValue(invalidPeriod);
+    mockPrisma.period.update.mockResolvedValue(updated);
+
+    const res = await request(server)
+      .patch(`${BASE}/1`)
+      .send({ name: "Updated Period" });
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.period.update).toHaveBeenCalled();
+  });
 });
 
 describe(`DELETE ${BASE}/:id`, () => {
