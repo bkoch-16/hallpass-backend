@@ -7,6 +7,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 COPY packages/logger/package.json packages/logger/
+COPY packages/schedule/package.json packages/schedule/
 COPY packages/types/package.json packages/types/
 COPY packages/middleware/package.json packages/middleware/
 COPY apps/passes-api/package.json apps/passes-api/
@@ -26,6 +27,7 @@ RUN DATABASE_URL=postgresql://build:build@localhost/build \
 RUN pnpm --filter @hallpass/db build && \
     pnpm --filter @hallpass/auth build && \
     pnpm --filter @hallpass/logger build && \
+    pnpm --filter @hallpass/schedule build && \
     pnpm --filter @hallpass/types build && \
     pnpm --filter @hallpass/express-middleware build && \
     pnpm --filter @hallpass/passes-api build

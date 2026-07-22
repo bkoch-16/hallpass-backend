@@ -179,6 +179,7 @@ async function seedPass(
     approverId: number | null;
     denierId: number | null;
     cancellerId: number | null;
+    requestedAt: Date;
   }> = {},
 ) {
   return prisma.pass.create({
@@ -193,6 +194,7 @@ async function seedPass(
       approverId: overrides.approverId ?? null,
       denierId: overrides.denierId ?? null,
       cancellerId: overrides.cancellerId ?? null,
+      ...(overrides.requestedAt !== undefined ? { requestedAt: overrides.requestedAt } : {}),
     },
   });
 }
@@ -515,6 +517,174 @@ describe("GET /api/passes (integration)", () => {
     const res = await request(server).get("/api/passes");
 
     expect(res.status).toBe(401);
+  });
+
+  it("200 returns the union of passes for a multi-status filter (teacher board case)", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    // One non-terminal pass per student at a time is enforced by a partial unique
+    // index, so each status here belongs to a different student.
+    const pendingStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const activeStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const waitingStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const completedStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const pending = await seedPass(school.id, pendingStudent.id, destination.id, { periodId: period.id, status: "PENDING" });
+    const active = await seedPass(school.id, activeStudent.id, destination.id, { periodId: period.id, status: "ACTIVE" });
+    const waiting = await seedPass(school.id, waitingStudent.id, destination.id, { periodId: period.id, status: "WAITING" });
+    await seedPass(school.id, completedStudent.id, destination.id, { periodId: period.id, status: "COMPLETED" });
+    authenticateAs(teacher);
+
+    const res = await request(server).get("/api/passes?status=ACTIVE,WAITING");
+
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((p: { id: number }) => p.id).sort((a: number, b: number) => a - b);
+    expect(ids).toEqual([active.id, waiting.id].sort((a, b) => a - b));
+    expect(ids).not.toContain(pending.id);
+  });
+
+  it("200 filters by studentId", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const student1 = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const student2 = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    const pass1 = await seedPass(school.id, student1.id, destination.id, { periodId: period.id });
+    await seedPass(school.id, student2.id, destination.id, { periodId: period.id });
+    authenticateAs(teacher);
+
+    const res = await request(server).get(`/api/passes?studentId=${student1.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].id).toBe(pass1.id);
+  });
+
+  it("200 a student's own studentId query param does not expand access to another student's passes", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const student1 = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const student2 = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const ownPass = await seedPass(school.id, student1.id, destination.id, { periodId: period.id });
+    await seedPass(school.id, student2.id, destination.id, { periodId: period.id });
+    authenticateAs(student1);
+
+    const res = await request(server).get(`/api/passes?studentId=${student2.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].id).toBe(ownPass.id);
+  });
+
+  it("200 from/to range filters requestedAt inclusively on both boundaries", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+    // All default to PENDING (non-terminal) — one student per pass so the
+    // one-non-terminal-pass-per-student partial unique index isn't tripped.
+    const beforeStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const lowerStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const upperStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const afterStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const before = await seedPass(school.id, beforeStudent.id, destination.id, {
+      periodId: period.id,
+      requestedAt: new Date("2025-09-01T00:00:00.000Z"),
+    });
+    const lowerBoundary = await seedPass(school.id, lowerStudent.id, destination.id, {
+      periodId: period.id,
+      requestedAt: new Date("2025-09-02T00:00:00.000Z"),
+    });
+    const upperBoundary = await seedPass(school.id, upperStudent.id, destination.id, {
+      periodId: period.id,
+      requestedAt: new Date("2025-09-05T00:00:00.000Z"),
+    });
+    const after = await seedPass(school.id, afterStudent.id, destination.id, {
+      periodId: period.id,
+      requestedAt: new Date("2025-09-06T00:00:00.000Z"),
+    });
+    authenticateAs(teacher);
+
+    const res = await request(server).get(
+      "/api/passes?from=2025-09-02T00:00:00.000Z&to=2025-09-05T00:00:00.000Z",
+    );
+
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((p: { id: number }) => p.id).sort((a: number, b: number) => a - b);
+    expect(ids).toEqual([lowerBoundary.id, upperBoundary.id].sort((a, b) => a - b));
+    expect(ids).not.toContain(before.id);
+    expect(ids).not.toContain(after.id);
+  });
+
+  it("200 combines status, studentId, and date-range filters with cursor pagination across pages", async () => {
+    const school = await seedSchool();
+    const scheduleType = await seedScheduleType(school.id);
+    const destination = await seedDestination(school.id);
+    const period = await seedPeriod(school.id, scheduleType.id);
+    const student = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const otherStudent = await seedUser({ role: "STUDENT", schoolId: school.id });
+    const teacher = await seedUser({ role: "TEACHER", schoolId: school.id });
+
+    // Matches all filters — 3 passes in range, right student, right statuses.
+    // Terminal statuses (COMPLETED/CANCELLED) so multiple can coexist for one
+    // student without tripping the one-non-terminal-pass-per-student index.
+    const match1 = await seedPass(school.id, student.id, destination.id, {
+      periodId: period.id,
+      status: "COMPLETED",
+      requestedAt: new Date("2025-09-10T00:00:00.000Z"),
+    });
+    const match2 = await seedPass(school.id, student.id, destination.id, {
+      periodId: period.id,
+      status: "CANCELLED",
+      requestedAt: new Date("2025-09-11T00:00:00.000Z"),
+    });
+    const match3 = await seedPass(school.id, student.id, destination.id, {
+      periodId: period.id,
+      status: "COMPLETED",
+      requestedAt: new Date("2025-09-12T00:00:00.000Z"),
+    });
+    // Non-matches: wrong student, wrong status, out of range
+    await seedPass(school.id, otherStudent.id, destination.id, {
+      periodId: period.id,
+      status: "COMPLETED",
+      requestedAt: new Date("2025-09-11T00:00:00.000Z"),
+    });
+    await seedPass(school.id, student.id, destination.id, {
+      periodId: period.id,
+      status: "PENDING",
+      requestedAt: new Date("2025-09-11T00:00:00.000Z"),
+    });
+    await seedPass(school.id, student.id, destination.id, {
+      periodId: period.id,
+      status: "COMPLETED",
+      requestedAt: new Date("2025-09-20T00:00:00.000Z"),
+    });
+    authenticateAs(teacher);
+
+    const query =
+      `status=COMPLETED,CANCELLED&studentId=${student.id}` +
+      `&from=2025-09-10T00:00:00.000Z&to=2025-09-12T00:00:00.000Z&limit=2`;
+
+    const page1 = await request(server).get(`/api/passes?${query}`);
+
+    expect(page1.status).toBe(200);
+    expect(page1.body.data).toHaveLength(2);
+    expect(page1.body.data.map((p: { id: number }) => p.id)).toEqual([match3.id, match2.id]);
+    expect(page1.body.nextCursor).toBe(String(match2.id));
+
+    const page2 = await request(server).get(`/api/passes?${query}&cursor=${page1.body.nextCursor}`);
+
+    expect(page2.status).toBe(200);
+    expect(page2.body.data).toHaveLength(1);
+    expect(page2.body.data[0].id).toBe(match1.id);
+    expect(page2.body.nextCursor).toBeNull();
   });
 });
 

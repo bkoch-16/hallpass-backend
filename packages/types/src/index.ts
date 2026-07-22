@@ -72,6 +72,10 @@ export interface SchoolResponse {
   updatedAt: Date;
 }
 
+export interface MeResponse extends UserResponse {
+  school: Pick<SchoolResponse, "id" | "name" | "timezone"> | null;
+}
+
 export interface PassPolicyResponse {
   id: number;
   schoolId: number;
@@ -103,6 +107,18 @@ export interface SchoolCalendarResponse {
   date: Date;
   scheduleTypeId: number | null;
   note: string | null;
+}
+
+export interface PeriodWindowResponse extends PeriodResponse {
+  windowStart: string;
+  windowEnd: string;
+}
+
+export interface ScheduleTodayResponse {
+  date: string; // school-local "YYYY-MM-DD"
+  scheduleType: ScheduleTypeResponse | null;
+  periods: PeriodWindowResponse[];
+  currentPeriod: PeriodWindowResponse | null;
 }
 
 export interface DestinationResponse {

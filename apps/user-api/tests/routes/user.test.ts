@@ -27,6 +27,12 @@ vi.mock("@hallpass/db", () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    school: {
+      findFirst: vi.fn(),
+    },
+    session: {
+      deleteMany: vi.fn(),
+    },
   },
   Role: {
     STUDENT: "STUDENT",
@@ -58,6 +64,12 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
+  };
+  school: {
+    findFirst: ReturnType<typeof vi.fn>;
+  };
+  session: {
+    deleteMany: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -247,6 +259,45 @@ describe("GET /api/users/me", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("schoolId", 1);
   });
+
+  it("embeds the user's school when schoolId is set", async () => {
+    authenticateAs(fakeUser); // schoolId: 1
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "Test School", timezone: "America/Los_Angeles" });
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toEqual({ id: 1, name: "Test School", timezone: "America/Los_Angeles" });
+    expect(mockPrisma.school.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null },
+      select: { id: true, name: true, timezone: true },
+    });
+  });
+
+  it("embeds a null school for a SUPER_ADMIN without a school", async () => {
+    const superAdmin = { ...fakeUser, id: 5, role: "SUPER_ADMIN", schoolId: null };
+    authenticateAs(superAdmin);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toBeNull();
+    expect(mockPrisma.school.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns a null school when the user's school is soft-deleted", async () => {
+    authenticateAs(fakeUser); // schoolId: 1
+    mockPrisma.school.findFirst.mockResolvedValue(null);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body.school).toBeNull();
+    expect(mockPrisma.school.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null },
+      select: { id: true, name: true, timezone: true },
+    });
+  });
 });
 
 describe("GET /api/users", () => {
@@ -344,6 +395,24 @@ describe("GET /api/users", () => {
     );
   });
 
+  it("ignores role and q when ?ids= is provided", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([
+      { id: 10, email: "a@test.com", name: "A", role: "STUDENT", createdAt: new Date() },
+    ]);
+
+    const res = await request(server).get("/api/users?ids=10&role=STUDENT&q=nonexistentquery");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].id).toBe(10);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: [10] }, deletedAt: null, schoolId: 1 },
+      }),
+    );
+  });
+
   it("trims whitespace around ids", async () => {
     authenticateAs(fakeUser);
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -416,6 +485,52 @@ describe("GET /api/users", () => {
 
     const callArg = mockPrisma.user.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
     expect(callArg.where).not.toHaveProperty("schoolId");
+  });
+
+  it("filters by ?q= as a case-insensitive OR on name/email", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await request(server).get("/api/users?q=ali");
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { name: { contains: "ali", mode: "insensitive" } },
+            { email: { contains: "ali", mode: "insensitive" } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("composes ?q= with ?role=", async () => {
+    authenticateAs(fakeUser);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await request(server).get("/api/users?q=ali&role=STUDENT");
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          role: "STUDENT",
+          OR: [
+            { name: { contains: "ali", mode: "insensitive" } },
+            { email: { contains: "ali", mode: "insensitive" } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("returns 400 when ?q= exceeds 100 characters", async () => {
+    authenticateAs(fakeUser);
+
+    const res = await request(server).get(`/api/users?q=${"a".repeat(101)}`);
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
   });
 
   it("returns 400 when more than 100 ids provided", async () => {
@@ -1074,6 +1189,19 @@ describe("DELETE /api/users/:id", () => {
       where: { id: 2 },
       data: { deletedAt: expect.any(Date) },
     });
+  });
+
+  it("revokes the deleted user's sessions after the soft delete succeeds", async () => {
+    const admin = { ...fakeUser, id: 3, role: "ADMIN" };
+    const student = { ...fakeUser, id: 2, role: "STUDENT" };
+    authenticateAs(admin);
+    givenTargetUser(student);
+    mockPrisma.user.update.mockResolvedValue({ ...student, deletedAt: new Date() });
+
+    const res = await request(server).delete("/api/users/2");
+
+    expect(res.status).toBe(204);
+    expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 2 } });
   });
 
   it("allows super_admin to delete an admin (soft delete)", async () => {

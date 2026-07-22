@@ -167,6 +167,39 @@ describe("listUsersSchema", () => {
     const r = listUsersSchema.safeParse({ cursor: "some-id" });
     expect(r.success).toBe(false);
   });
+
+  it("accepts a valid q string", () => {
+    const r = listUsersSchema.safeParse({ q: "alice" });
+    expect(r.success).toBe(true);
+    expect(r.data?.q).toBe("alice");
+  });
+
+  it("q is optional (undefined when omitted)", () => {
+    const r = listUsersSchema.safeParse({});
+    expect(r.success).toBe(true);
+    expect(r.data?.q).toBeUndefined();
+  });
+
+  it("trims whitespace around q", () => {
+    const r = listUsersSchema.safeParse({ q: "  alice  " });
+    expect(r.success).toBe(true);
+    expect(r.data?.q).toBe("alice");
+  });
+
+  it("rejects q that is only whitespace", () => {
+    const r = listUsersSchema.safeParse({ q: "   " });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects q longer than 100 characters", () => {
+    const r = listUsersSchema.safeParse({ q: "a".repeat(101) });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts q at exactly 100 characters", () => {
+    const r = listUsersSchema.safeParse({ q: "a".repeat(100) });
+    expect(r.success).toBe(true);
+  });
 });
 
 describe("bulkCreateSchema", () => {
