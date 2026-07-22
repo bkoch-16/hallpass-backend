@@ -199,6 +199,54 @@ describe("Real auth flow (integration)", () => {
     expect(newSignIn.status).toBe(200);
   });
 
+  it("DELETE /api/users/:id revokes the deleted user's session immediately", async () => {
+    const school = await prisma.school.create({ data: { name: "Revoke High" } });
+
+    await createUserWithCredential(auth, {
+      email: "admin-revoke@test.com",
+      password: "adminpassword123",
+      name: "Admin User",
+      role: "ADMIN",
+      schoolId: school.id,
+    });
+    const adminAgent = request.agent(app);
+    const adminSignIn = await adminAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "admin-revoke@test.com", password: "adminpassword123" });
+    expect(adminSignIn.status).toBe(200);
+
+    await createUserWithCredential(auth, {
+      email: "student-revoke@test.com",
+      password: "studentpassword123",
+      name: "Student User",
+      role: "STUDENT",
+      schoolId: school.id,
+    });
+    const studentAgent = request.agent(app);
+    const studentSignIn = await studentAgent
+      .post("/api/auth/sign-in/email")
+      .send({ email: "student-revoke@test.com", password: "studentpassword123" });
+    expect(studentSignIn.status).toBe(200);
+
+    const meBeforeDelete = await studentAgent.get("/api/users/me");
+    expect(meBeforeDelete.status).toBe(200);
+    const studentId: number = meBeforeDelete.body.id;
+
+    // The student's session is valid against better-auth's own endpoint too.
+    const sessionBeforeDelete = await studentAgent.get("/api/auth/get-session");
+    expect(sessionBeforeDelete.body).not.toBeNull();
+
+    const del = await adminAgent.delete(`/api/users/${studentId}`);
+    expect(del.status).toBe(204);
+
+    // The same still-cached session token no longer resolves anywhere.
+    const sessionAfterDelete = await studentAgent.get("/api/auth/get-session");
+    expect(sessionAfterDelete.body).toBeNull();
+
+    const meAfterDelete = await studentAgent.get("/api/users/me");
+    expect(meAfterDelete.status).toBe(401);
+  });
+
   it("sign in with wrong password returns 401", async () => {
     await createUserWithCredential(auth, {
       email: "wrongpass@test.com",

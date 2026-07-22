@@ -15,6 +15,7 @@
     "@hallpass/db": "workspace:*",
     "@hallpass/express-middleware": "workspace:*",
     "@hallpass/logger": "workspace:*",
+    "@hallpass/schedule": "workspace:*",
     "@hallpass/types": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "latest",

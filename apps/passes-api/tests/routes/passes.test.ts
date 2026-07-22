@@ -637,6 +637,87 @@ describe("GET /api/passes", () => {
     expect(res.status).toBe(400);
   });
 
+  it("filters by a comma-separated multi-status list (teacher board case)", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
+
+    const res = await request(server).get(`${BASE}?status=ACTIVE,WAITING`);
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ["ACTIVE", "WAITING"] } }),
+      }),
+    );
+  });
+
+  it("returns 400 when the multi-status list contains an unknown token", async () => {
+    authenticateAs(fakeTeacher);
+
+    const res = await request(server).get(`${BASE}?status=PENDING,BOGUS`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("filters by studentId when query param is provided", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
+
+    const res = await request(server).get(`${BASE}?studentId=42`);
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ studentId: 42 }),
+      }),
+    );
+  });
+
+  it("ignores a STUDENT-supplied studentId — still scoped to their own id", async () => {
+    authenticateAs(fakeStudent);
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
+
+    const res = await request(server).get(`${BASE}?studentId=${fakeOtherStudent.id}`);
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ studentId: fakeStudent.id }),
+      }),
+    );
+  });
+
+  it("filters by requestedAt range with from/to", async () => {
+    authenticateAs(fakeTeacher);
+    mockPrisma.pass.findMany.mockResolvedValue([fakePass]);
+
+    const res = await request(server).get(
+      `${BASE}?from=2025-09-01T00:00:00.000Z&to=2025-09-30T23:59:59.000Z`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.pass.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          requestedAt: {
+            gte: new Date("2025-09-01T00:00:00.000Z"),
+            lte: new Date("2025-09-30T23:59:59.000Z"),
+          },
+        }),
+      }),
+    );
+  });
+
+  it("returns 400 when from is after to", async () => {
+    authenticateAs(fakeTeacher);
+
+    const res = await request(server).get(
+      `${BASE}?from=2025-09-30T00:00:00.000Z&to=2025-09-01T00:00:00.000Z`,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
   it("orders newest-first (id desc)", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findMany.mockResolvedValue([fakePass]);

@@ -17,11 +17,22 @@ describe("notFound", () => {
 
 describe("createErrorHandler", () => {
   function buildApp() {
-    const logger = { error: vi.fn() };
+    const logger = { error: vi.fn(), warn: vi.fn() };
     const boom = new Error("boom");
     const app = express();
+    app.use(express.json());
     app.get("/boom", () => {
       throw boom;
+    });
+    app.post("/echo", (_req, res) => {
+      res.status(200).json({ ok: true });
+    });
+    app.get("/almost-client-error", () => {
+      const err = new Error("looks like a 400") as Error & {
+        statusCode: number;
+      };
+      err.statusCode = 400;
+      throw err;
     });
     app.use(
       createErrorHandler(
@@ -47,6 +58,31 @@ describe("createErrorHandler", () => {
 
     expect(logger.error).toHaveBeenCalledOnce();
     expect(logger.error).toHaveBeenCalledWith(boom, "Unhandled route error");
+  });
+
+  it("returns 400 with the parse message for malformed JSON bodies", async () => {
+    const { app, logger } = buildApp();
+
+    const res = await request(app)
+      .post("/echo")
+      .set("Content-Type", "application/json")
+      .send('[{"a":1},]');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/JSON/);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 for errors with a 4xx statusCode but no expose flag", async () => {
+    const { app, logger } = buildApp();
+
+    const res = await request(app).get("/almost-client-error");
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ message: "Internal server error" });
+    expect(logger.error).toHaveBeenCalledOnce();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("delegates to next(err) when headers are already sent", async () => {

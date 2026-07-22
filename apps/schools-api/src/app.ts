@@ -19,6 +19,7 @@ import periodRouter from "./routes/period.js";
 import calendarRouter from "./routes/calendar.js";
 import destinationRouter from "./routes/destination.js";
 import policyRouter from "./routes/policy.js";
+import scheduleRouter from "./routes/schedule.js";
 
 const app = express();
 
@@ -62,6 +63,7 @@ schoolRouter.use("/:schoolId/schedule-types", scheduleTypeRouter);
 schoolRouter.use("/:schoolId/calendar", calendarRouter);
 schoolRouter.use("/:schoolId/destinations", destinationRouter);
 schoolRouter.use("/:schoolId/policy", policyRouter);
+schoolRouter.use("/:schoolId/schedule", scheduleRouter);
 
 app.use("/api/districts", districtRouter);
 app.use("/api/schools", schoolRouter);
