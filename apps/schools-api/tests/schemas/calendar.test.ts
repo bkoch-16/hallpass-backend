@@ -100,6 +100,13 @@ describe("calendarBulkSchema", () => {
   it("rejects array with invalid entry", () => {
     expect(calendarBulkSchema.safeParse([{ date: "not-a-date" }]).success).toBe(false);
   });
+
+  it("rejects array with more than 366 entries", () => {
+    const entries = Array.from({ length: 367 }, (_, i) => ({
+      date: `2025-01-${String((i % 28) + 1).padStart(2, "0")}`,
+    }));
+    expect(calendarBulkSchema.safeParse(entries).success).toBe(false);
+  });
 });
 
 describe("updateCalendarSchema", () => {

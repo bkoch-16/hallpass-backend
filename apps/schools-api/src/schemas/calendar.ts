@@ -34,7 +34,7 @@ export const calendarEntrySchema = z.object({
 
 export const calendarBulkSchema = z.union([
   calendarEntrySchema,
-  z.array(calendarEntrySchema).min(1),
+  z.array(calendarEntrySchema).min(1).max(366),
 ]);
 
 export const updateCalendarSchema = z
