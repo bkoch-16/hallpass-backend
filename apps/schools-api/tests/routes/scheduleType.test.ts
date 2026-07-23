@@ -257,6 +257,20 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/abc/schedule-types")
+      .send({ name: "B Block" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {

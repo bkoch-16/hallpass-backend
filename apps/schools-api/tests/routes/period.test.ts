@@ -271,6 +271,34 @@ describe(`POST ${BASE}`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/abc/schedule-types/1/periods")
+      .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
+
+  it("returns 400 for a non-numeric :scheduleTypeId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/1/schedule-types/abc/periods")
+      .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe(`PATCH ${BASE}/:id`, () => {

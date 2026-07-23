@@ -70,6 +70,7 @@ router.get(
 router.post(
   "/",
   requireAuth,
+  validateParams(periodListParamsSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateBody(createPeriodSchema),

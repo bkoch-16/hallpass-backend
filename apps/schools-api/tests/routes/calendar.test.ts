@@ -291,6 +291,20 @@ describe(`POST ${BASE} (bulk upsert)`, () => {
     expect(res.status).toBe(422);
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/abc/calendar")
+      .send([{ date: "2025-09-01" }]);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe(`PATCH ${BASE}/:id`, () => {
