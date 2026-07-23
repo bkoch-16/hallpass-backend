@@ -107,14 +107,14 @@ function isDuplicateEmailError(err: unknown): boolean {
 
 // GET /me — must come before /:id
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
-  const schoolId = req.user!.schoolId;
+  const { id, email, name, role, schoolId, createdAt } = req.user!;
   const school = schoolId
     ? await prisma.school.findFirst({
         where: { id: schoolId, deletedAt: null },
         select: { id: true, name: true, timezone: true },
       })
     : null;
-  res.json({ ...toUserResponse(req.user!), school } satisfies MeResponse);
+  res.json({ ...toUserResponse({ id, email, name, role, schoolId, createdAt }), school } satisfies MeResponse);
 });
 
 // GET / — cursor-paginated list; ?ids= replaces the former /batch endpoint

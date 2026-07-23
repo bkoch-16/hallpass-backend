@@ -274,6 +274,16 @@ describe("GET /api/users/me", () => {
     expect(res.body).not.toHaveProperty("emailVerified");
   });
 
+  it("does not expose pinCode even when the authenticated user has one set", async () => {
+    const studentWithPin = { ...fakeUser, role: "STUDENT", pinCode: "482913" };
+    authenticateAs(studentWithPin);
+
+    const res = await request(server).get("/api/users/me");
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty("pinCode");
+  });
+
   it("response includes schoolId field", async () => {
     authenticateAs(fakeUser); // schoolId: 1
 
