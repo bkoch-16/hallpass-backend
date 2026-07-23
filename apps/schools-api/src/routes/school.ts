@@ -47,15 +47,23 @@ router.post(
   requireRole(UserRole.SUPER_ADMIN),
   validateBody(createSchoolSchema),
   async (req: Request, res: Response) => {
-    const school = await prisma.school.create({
-      data: {
-        name: req.body.name,
-        ...(req.body.timezone ? { timezone: req.body.timezone } : {}),
-        ...(req.body.districtId ? { districtId: req.body.districtId } : {}),
-      },
-      select: SCHOOL_SELECT,
-    });
-    res.status(201).json(toSchoolResponse(school));
+    try {
+      const school = await prisma.school.create({
+        data: {
+          name: req.body.name,
+          ...(req.body.timezone ? { timezone: req.body.timezone } : {}),
+          ...(req.body.districtId ? { districtId: req.body.districtId } : {}),
+        },
+        select: SCHOOL_SELECT,
+      });
+      res.status(201).json(toSchoolResponse(school));
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+        res.status(400).json({ message: "Invalid districtId" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -95,13 +103,20 @@ router.patch(
       return;
     }
 
-    const updated = await prisma.school.update({
-      where: { id: Number(req.params.id) },
-      data: req.body,
-      select: SCHOOL_SELECT,
-    });
-
-    res.json(toSchoolResponse(updated));
+    try {
+      const updated = await prisma.school.update({
+        where: { id: Number(req.params.id) },
+        data: req.body,
+        select: SCHOOL_SELECT,
+      });
+      res.json(toSchoolResponse(updated));
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+        res.status(400).json({ message: "Invalid districtId" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 

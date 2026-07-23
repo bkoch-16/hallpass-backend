@@ -186,6 +186,18 @@ describe("POST /api/schools", () => {
     expect(res.status).toBe(400);
     expect(mockPrisma.school.create).not.toHaveBeenCalled();
   });
+
+  it("returns 400 for unknown districtId", async () => {
+    authenticateAs(fakeSuperAdmin);
+    mockPrisma.school.create.mockRejectedValue({ code: "P2003" });
+
+    const res = await request(server)
+      .post("/api/schools")
+      .send({ name: "New School", districtId: 9999 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid districtId" });
+  });
 });
 
 describe("GET /api/schools/:id", () => {
@@ -264,6 +276,17 @@ describe("PATCH /api/schools/:id", () => {
 
     expect(res.status).toBe(400);
     expect(mockPrisma.school.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for unknown districtId", async () => {
+    authenticateAs(fakeSuperAdmin);
+    mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
+    mockPrisma.school.update.mockRejectedValue({ code: "P2003" });
+
+    const res = await request(server).patch("/api/schools/1").send({ districtId: 9999 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid districtId" });
   });
 });
 
