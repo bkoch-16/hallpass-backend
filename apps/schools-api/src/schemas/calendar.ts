@@ -1,20 +1,5 @@
 import { z } from "zod";
-
-const dateString = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD format")
-  .refine(
-    (value) => {
-      const [year, month, day] = value.split("-").map(Number);
-      const date = new Date(Date.UTC(year, month - 1, day));
-      return (
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month - 1 &&
-        date.getUTCDate() === day
-      );
-    },
-    { message: "must be a valid calendar date" },
-  );
+import { dateString } from "@hallpass/types";
 
 export const calendarIdSchema = z.object({
   schoolId: z.coerce.number().int().positive(),
@@ -26,16 +11,10 @@ export const calendarQuerySchema = z.object({
   to: dateString.optional(),
 });
 
-export const calendarEntrySchema = z.object({
-  date: dateString,
-  scheduleTypeId: z.number().int().positive().nullable().optional(),
-  note: z.string().nullable().optional(),
-});
-
-export const calendarBulkSchema = z.union([
-  calendarEntrySchema,
-  z.array(calendarEntrySchema).min(1).max(366),
-]);
+// calendarEntrySchema/calendarBulkSchema live in @hallpass/types so
+// CalendarEntryBody can't drift from what's actually enforced — see
+// packages/types/src/schemas.ts.
+export { calendarEntrySchema, calendarBulkSchema } from "@hallpass/types";
 
 export const updateCalendarSchema = z
   .object({

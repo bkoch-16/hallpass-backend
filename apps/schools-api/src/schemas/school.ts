@@ -13,27 +13,7 @@ export const listSchoolsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
-const IANA_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
-
-const timezoneSchema = z
-  .string()
-  .refine((tz) => IANA_TIMEZONES.has(tz), {
-    message: "timezone must be a valid IANA time zone",
-  })
-  .optional();
-
-export const createSchoolSchema = z.object({
-  name: z.string().min(1, "name is required"),
-  timezone: timezoneSchema,
-  districtId: z.number().int().positive().optional(),
-});
-
-export const updateSchoolSchema = z
-  .object({
-    name: z.string().min(1).optional(),
-    timezone: timezoneSchema,
-    districtId: z.number().int().positive().nullable().optional(),
-  })
-  .refine((data) => Object.keys(data).length > 0, {
-    message: "At least one field is required",
-  });
+// createSchoolSchema/updateSchoolSchema live in @hallpass/types so the
+// request-body types exported for a frontend can't drift from what's
+// actually enforced here — see packages/types/src/schemas.ts.
+export { createSchoolSchema, updateSchoolSchema } from "@hallpass/types";
