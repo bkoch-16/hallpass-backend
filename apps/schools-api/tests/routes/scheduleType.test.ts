@@ -98,6 +98,17 @@ const fakeWrongSchoolUser: FakeUser = {
   deletedAt: null,
 };
 
+const fakeSuperAdmin: FakeUser = {
+  id: 5,
+  email: "superadmin@test.com",
+  name: "Super Admin",
+  role: "SUPER_ADMIN",
+  schoolId: null,
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
+  deletedAt: null,
+};
+
 function authenticateAs(user: FakeUser) {
   mockGetSession.mockResolvedValue({ user: { id: String(user.id) }, session: {} });
   mockPrisma.user.findFirst.mockResolvedValue(user);
@@ -176,6 +187,18 @@ describe("GET /api/schools/:schoolId/schedule-types", () => {
     const res = await request(server).get("/api/schools/1/schedule-types");
 
     expect(res.status).toBe(200);
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).get("/api/schools/abc/schedule-types");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });
 

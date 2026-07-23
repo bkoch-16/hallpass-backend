@@ -172,6 +172,18 @@ describe(`GET ${BASE}`, () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).get("/api/schools/abc/destinations");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe(`POST ${BASE}`, () => {

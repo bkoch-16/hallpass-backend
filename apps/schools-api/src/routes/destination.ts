@@ -7,6 +7,7 @@ import { requireRole } from "@hallpass/express-middleware";
 import { validateBody, validateParams } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { createDestinationSchema, destinationIdSchema, updateDestinationSchema } from "../schemas/destination.js";
+import { schoolParamSchema } from "../schemas/school.js";
 
 const router = Router({ mergeParams: true });
 
@@ -23,7 +24,7 @@ function toDestinationResponse(d: DestinationRow): DestinationResponse {
   return { id: d.id, schoolId: d.schoolId, name: d.name, maxOccupancy: d.maxOccupancy };
 }
 
-router.get("/", requireAuth, requireSchoolAccess, async (req: Request, res: Response) => {
+router.get("/", requireAuth, validateParams(schoolParamSchema), requireSchoolAccess, async (req: Request, res: Response) => {
   const schoolId = Number(req.params.schoolId);
   const destinations = await prisma.destination.findMany({
     where: { schoolId, deletedAt: null },
