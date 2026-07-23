@@ -202,7 +202,12 @@ const fakePass = {
   cancelledAt: null,
   deniedAt: null,
   expiredAt: null,
-  destination: { maxOccupancy: 10 },
+  student: { name: "Fake Student" },
+  requester: { name: "Fake Requester" },
+  destination: { maxOccupancy: 10, name: "Library" },
+  approver: null,
+  denier: null,
+  canceller: null,
 };
 
 const BASE = "/api/passes";
@@ -240,6 +245,8 @@ describe("POST /api/passes", () => {
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(100);
     expect(res.body.status).toBe("PENDING");
+    expect(res.body.studentName).toBe("Fake Student");
+    expect(res.body.destinationName).toBe("Library");
     // Ordered so overlapping buffer windows resolve to the earliest period deterministically
     expect(mockPrisma.period.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { startTime: "asc" } }),
@@ -454,7 +461,17 @@ describe("POST /api/passes — teacher-created", () => {
         }),
       }),
     );
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(teacherCreatedPass, "pass:approved");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 101,
+        status: "ACTIVE",
+        studentId: 11,
+        studentName: "Fake Student",
+        requesterId: 20,
+        destinationName: "Library",
+      }),
+      "pass:approved",
+    );
   });
 
   it("TEACHER creates when the destination is full — pass lands WAITING", async () => {
@@ -471,7 +488,16 @@ describe("POST /api/passes — teacher-created", () => {
     const createData = mockPrisma.pass.create.mock.calls[0][0].data;
     expect(createData.status).toBe("WAITING");
     expect(createData.activatedAt).toBeUndefined();
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(waitingPass, "pass:waiting");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 101,
+        status: "WAITING",
+        studentId: 11,
+        studentName: "Fake Student",
+        destinationName: "Library",
+      }),
+      "pass:waiting",
+    );
   });
 
   it("returns 400 when TEACHER omits studentId", async () => {
@@ -592,6 +618,7 @@ describe("GET /api/passes", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].studentId).toBe(10);
+    expect(res.body.data[0].destinationName).toBe("Library");
     expect(res.body.nextCursor).toBeNull();
   });
 
@@ -945,7 +972,16 @@ describe("POST /api/passes/:id/approve", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("WAITING");
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(waitingPass, "pass:waiting");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 100,
+        status: "WAITING",
+        approverId: 20,
+        studentName: "Fake Student",
+        destinationName: "Library",
+      }),
+      "pass:waiting",
+    );
     expect(mockSlots.claimPassSlots).toHaveBeenCalledWith(
       1,
       5,

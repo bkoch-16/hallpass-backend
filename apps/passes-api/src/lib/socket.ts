@@ -2,7 +2,7 @@ import { Server, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import type Redis from "ioredis";
-import { UserRole } from "@hallpass/types";
+import { UserRole, type PassResponse } from "@hallpass/types";
 import { resolveSessionUser, roleRank, parseCorsOrigins } from "@hallpass/express-middleware";
 import { auth } from "../auth.js";
 import { env } from "../env.js";
@@ -99,10 +99,7 @@ export function initSocket(
   return { io, pubClient, subClient };
 }
 
-export function emitPassEvent(
-  pass: { schoolId: number; studentId: number; [key: string]: unknown },
-  event: string,
-): void {
+export function emitPassEvent(pass: PassResponse, event: string): void {
   if (!io) return; // not initialized (e.g., in tests)
   io.to(`school:${pass.schoolId}`).emit(event, pass);
   // pass:requested is staff-only — the requesting student already has the

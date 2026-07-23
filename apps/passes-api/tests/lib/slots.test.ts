@@ -255,7 +255,14 @@ describe("promoteFromQueue", () => {
       requestedAt: new Date(),
       destination: { maxOccupancy: 10 },
     };
-    const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
+    const promotedPass = {
+      ...waitingPass,
+      status: "ACTIVE",
+      approvedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...waitingPass.destination, name: "Library" },
+    };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
     mockRedis.eval.mockResolvedValue(1); // both slots claimed
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
@@ -339,7 +346,13 @@ describe("promoteFromQueue", () => {
     mockPrisma.pass.updateMany
       .mockResolvedValueOnce({ count: 0 }) // race lost on id 60
       .mockResolvedValueOnce({ count: 1 }); // id 61 promoted
-    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({ ...newer, status: "ACTIVE" });
+    mockPrisma.pass.findUniqueOrThrow.mockResolvedValue({
+      ...newer,
+      status: "ACTIVE",
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...newer.destination, name: "Library" },
+    });
 
     await promoteFromQueue(1, 5);
 
@@ -348,7 +361,9 @@ describe("promoteFromQueue", () => {
       id: 61,
       status: "WAITING",
     });
-    expect(mockPrisma.pass.findUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 61 } });
+    expect(mockPrisma.pass.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 61 } }),
+    );
   });
 
   it("promotes regardless of maxOccupancy=null (unlimited)", async () => {
@@ -360,7 +375,14 @@ describe("promoteFromQueue", () => {
       requestedAt: new Date(),
       destination: { maxOccupancy: null },
     };
-    const promotedPass = { ...waitingPass, status: "ACTIVE", approvedAt: new Date() };
+    const promotedPass = {
+      ...waitingPass,
+      status: "ACTIVE",
+      approvedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...waitingPass.destination, name: "Library" },
+    };
     mockPrisma.pass.findMany.mockResolvedValue([waitingPass]);
     // claimPassSlots returns "claimed" immediately when both maxes are null (no eval call)
     mockPrisma.pass.updateMany.mockResolvedValue({ count: 1 });
@@ -404,7 +426,14 @@ describe("promoteFromQueue", () => {
       requestedAt: new Date("2025-09-15T08:05:00Z"),
       destination: { maxOccupancy: 10, deletedAt: null },
     };
-    const promotedPass = { ...liveDestPass, status: "ACTIVE", activatedAt: new Date() };
+    const promotedPass = {
+      ...liveDestPass,
+      status: "ACTIVE",
+      activatedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...liveDestPass.destination, name: "Library" },
+    };
     // The query is expected to exclude soft-deleted destinations, so it only ever
     // returns the live-destination pass. Mock that filtered result.
     mockPrisma.pass.findMany.mockResolvedValue([liveDestPass]);
@@ -449,7 +478,14 @@ describe("promoteFromQueue", () => {
       requestedAt: new Date("2025-09-15T08:05:00Z"),
       destination: { maxOccupancy: 10 },
     };
-    const promotedPass = { ...otherDestPass, status: "ACTIVE", activatedAt: new Date() };
+    const promotedPass = {
+      ...otherDestPass,
+      status: "ACTIVE",
+      activatedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...otherDestPass.destination, name: "Library" },
+    };
     mockPrisma.pass.findMany.mockResolvedValue([fullDestPass, otherDestPass]);
     mockRedis.eval
       .mockResolvedValueOnce(0) // destination 1 full
