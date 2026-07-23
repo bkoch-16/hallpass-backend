@@ -206,7 +206,7 @@ router.get(
 
     // pinCode is only for the ADMIN+ voice-lookup workflow — never for
     // TEACHER or a user viewing their own record.
-    const canViewPin = isSuperAdmin || req.user!.role === UserRole.ADMIN;
+    const canViewPin = !isSelf && (isSuperAdmin || req.user!.role === UserRole.ADMIN);
     const user = await prisma.user.findFirst({
       where,
       select: canViewPin ? USER_SELECT_WITH_PIN : USER_SELECT,
