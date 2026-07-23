@@ -1,6 +1,6 @@
 # Tech Debt
 
-Findings from the full-codebase audit (2026-07-13), updated with the web-app-readiness audit (2026-07-17). Severity: 🔴 blocks or breaks a real client / exploitable, 🟠 real defect or policy gap, 🟡 friction or drift.
+Findings from the full-codebase audit (2026-07-13), updated with the web-app-readiness audit (2026-07-17) and re-verified/extended 2026-07-23 (post-PRs #116-#124; the 2026-07-23 audit's `:schoolId` mutation-validation, pass-transition status code, `pinCode` exposure, `@hallpass/types` drift, and `createUserWithCredential` atomicity findings are fixed on `chore/web-app-readiness-fixes`). Severity: 🔴 blocks or breaks a real client / exploitable, 🟠 real defect or policy gap, 🟡 friction or drift.
 
 Known-and-accepted trade-offs are listed at the bottom so they don't get re-reported; they are documented in-code and are **not** open items.
 
@@ -19,7 +19,7 @@ The 7 event names and room conventions are inline string literals in `passes.ts`
 **Fix:** export the event/room catalog as constants (and payload types) from `@hallpass/types`.
 
 ### 🟡 demo-ui's auth bootstrap must not be copied by the real SPA
-demo-ui signs in with `credentials: 'include'` and then reads the token from the `get-session` JSON body (`apps/demo-ui/app.js:58-61`) — a cross-site-cookie round-trip that Safari ITP / Chrome third-party-cookie phaseout can silently break. The supported flow is capturing the `set-auth-token` response header per `docs/AUTH.md`.
+demo-ui signs in with `credentials: 'include'` and then reads the token from the `get-session` JSON body (`apps/demo-ui/app.js:53-56`) — a cross-site-cookie round-trip that Safari ITP / Chrome third-party-cookie phaseout can silently break. The supported flow is capturing the `set-auth-token` response header per `docs/AUTH.md`.
 
 ### 🟡 SPA deployment prerequisites (ops, not code)
 - Append the SPA origin to `CORS_ORIGIN` on **all three** Cloud Run services — the one var drives HTTP CORS, better-auth `trustedOrigins` (user-api), and Socket.io CORS (passes-api).
@@ -31,7 +31,7 @@ demo-ui signs in with `credentials: 'include'` and then reads the token from the
 Users/districts/schools/passes return a `CursorPage` envelope; schedule types/periods/calendar/destinations return bare arrays. Id params: string-regex schemas (user, district, school) vs `z.coerce.number()` (everything else).
 
 ### 🟡 No OpenAPI spec
-Postman collection is the only machine-readable contract, and `@hallpass/types` has drifted from the validators (§4), so a frontend can't safely codegen from either.
+Postman collection is the only machine-readable contract a frontend could codegen from, and it's already incomplete: `GET /api/schools/:schoolId/schedule/today` (added with the SPA-gaps PR) has no request in `postman/collections/hallpass/`.
 
 ### 🟡 `docker-compose.yml` omits passes-api
 Frontend devs can't spin up the realtime API locally the way they can the other two services.
@@ -42,10 +42,10 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ### 🟡 Small items
 - Soft-deleting a user now revokes its better-auth sessions on `DELETE /api/users/:id`, but the email row is still occupied forever — the user can never be re-provisioned (409). Email-reuse story is still undecided.
-- `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:123-129`) — 10/15min shared across a school NAT for password changes.
-- Provisioning now emails a 7-day set-password invite link (`apps/user-api/src/routes/user.ts:56-59`), but the `tempPassword` returned in the response itself still never expires and nothing forces a change on first login.
-- `INTERNAL_SECRET` only requires `min(1)` (`apps/passes-api/src/env.ts`) — enforce a real minimum length for the static bearer guarding `/internal/reconcile-expiry`.
-- ADMINs with `schoolId: null` are 403'd on reads but silently create `schoolId: null` users via `POST /api/users` and `/bulk` — users they can then never see or manage. Reject like the read paths.
+- `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:136-142`) — 10/15min shared across a school NAT for password changes.
+- Provisioning now emails a 7-day set-password invite link (`apps/user-api/src/routes/user.ts:56-62`), but the `tempPassword` returned in the response itself still never expires and nothing forces a change on first login.
+- `INTERNAL_SECRET` and `PARENT_TOOL_API_KEY` only require `min(1)` (`apps/passes-api/src/env.ts:12-13`, `apps/schools-api/src/env.ts:15`) — enforce a real minimum length. Note `PARENT_TOOL_API_KEY` is a single static, platform-wide credential: with it plus a student PIN, `GET /api/passes/parent-lookup` returns any student's pass history in any school, and the API-key path on the schools-api public GETs reads any school's calendar/schedule data. Acceptable for one trusted voice-AI caller, but there is no rotation story and no per-school scoping.
+- ADMINs with `schoolId: null` are 403'd on reads but silently create `schoolId: null` users via `POST /api/users` and `/bulk` (`apps/user-api/src/routes/user.ts:224`, `:286`) — users they can then never see or manage. Reject like the read paths.
 - No audit trail for admin actions (role changes, deletions). Eventually a K-12 compliance expectation; noted, not urgent.
 
 ---
@@ -55,27 +55,18 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 ### 🟡 Delete-protection is inconsistent across the hierarchy
 Destination delete blocks on in-flight passes; scheduleType delete blocks on calendar refs; school and district soft-deletes have no guards — a school with ACTIVE passes and enrolled users can be deleted, stranding its users. Decide the invariant and apply uniformly.
 
-### 🟡 Wrong-state pass transitions return 400, contradicting `docs/API_CONVENTIONS.md`
-The convention says business-rule failures are 422, but approve/deny/return/cancel return 400 for "Pass is not PENDING/ACTIVE/..." (`apps/passes-api/src/routes/passes.ts`). Pick one and align — clients branch on these codes.
-
 ---
 
 ## 4. DRY / drift
 
-### 🟠 `@hallpass/types` has drifted from the Zod schemas, and nothing enforces agreement
-- `CalendarEntryBody.scheduleTypeId` is `string | null` (`packages/types/src/index.ts:188`) but the validator requires a number.
-- `UpdateSchoolBody.districtId` is `number?` but the schema accepts `null` to clear it.
+### 🟡 Service bootstrap duplication — mostly fixed, remainder is small
+Since the last audit, env schemas (`baseEnvSchema`), CORS options, health route, error handler, limiter factories, and the RedisStore helper all moved into `@hallpass/express-middleware`. What's left: `auth.ts` is byte-identical ×2 (schools-api/passes-api), and each `app.ts` still hand-repeats the same helmet/CORS/httpLogger/json/health/limiter/notFound/errorHandler ordering (~40 lines ×3). A `createBaseApp(serviceName, env)` would close it out; low urgency now.
 
-**Fix:** derive request-body types from the schemas (`z.infer`) and export those; keep response interfaces hand-written.
+### 🟡 Cursor-pagination block: helper exists but isn't shared
+passes-api extracted `paginate()` (`apps/passes-api/src/lib/pagination.ts`) and uses it twice, but users (`user.ts:164-166`), schools (`school.ts:36-38`), and districts (`district.ts:36-38`) still inline the same `take + 1`/slice/`nextCursor` block. Move `paginate()` into a shared package and use it everywhere.
 
-### 🟡 Service bootstrap is triplicated
-`auth.ts` byte-identical ×3; `env.ts` identical ×2; `app.ts` repeats helmet/CORS/logger/health/limiter/error-handler wiring; the RedisStore setup is a helper in user-api but inlined in the other two. A shared `createBaseApp(serviceName, env)` collapses ~150 lines and guarantees middleware fixes land in all three services.
-
-### 🟡 Cursor-pagination block copy-pasted five times
-users, districts, schools, passes — `take + 1`, slice, `nextCursor`. Extract a `paginate()` helper.
-
-### 🟡 Prisma error-code sniffing reimplemented three ways
-`isUniqueViolation` (passes), `isDuplicateEmailError` (users), inline P2003 check (users PATCH). One shared `isPrismaError(err, code)` in the middleware package.
+### 🟡 Prisma error-code sniffing reimplemented four ways
+`isUniqueViolation` (`passes.ts:81`), `isDuplicateEmailError` (`user.ts:88`), `isPinCodeConflict` (`apps/user-api/src/lib/pin.ts:14`), and inline P2003 checks ×3 (user PATCH, school create, school PATCH). One shared `isPrismaError(err, code, target?)` in the middleware package.
 
 ### 🟡 Naming and ordering nits
 `requireSchool` (passes-api) vs `requireSchoolAccess` (schools-api) are different contracts with confusingly similar names; middleware order flips between routes (`validateBody` before `requireRole` on `POST /users`, after on `/bulk`).
@@ -83,11 +74,23 @@ users, districts, schools, passes — `take + 1`, slice, `nextCursor`. Extract a
 ### 🟡 `docs/ONBOARDING.md` documents a dead flow
 Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 419544d) and contradicts `docs/AUTH.md` — sign-up now rejects with BAD_REQUEST. Only the temp-password path works. Update when onboarding work starts.
 
+### 🟡 `docs/SCHEMA_PLAN.md` has drifted substantially from the code
+It's labeled "source of truth before building", but a frontend dev reading it will be misled on several live contracts:
+- `GET /passes` takes `?date=` defaulting to today per the doc; the code has `from`/`to` with **no** default — omits nothing, returns full history.
+- Destination DELETE says "immediately expire all WAITING passes"; code instead 409-blocks when any PENDING/WAITING/ACTIVE pass exists (`destination.ts:112-119`).
+- Documents Redis keys/mechanisms that were never built: `pass:current:{studentId}`, the `session:{token}` auth cache (every authed request does getSession + user lookup against Neon — relevant to SPA latency), the cold-start `slots:init` lock, and the whole BullMQ expiry section (replaced by in-process timers + reconcile sweep, per INFRA.md).
+- Index strategy lists compound `Pass` indexes (`(schoolId,status)`, `(studentId,status)`, `(schoolId,status,createdAt)`, `(destinationId,status,createdAt)`, `(periodId,status)`); actual schema has single-column `schoolId`/`studentId`/`status` plus `(destinationId,status)` and no `periodId` index (`packages/db/prisma/schema.prisma` Pass model) — the doc's rationale queries (promotion, reconcile, teacher board) run on weaker indexes than documented.
+- Prisma sketches use `String @default(cuid())` ids and old field names (`requestedById`, `issuedAt`, `createdAt`); real schema is Int serial with `requesterId`/`activatedAt`/`requestedAt`.
+- The parent-lookup, PIN, and `GET /schedule/today` endpoints are absent from its API tables (INFRA.md covers them).
+
+Mark the stale sections as historical or update them — cheaper than a support round-trip per misled reader.
+
 ---
 
 ## Suggested priority
 
-1. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
+1. `PassResponse` expansion mechanism (§1) before the SPA builds a live pass board — the highest-leverage remaining web-app blocker.
+2. Delete-protection invariant (§3) and the remaining DRY items opportunistically.
 
 ---
 
