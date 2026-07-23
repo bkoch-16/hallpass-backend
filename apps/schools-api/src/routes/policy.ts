@@ -4,9 +4,10 @@ import { UserRole } from "@hallpass/types";
 import type { PassPolicyResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
-import { validateBody } from "@hallpass/express-middleware";
+import { validateBody, validateParams } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { upsertPolicySchema } from "../schemas/policy.js";
+import { schoolParamSchema } from "../schemas/school.js";
 
 const router = Router({ mergeParams: true });
 
@@ -36,7 +37,7 @@ function toPolicyResponse(p: PolicyRow): PassPolicyResponse {
   };
 }
 
-router.get("/", requireAuth, requireSchoolAccess, async (req: Request, res: Response) => {
+router.get("/", requireAuth, validateParams(schoolParamSchema), requireSchoolAccess, async (req: Request, res: Response) => {
   const schoolId = Number(req.params.schoolId);
 
   const policy = await prisma.passPolicy.findUnique({

@@ -52,9 +52,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ## 3. Correctness
 
-### 🟡 Missing `:schoolId` validation on collection GETs → 500 for SUPER_ADMIN
-Nested `GET /` routes (destinations, schedule types, calendar, policy) never validate `:schoolId`. Non-admins are saved by the `!==` in `requireSchoolAccess`, but SUPER_ADMIN on `/api/schools/abc/destinations` reaches Prisma with `NaN` → 500. `schoolParamSchema` exists for exactly this (`apps/schools-api/src/schemas/school.ts:7`) and is used nowhere.
-
 ### 🟡 Delete-protection is inconsistent across the hierarchy
 Destination delete blocks on in-flight passes; scheduleType delete blocks on calendar refs; school and district soft-deletes have no guards — a school with ACTIVE passes and enrolled users can be deleted, stranding its users. Decide the invariant and apply uniformly.
 
@@ -90,8 +87,7 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. `:schoolId` param validation.
-2. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
+1. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
 

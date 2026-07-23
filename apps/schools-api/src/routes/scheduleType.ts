@@ -15,6 +15,7 @@ import {
   scheduleTypeIdSchema,
   updateScheduleTypeSchema,
 } from "../schemas/scheduleType.js";
+import { schoolParamSchema } from "../schemas/school.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -49,6 +50,7 @@ function toScheduleTypeResponse(s: ScheduleTypeRow): ScheduleTypeResponse {
 router.get(
   "/",
   requireAuthOrApiKey,
+  validateParams(schoolParamSchema),
   requireSchoolAccessIfSession,
   (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
   async (req: Request, res: Response) => {

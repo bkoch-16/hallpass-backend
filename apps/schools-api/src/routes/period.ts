@@ -15,6 +15,7 @@ import {
   isValidTimeRange,
   PERIOD_TIME_ORDER_MESSAGE,
   periodIdSchema,
+  periodListParamsSchema,
   updatePeriodSchema,
 } from "../schemas/period.js";
 
@@ -40,6 +41,7 @@ function toPeriodResponse(p: PeriodRow): PeriodResponse {
 router.get(
   "/",
   requireAuthOrApiKey,
+  validateParams(periodListParamsSchema),
   requireSchoolAccessIfSession,
   (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
   async (req: Request, res: Response) => {

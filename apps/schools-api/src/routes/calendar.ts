@@ -20,6 +20,7 @@ import {
   calendarQuerySchema,
   updateCalendarSchema,
 } from "../schemas/calendar.js";
+import { schoolParamSchema } from "../schemas/school.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -54,6 +55,7 @@ function toCalendarResponse(c: CalendarRow): SchoolCalendarResponse {
 router.get(
   "/",
   requireAuthOrApiKey,
+  validateParams(schoolParamSchema),
   requireSchoolAccessIfSession,
   (req, res, next) => (req.user ? next() : publicSchoolDataLimiter(req, res, next)),
   validateQuery(calendarQuerySchema),

@@ -14,6 +14,11 @@ export const periodIdSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+export const periodListParamsSchema = z.object({
+  schoolId: z.coerce.number().int().positive(),
+  scheduleTypeId: z.coerce.number().int().positive(),
+});
+
 export const createPeriodSchema = z
   .object({
     name: z.string().min(1, "name is required"),
