@@ -40,11 +40,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ## 2. Security
 
-### 🟠 Account-lockout griefing via the auth limiter
-Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-in indefinitely (10 junk attempts per window from anywhere).
-
-**Fix:** limit per email+IP pair, plus a looser pure-email cap.
-
 ### 🟠 ADMIN can mint peer ADMINs — contradicts the PATCH/DELETE policy
 `POST /api/users` blocks only `targetRole > callerRole` (`apps/user-api/src/routes/user.ts:165`; same for `/bulk`), and PATCH `role` promotion is also `>` not `>=` (`user.ts:262`). Meanwhile PATCH/DELETE forbid acting on equal-or-greater-rank targets. An admin can't edit a peer but can create unlimited new peers or promote a student to ADMIN.
 
@@ -67,9 +62,6 @@ Keying sign-in by `body.email` alone lets an attacker 429-lock a victim's sign-i
 
 ### 🟠 Unbounded calendar bulk upsert
 `calendarBulkSchema` has `.min(1)` but no `.max` (`apps/schools-api/src/schemas/calendar.ts:35`); the handler builds one raw SQL `VALUES` list from the whole array. User bulk caps at 100; cap this too (a school year is ~200 entries, 366 is a natural bound).
-
-### 🟠 Periods have no time-sanity validation
-`createPeriodSchema` accepts `endTime < startTime` and overlapping/duplicate-order periods. passes-api derives the active period and expiry from these strings, so a bad period silently yields "No active period" 422s or instant expiries. Validate `startTime < endTime` at minimum.
 
 ### 🟡 Missing `:schoolId` validation on collection GETs → 500 for SUPER_ADMIN
 Nested `GET /` routes (destinations, schedule types, calendar, policy) never validate `:schoolId`. Non-admins are saved by the `!==` in `requireSchoolAccess`, but SUPER_ADMIN on `/api/schools/abc/destinations` reaches Prisma with `NaN` → 500. `schoolParamSchema` exists for exactly this (`apps/schools-api/src/schemas/school.ts:7`) and is used nowhere.
@@ -109,8 +101,8 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. Before the login page is public: auth-limiter keying (email+IP), ADMIN peer-creation policy.
-2. Cap calendar bulk, handle `districtId` P2003, period time validation, `:schoolId` param validation.
+1. Before the login page is public: ADMIN peer-creation policy.
+2. Cap calendar bulk, handle `districtId` P2003, `:schoolId` param validation.
 3. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
