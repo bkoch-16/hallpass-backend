@@ -206,6 +206,8 @@ router.post(
   async (req: Request, res: Response) => {
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const targetRole: UserRole = req.body.role ?? UserRole.STUDENT;
+    // `>` not `>=`: an ADMIN may create peer ADMINs. Only PATCH/DELETE on an
+    // existing peer account is blocked — creation is intentionally looser.
     if (roleRank(targetRole) > roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -258,6 +260,7 @@ router.post(
     const users: Array<{ email: string; name: string; role?: UserRole }> = req.body;
     const callerRank = roleRank(req.user!.role);
 
+    // `>` not `>=`: same intentional peer-creation allowance as POST /.
     for (const u of users) {
       if (roleRank(u.role ?? "STUDENT") > callerRank) {
         res.status(403).json({ message: "Forbidden" });
@@ -359,6 +362,8 @@ router.patch(
       return;
     }
 
+    // `>` not `>=`: an ADMIN may promote another user up to their own rank,
+    // same intentional allowance as POST / — see comment there.
     if (req.body.role && roleRank(req.body.role) > roleRank(req.user!.role)) {
       res.status(403).json({ message: "Forbidden" });
       return;

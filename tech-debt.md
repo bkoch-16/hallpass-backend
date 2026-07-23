@@ -40,11 +40,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ## 2. Security
 
-### 🟠 ADMIN can mint peer ADMINs — contradicts the PATCH/DELETE policy
-`POST /api/users` blocks only `targetRole > callerRole` (`apps/user-api/src/routes/user.ts:165`; same for `/bulk`), and PATCH `role` promotion is also `>` not `>=` (`user.ts:262`). Meanwhile PATCH/DELETE forbid acting on equal-or-greater-rank targets. An admin can't edit a peer but can create unlimited new peers or promote a student to ADMIN.
-
-**Fix:** decide the policy; if lateral escalation is unintended, make create/promote checks `>=` at the ADMIN tier. If intended, comment it.
-
 ### 🟡 Small items
 - Soft-deleting a user now revokes its better-auth sessions on `DELETE /api/users/:id`, but the email row is still occupied forever — the user can never be re-provisioned (409). Email-reuse story is still undecided.
 - `change-password` has no `email` in its body, so the strict auth limiter falls back to per-IP keying (`packages/middleware/src/rateLimit.ts:123-129`) — 10/15min shared across a school NAT for password changes.
@@ -56,9 +51,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 ---
 
 ## 3. Correctness
-
-### 🟠 Unknown `districtId` on school create/patch → 500
-`POST /api/schools` passes `districtId` straight through (`apps/schools-api/src/routes/school.ts:54`); a nonexistent district throws Prisma P2003 → generic 500. Same gap on PATCH. user-api already handles P2003 for `schoolId` — reuse that pattern.
 
 ### 🟠 Unbounded calendar bulk upsert
 `calendarBulkSchema` has `.min(1)` but no `.max` (`apps/schools-api/src/schemas/calendar.ts:35`); the handler builds one raw SQL `VALUES` list from the whole array. User bulk caps at 100; cap this too (a school year is ~200 entries, 366 is a natural bound).
@@ -101,9 +93,8 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. Before the login page is public: ADMIN peer-creation policy.
-2. Cap calendar bulk, handle `districtId` P2003, `:schoolId` param validation.
-3. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
+1. Cap calendar bulk, `:schoolId` param validation.
+2. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
 
@@ -118,3 +109,4 @@ Documented in-code with sound reasoning; listed so future audits don't re-flag t
 - `express.json()` mounted before `toNodeHandler(auth)` — verified working on better-auth 1.5.4 by the real-auth integration tests.
 - `corsOptions` sets no `exposedHeaders` — not a gap: better-auth's `bearer()` plugin sets `Access-Control-Expose-Headers: set-auth-token` on the response itself (verified in 1.5.4, `plugins/bearer/index.mjs:71-73`).
 - Preflight, `trust proxy`, helmet defaults, and per-session-token rate-limit keying are all correct for a cross-origin SPA — audited 2026-07-17, no changes needed.
+- ADMINs can create/promote peer ADMINs (`>` not `>=` rank check on create/promote in `user.ts`) while PATCH/DELETE block acting on peers — intentional; documented in-code at the rank checks.
