@@ -52,9 +52,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ## 3. Correctness
 
-### 🟠 Unbounded calendar bulk upsert
-`calendarBulkSchema` has `.min(1)` but no `.max` (`apps/schools-api/src/schemas/calendar.ts:35`); the handler builds one raw SQL `VALUES` list from the whole array. User bulk caps at 100; cap this too (a school year is ~200 entries, 366 is a natural bound).
-
 ### 🟡 Missing `:schoolId` validation on collection GETs → 500 for SUPER_ADMIN
 Nested `GET /` routes (destinations, schedule types, calendar, policy) never validate `:schoolId`. Non-admins are saved by the `!==` in `requireSchoolAccess`, but SUPER_ADMIN on `/api/schools/abc/destinations` reaches Prisma with `NaN` → 500. `schoolParamSchema` exists for exactly this (`apps/schools-api/src/schemas/school.ts:7`) and is used nowhere.
 
@@ -93,7 +90,7 @@ Its primary "self-signup + promote" flow predates `disableSignUp: true` (commit 
 
 ## Suggested priority
 
-1. Cap calendar bulk, `:schoolId` param validation.
+1. `:schoolId` param validation.
 2. `z.infer`-derived body types before frontend consumption starts (prevents real client bugs); other DRY items opportunistically.
 
 ---
