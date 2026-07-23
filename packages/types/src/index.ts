@@ -57,6 +57,9 @@ export interface UserResponse {
   role: UserRole;
   schoolId: number | null;
   createdAt: Date;
+  // Only present when the caller is ADMIN+ reading a single STUDENT via
+  // GET /users/:id — never on list, self, or TEACHER reads.
+  pinCode?: string | null;
 }
 
 export interface ProvisionUserResponse extends UserResponse {

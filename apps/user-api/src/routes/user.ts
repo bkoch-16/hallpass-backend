@@ -23,11 +23,28 @@ import {
 const router = Router();
 
 const USER_SELECT = { id: true, email: true, name: true, role: true, schoolId: true, createdAt: true } as const;
+const USER_SELECT_WITH_PIN = { ...USER_SELECT, pinCode: true } as const;
 
-type UserRow = { id: number; email: string; name: string | null; role: UserRole; schoolId: number | null; createdAt: Date };
+type UserRow = {
+  id: number;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  schoolId: number | null;
+  createdAt: Date;
+  pinCode?: string | null;
+};
 
 function toUserResponse(u: UserRow): UserResponse {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, schoolId: u.schoolId, createdAt: u.createdAt };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    schoolId: u.schoolId,
+    createdAt: u.createdAt,
+    ...(u.pinCode !== undefined ? { pinCode: u.pinCode } : {}),
+  };
 }
 
 // Server-generated one-time password. 24 url-safe base64 chars — comfortably
@@ -187,7 +204,13 @@ router.get(
     const where: Record<string, unknown> = { id: userId, deletedAt: null };
     if (!isSuperAdmin && !isSelf) where.schoolId = req.user!.schoolId;
 
-    const user = await prisma.user.findFirst({ where, select: USER_SELECT });
+    // pinCode is only for the ADMIN+ voice-lookup workflow — never for
+    // TEACHER or a user viewing their own record.
+    const canViewPin = isSuperAdmin || req.user!.role === UserRole.ADMIN;
+    const user = await prisma.user.findFirst({
+      where,
+      select: canViewPin ? USER_SELECT_WITH_PIN : USER_SELECT,
+    });
 
     if (!user) {
       res.status(404).json({ message: "User not found" });

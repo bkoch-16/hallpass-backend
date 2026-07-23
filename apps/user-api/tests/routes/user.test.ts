@@ -212,6 +212,29 @@ describe("GET /api/users/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(4);
   });
+
+  it("includes pinCode when ADMIN reads a student", async () => {
+    const admin = { ...fakeUser, id: 5, role: "ADMIN" };
+    const student = { id: 2, email: "student@test.com", name: "Student", role: "STUDENT", createdAt: fakeUser.createdAt, pinCode: "482913" };
+    authenticateAs(admin);
+    givenTargetUser(student);
+
+    const res = await request(server).get("/api/users/2");
+
+    expect(res.status).toBe(200);
+    expect(res.body.pinCode).toBe("482913");
+  });
+
+  it("omits pinCode when TEACHER reads a student", async () => {
+    const student = { id: 2, email: "student@test.com", name: "Student", role: "STUDENT", createdAt: fakeUser.createdAt };
+    authenticateAs(fakeUser); // teacher with id 1
+    givenTargetUser(student);
+
+    const res = await request(server).get("/api/users/2");
+
+    expect(res.status).toBe(200);
+    expect(res.body.pinCode).toBeUndefined();
+  });
 });
 
 describe("GET /api/users/me", () => {
