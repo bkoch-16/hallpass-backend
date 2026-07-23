@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-22T19:13:07.394Z — 19 files indexed_
+_Generated: 2026-07-23T16:56:27.293Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,7 +58,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for users with role-based access control, cursor-paginated listing, bulk creation, and soft-delete. Exports a default Router with endpoints: GET /me, GET / (list with optional ?ids= batch lookup and ?q= search), GET /:id, POST / (single create), POST /bulk (throttled concurrent creation), PATCH /:id, and DELETE /:id. User provisioning uses `createUserWithCredential` from @hallpass/auth with a server-generated temp password, assigns a student pinCode via `createUserWithPin`, and sends an invite email—both pin and email failures are logged but non-fatal to avoid rolling back committed user rows. Enforces hierarchical role authorization via `roleRank`, school-scoping for non-super-admins, and `requireSelfOrRole` for self-access paths. Soft-deletes set `deletedAt` and revoke better-auth sessions. Depends on Prisma, Zod validation middleware, and shared packages (@hallpass/auth, @hallpass/email, @hallpass/express-middleware, @hallpass/types).
+Express router implementing full CRUD for user management in a multi-tenant school system. Exposes endpoints: GET /me (authenticated user info with school), GET / (cursor-paginated list with optional id-batch, role, and search filters), GET /:id, POST / (single user provisioning with temp password, pin assignment, and invite email), POST /bulk (batch user creation with concurrency throttling at BULK_CONCURRENCY=8), PATCH /:id (update with field-level permission checks), and DELETE /:id (soft-delete with session revocation). Enforces role-based access control using roleRank comparisons—super admins bypass school scoping, admins can create peers but cannot modify/delete them, and teachers get read-only list access. Key dependencies include better-auth (via createUserWithCredential, createSetPasswordToken), Prisma for persistence, and shared packages for validation schemas, middleware, email, and pin generation. Non-critical side effects (pin assignment, invite email, session cleanup) are wrapped in try/catch to avoid failing the primary operation, with errors logged rather than propagated. Developers modifying this file should note the intentional asymmetry between creation (allows peer-rank) and modification/deletion (blocks peer-rank), the soft-delete pattern using deletedAt, and that role/schoolId are runtime-only additionalFields requiring type casting from better-auth's return type.
 
 ### `apps/user-api/src/schemas/user.ts`
 

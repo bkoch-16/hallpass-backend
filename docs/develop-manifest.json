@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-22T19:13:07.394Z",
+  "generatedAt": "2026-07-23T16:56:27.293Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "771d3f85761d43a2408ed526d045bf02c546bff4",
@@ -27,8 +27,8 @@
       "summary": "Exports a `requireAuth` Express middleware created via the `createRequireAuth` factory from `@hallpass/express-middleware`, configured with the local `auth` instance. This middleware should be used on routes that need an authenticated user; it populates `req.user` on success. Changing the auth provider or configuration should be done in `../auth.js`, not here."
     },
     "apps/user-api/src/routes/user.ts": {
-      "blobSha": "eb1488e0e3c1eab704995a7ccfd1ce69a5a7d5b2",
-      "summary": "Express router implementing full CRUD for users with role-based access control, cursor-paginated listing, bulk creation, and soft-delete. Exports a default Router with endpoints: GET /me, GET / (list with optional ?ids= batch lookup and ?q= search), GET /:id, POST / (single create), POST /bulk (throttled concurrent creation), PATCH /:id, and DELETE /:id. User provisioning uses `createUserWithCredential` from @hallpass/auth with a server-generated temp password, assigns a student pinCode via `createUserWithPin`, and sends an invite email—both pin and email failures are logged but non-fatal to avoid rolling back committed user rows. Enforces hierarchical role authorization via `roleRank`, school-scoping for non-super-admins, and `requireSelfOrRole` for self-access paths. Soft-deletes set `deletedAt` and revoke better-auth sessions. Depends on Prisma, Zod validation middleware, and shared packages (@hallpass/auth, @hallpass/email, @hallpass/express-middleware, @hallpass/types)."
+      "blobSha": "fd6f147561bb65a0702a5cc919ce2a3951ac4a14",
+      "summary": "Express router implementing full CRUD for user management in a multi-tenant school system. Exposes endpoints: GET /me (authenticated user info with school), GET / (cursor-paginated list with optional id-batch, role, and search filters), GET /:id, POST / (single user provisioning with temp password, pin assignment, and invite email), POST /bulk (batch user creation with concurrency throttling at BULK_CONCURRENCY=8), PATCH /:id (update with field-level permission checks), and DELETE /:id (soft-delete with session revocation). Enforces role-based access control using roleRank comparisons—super admins bypass school scoping, admins can create peers but cannot modify/delete them, and teachers get read-only list access. Key dependencies include better-auth (via createUserWithCredential, createSetPasswordToken), Prisma for persistence, and shared packages for validation schemas, middleware, email, and pin generation. Non-critical side effects (pin assignment, invite email, session cleanup) are wrapped in try/catch to avoid failing the primary operation, with errors logged rather than propagated. Developers modifying this file should note the intentional asymmetry between creation (allows peer-rank) and modification/deletion (blocks peer-rank), the soft-delete pattern using deletedAt, and that role/schoolId are runtime-only additionalFields requiring type casting from better-auth's return type."
     },
     "apps/user-api/src/schemas/user.ts": {
       "blobSha": "13c148b40cb0facce8a2d3155e96160736b50581",
