@@ -13,21 +13,7 @@ export const listUsersSchema = z.object({
   q: z.string().trim().min(1).max(100).optional(),
 });
 
-export const createUserSchema = z.object({
-  email: z.string().email("Invalid email"),
-  name: z.string().min(1, "name is required"),
-  role: z.enum(ASSIGNABLE_ROLES).optional(),
-});
-
-export const bulkCreateSchema = z.array(createUserSchema).min(1).max(100);
-
-export const updateUserSchema = z
-  .object({
-    name: z.string().min(1).optional(),
-    email: z.string().email("Invalid email").optional(),
-    role: z.enum(ASSIGNABLE_ROLES).optional(),
-    schoolId: z.number().int().positive().nullable().optional(),
-  })
-  .refine((data) => Object.keys(data).length > 0, {
-    message: "At least one field is required",
-  });
+// createUserSchema/updateUserSchema/bulkCreateSchema live in @hallpass/types
+// so CreateUserBody/UpdateUserBody can't drift from what's actually enforced
+// — see packages/types/src/schemas.ts.
+export { createUserSchema, updateUserSchema, bulkCreateSchema } from "@hallpass/types";

@@ -37,6 +37,7 @@ router.get("/", requireAuth, validateParams(schoolParamSchema), requireSchoolAcc
 router.post(
   "/",
   requireAuth,
+  validateParams(schoolParamSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateBody(createDestinationSchema),
@@ -65,9 +66,9 @@ router.post(
 router.patch(
   "/:id",
   requireAuth,
+  validateParams(destinationIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(destinationIdSchema),
   validateBody(updateDestinationSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
@@ -95,9 +96,9 @@ router.patch(
 router.delete(
   "/:id",
   requireAuth,
+  validateParams(destinationIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(destinationIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
     const id = Number(req.params.id);

@@ -494,7 +494,7 @@ router.post(
     }
 
     if (pass.status !== PassStatus.PENDING) {
-      res.status(400).json({ message: "Pass is not in PENDING status" });
+      res.status(409).json({ message: "Pass is not in PENDING status" });
       return;
     }
 
@@ -601,7 +601,7 @@ router.post(
 
     // WAITING passes are cancelled, not denied — deny is PENDING-only by design
     if (pass.status !== PassStatus.PENDING) {
-      res.status(400).json({ message: "Pass must be PENDING to deny" });
+      res.status(409).json({ message: "Pass must be PENDING to deny" });
       return;
     }
 
@@ -660,7 +660,7 @@ router.post(
     }
 
     if (pass.status !== PassStatus.ACTIVE) {
-      res.status(400).json({ message: "Pass must be ACTIVE to return" });
+      res.status(409).json({ message: "Pass must be ACTIVE to return" });
       return;
     }
 
@@ -730,7 +730,7 @@ router.post(
     const cancellable: PassStatus[] = [PassStatus.PENDING, PassStatus.WAITING];
     if (!cancellable.includes(pass.status)) {
       res
-        .status(400)
+        .status(409)
         .json({ message: "Pass must be PENDING or WAITING to cancel" });
       return;
     }

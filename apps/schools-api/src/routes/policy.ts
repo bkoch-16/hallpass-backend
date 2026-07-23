@@ -56,6 +56,7 @@ router.get("/", requireAuth, validateParams(schoolParamSchema), requireSchoolAcc
 router.put(
   "/",
   requireAuth,
+  validateParams(schoolParamSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateBody(upsertPolicySchema),

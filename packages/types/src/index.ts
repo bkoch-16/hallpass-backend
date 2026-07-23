@@ -1,38 +1,8 @@
+import type { UserRole, PassStatus, PolicyInterval } from "./enums.js";
+
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export const UserRole = {
-  STUDENT: "STUDENT",
-  TEACHER: "TEACHER",
-  ADMIN: "ADMIN",
-  SUPER_ADMIN: "SUPER_ADMIN",
-  SERVICE: "SERVICE",
-} as const;
-
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
-
-// Roles that can be assigned to users via the API (excludes SERVICE)
-export const ASSIGNABLE_ROLES = ["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"] as const;
-export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
-
-export const PassStatus = {
-  PENDING: "PENDING",
-  WAITING: "WAITING",
-  ACTIVE: "ACTIVE",
-  COMPLETED: "COMPLETED",
-  CANCELLED: "CANCELLED",
-  DENIED: "DENIED",
-  EXPIRED: "EXPIRED",
-} as const;
-
-export type PassStatus = (typeof PassStatus)[keyof typeof PassStatus];
-
-export const PolicyInterval = {
-  DAY: "DAY",
-  WEEK: "WEEK",
-  MONTH: "MONTH",
-} as const;
-
-export type PolicyInterval = (typeof PolicyInterval)[keyof typeof PolicyInterval];
+export * from "./enums.js";
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
@@ -57,6 +27,9 @@ export interface UserResponse {
   role: UserRole;
   schoolId: number | null;
   createdAt: Date;
+  // Only present when the caller is ADMIN+ reading a single STUDENT via
+  // GET /users/:id — never on list, self, or TEACHER reads.
+  pinCode?: string | null;
 }
 
 export interface ProvisionUserResponse extends UserResponse {
@@ -169,24 +142,21 @@ export interface ParentLookupResponse {
 
 // ─── Request bodies ───────────────────────────────────────────────────────────
 
+// CreateSchoolBody/UpdateSchoolBody, CalendarEntryBody, and
+// CreateUserBody/UpdateUserBody are derived via z.infer from the Zod schemas
+// in ./schemas.js (also re-exported here so apps can use the same schema
+// instances for validateBody()) — the hand-written interfaces that used to
+// live here for these could drift from the validators actually enforced at
+// runtime (and did: UpdateSchoolBody.districtId was non-nullable even though
+// the schema accepts null to clear it).
+export * from "./schemas.js";
+
 export interface CreateDistrictBody {
   name: string;
 }
 
 export interface UpdateDistrictBody {
   name?: string;
-}
-
-export interface CreateSchoolBody {
-  name: string;
-  timezone?: string;
-  districtId?: number;
-}
-
-export interface UpdateSchoolBody {
-  name?: string;
-  timezone?: string;
-  districtId?: number;
 }
 
 export interface CreateScheduleTypeBody {
@@ -213,12 +183,6 @@ export interface UpdatePeriodBody {
   startTime?: string;
   endTime?: string;
   order?: number;
-}
-
-export interface CalendarEntryBody {
-  date: string; // "YYYY-MM-DD"
-  scheduleTypeId?: string | null;
-  note?: string | null;
 }
 
 export interface CreateDestinationBody {

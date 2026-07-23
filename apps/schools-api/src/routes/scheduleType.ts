@@ -67,6 +67,7 @@ router.get(
 router.post(
   "/",
   requireAuth,
+  validateParams(schoolParamSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateBody(createScheduleTypeSchema),
@@ -102,9 +103,9 @@ router.post(
 router.patch(
   "/:id",
   requireAuth,
+  validateParams(scheduleTypeIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(scheduleTypeIdSchema),
   validateBody(updateScheduleTypeSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
@@ -132,9 +133,9 @@ router.patch(
 router.delete(
   "/:id",
   requireAuth,
+  validateParams(scheduleTypeIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(scheduleTypeIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
     const id = Number(req.params.id);

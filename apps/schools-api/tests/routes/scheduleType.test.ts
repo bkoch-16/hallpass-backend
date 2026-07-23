@@ -257,6 +257,20 @@ describe("POST /api/schools/:schoolId/schedule-types", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/abc/schedule-types")
+      .send({ name: "B Block" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {
@@ -294,6 +308,20 @@ describe("PATCH /api/schools/:schoolId/schedule-types/:id", () => {
       .send({});
 
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .patch("/api/schools/abc/schedule-types/1")
+      .send({ name: "Updated" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });
 
@@ -339,5 +367,17 @@ describe("DELETE /api/schools/:schoolId/schedule-types/:id", () => {
     const res = await request(server).delete("/api/schools/1/schedule-types/1");
 
     expect(res.status).toBe(403);
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).delete("/api/schools/abc/schedule-types/1");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });

@@ -271,6 +271,34 @@ describe(`POST ${BASE}`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/abc/schedule-types/1/periods")
+      .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
+
+  it("returns 400 for a non-numeric :scheduleTypeId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .post("/api/schools/1/schedule-types/abc/periods")
+      .send({ name: "Period 1", startTime: "08:00", endTime: "09:00", order: 0 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe(`PATCH ${BASE}/:id`, () => {
@@ -305,6 +333,20 @@ describe(`PATCH ${BASE}/:id`, () => {
     const res = await request(server).patch(`${BASE}/1`).send({});
 
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .patch("/api/schools/abc/schedule-types/1/periods/1")
+      .send({ name: "Updated" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 
   it("returns 422 when merged startTime is not before existing endTime", async () => {
@@ -396,5 +438,17 @@ describe(`DELETE ${BASE}/:id`, () => {
 
     expect(res.status).toBe(404);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).delete("/api/schools/abc/schedule-types/1/periods/1");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });

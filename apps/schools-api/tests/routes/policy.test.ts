@@ -246,6 +246,20 @@ describe(`PUT ${BASE}`, () => {
     expect(res.body.interval).toBe("DAY");
   });
 
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .put("/api/schools/abc/policy")
+      .send({ maxActivePasses: 5 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
+
   it("accepts empty body (all nulls)", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.school.findFirst.mockResolvedValue({ id: 1, name: "School", deletedAt: null });

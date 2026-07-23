@@ -966,13 +966,13 @@ describe("POST /api/passes/:id/approve", () => {
     expect(mockSlots.releasePassSlots).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when pass is not PENDING", async () => {
+  it("returns 409 when pass is not PENDING", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
     const res = await request(server).post(`${BASE}/100/approve`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
   it("returns 404 when pass not found", async () => {
@@ -1045,22 +1045,22 @@ describe("POST /api/passes/:id/deny", () => {
     expect(updateData.approverNote).toBeUndefined();
   });
 
-  it("returns 400 when pass is WAITING (use cancel instead)", async () => {
+  it("returns 409 when pass is WAITING (use cancel instead)", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "WAITING" });
 
     const res = await request(server).post(`${BASE}/100/deny`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
-  it("returns 400 when pass is not PENDING", async () => {
+  it("returns 409 when pass is not PENDING", async () => {
     authenticateAs(fakeTeacher);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
     const res = await request(server).post(`${BASE}/100/deny`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
   it("returns 404 when pass not found", async () => {
@@ -1151,13 +1151,13 @@ describe("POST /api/passes/:id/return", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns 400 when pass is not ACTIVE", async () => {
+  it("returns 409 when pass is not ACTIVE", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "PENDING" });
 
     const res = await request(server).post(`${BASE}/100/return`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
   it("returns 404 when pass not found", async () => {
@@ -1252,24 +1252,24 @@ describe("POST /api/passes/:id/cancel", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 when pass is ACTIVE (use return instead)", async () => {
+  it("returns 409 when pass is ACTIVE (use return instead)", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "ACTIVE" });
 
     const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
     expect(res.body.message).toBe("Pass must be PENDING or WAITING to cancel");
     expect(mockSlots.releaseAndPromote).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when pass is COMPLETED (not cancellable)", async () => {
+  it("returns 409 when pass is COMPLETED (not cancellable)", async () => {
     authenticateAs(fakeStudent);
     mockPrisma.pass.findFirst.mockResolvedValue({ ...fakePass, status: "COMPLETED" });
 
     const res = await request(server).post(`${BASE}/100/cancel`).send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
   it("returns 404 when pass not found", async () => {
