@@ -165,9 +165,9 @@ router.post(
 router.patch(
   "/:id",
   requireAuth,
+  validateParams(calendarIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(calendarIdSchema),
   validateBody(updateCalendarSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
@@ -217,9 +217,9 @@ router.patch(
 router.delete(
   "/:id",
   requireAuth,
+  validateParams(calendarIdSchema),
   requireSchoolAccess,
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateParams(calendarIdSchema),
   async (req: Request, res: Response) => {
     const schoolId = Number(req.params.schoolId);
     const id = Number(req.params.id);

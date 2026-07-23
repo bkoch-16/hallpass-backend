@@ -295,6 +295,20 @@ describe(`PATCH ${BASE}/:id`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .patch("/api/schools/abc/destinations/1")
+      .send({ name: "Updated" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
 });
 
 describe(`DELETE ${BASE}/:id`, () => {
@@ -340,6 +354,18 @@ describe(`DELETE ${BASE}/:id`, () => {
     const res = await request(server).delete(`${BASE}/1`);
 
     expect(res.status).toBe(403);
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).delete("/api/schools/abc/destinations/1");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });
 

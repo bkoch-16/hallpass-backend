@@ -335,6 +335,20 @@ describe(`PATCH ${BASE}/:id`, () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server)
+      .patch("/api/schools/abc/schedule-types/1/periods/1")
+      .send({ name: "Updated" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
+  });
+
   it("returns 422 when merged startTime is not before existing endTime", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
@@ -424,5 +438,17 @@ describe(`DELETE ${BASE}/:id`, () => {
 
     expect(res.status).toBe(404);
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for a non-numeric :schoolId", async () => {
+    authenticateAs(fakeSuperAdmin);
+
+    const res = await request(server).delete("/api/schools/abc/schedule-types/1/periods/1");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Invalid params",
+      errors: expect.anything(),
+    });
   });
 });
