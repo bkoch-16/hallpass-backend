@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-23T16:56:27.293Z — 19 files indexed_
+_Generated: 2026-07-23T19:47:59.334Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,11 +58,11 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for user management in a multi-tenant school system. Exposes endpoints: GET /me (authenticated user info with school), GET / (cursor-paginated list with optional id-batch, role, and search filters), GET /:id, POST / (single user provisioning with temp password, pin assignment, and invite email), POST /bulk (batch user creation with concurrency throttling at BULK_CONCURRENCY=8), PATCH /:id (update with field-level permission checks), and DELETE /:id (soft-delete with session revocation). Enforces role-based access control using roleRank comparisons—super admins bypass school scoping, admins can create peers but cannot modify/delete them, and teachers get read-only list access. Key dependencies include better-auth (via createUserWithCredential, createSetPasswordToken), Prisma for persistence, and shared packages for validation schemas, middleware, email, and pin generation. Non-critical side effects (pin assignment, invite email, session cleanup) are wrapped in try/catch to avoid failing the primary operation, with errors logged rather than propagated. Developers modifying this file should note the intentional asymmetry between creation (allows peer-rank) and modification/deletion (blocks peer-rank), the soft-delete pattern using deletedAt, and that role/schoolId are runtime-only additionalFields requiring type casting from better-auth's return type.
+Express router implementing full CRUD for users with cursor-paginated listing, bulk creation, and a `/me` endpoint. Enforces role-based access control via `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role checks using `roleRank` to prevent privilege escalation. User provisioning (POST `/` and POST `/bulk`) creates credentials via `createUserWithCredential`, assigns student PIN codes, and sends invite emails — all with non-fatal error handling so that downstream failures (pin, email) never roll back an already-committed user row. Bulk creation throttles concurrency (`BULK_CONCURRENCY = 8`) to avoid overwhelming scrypt hashing. Deletion is soft-delete (`deletedAt`) with a best-effort session revocation. Super-admins bypass school scoping; other roles are constrained to their own `schoolId`. Request validation uses Zod schemas from `../schemas/user.js` and `@hallpass/types`.
 
 ### `apps/user-api/src/schemas/user.ts`
 
-Zod validation schemas for user-related API endpoints, used with `validateBody`, `validateParams`, and `validateQuery` middleware. Exports `userIdSchema` (route param with numeric string id), `listUsersSchema` (query params: role filter, cursor pagination with configurable limit 1-100 defaulting to 50, comma-separated ids, and search query q), `createUserSchema` (email, name required; optional assignable role), `bulkCreateSchema` (array of 1-100 createUserSchema entries), and `updateUserSchema` (partial update requiring at least one field, with optional nullable schoolId). Uses `ASSIGNABLE_ROLES` from @hallpass/types to constrain role enums, ensuring only permitted roles can be specified by clients.
+Defines Zod validation schemas for user-related route parameters and query strings. Exports `userIdSchema` (numeric string param) and `listUsersSchema` (pagination cursor, limit with default 50, optional role/ids/q filters). Re-exports `createUserSchema`, `updateUserSchema`, and `bulkCreateSchema` directly from `@hallpass/types` to keep request body validation in sync with shared TypeScript types. Uses `ASSIGNABLE_ROLES` enum from `@hallpass/types` to constrain the role query filter.
 
 ### `docker-compose.yml`
 
@@ -74,7 +74,7 @@ Root package.json for the 'hallpass-backend' monorepo, managed with pnpm (v10.30
 
 ### `packages/auth/src/index.ts`
 
-Shared authentication package wrapping better-auth with project-specific configuration for the HallPass platform. Exports createAuth() factory that configures better-auth with PostgreSQL/Prisma adapter, bearer token plugin, serial ID generation, custom session TTL (7 days), and additional user fields (role, schoolId) that are not user-settable (input: false). Sign-up is disabled (disableSignUp: true); user creation is handled exclusively through the exported createUserWithCredential() helper, which performs email uniqueness checking, password hashing, and account linking, translating race-condition P2002 errors into the exported EmailInUseError class. Also exports createSetPasswordToken() which mints better-auth-compatible reset-password verification tokens server-side, used for invite flows with configurable expiry. Key exports include the Auth and Session types, toNodeHandler/fromNodeHeaders for Express integration, and EmailInUseError. When baseURL is HTTPS, cookies are configured with sameSite:'none' and secure:true for cross-origin deployments.
+Configures and exports a better-auth instance factory (`createAuth`) backed by a Prisma/PostgreSQL adapter with the bearer plugin, serial ID generation, cookie settings for HTTPS, and 7-day sessions. Extends the user model with `role` and `schoolId` additional fields; disables public sign-up (`disableSignUp: true`). Exports `createUserWithCredential` for server-side user provisioning: it hashes the password, creates a User row, links a credential Account, and rolls back the user on link failure to avoid orphaned rows — race conditions on the email unique index are translated to the exported `EmailInUseError`. `createSetPasswordToken` mints a reset-password Verification row so invite links reuse better-auth's existing reset flow. Also re-exports `toNodeHandler`, `fromNodeHeaders`, and the `Auth`/`Session` types.
 
 ### `packages/db/prisma/schema.prisma`
 
