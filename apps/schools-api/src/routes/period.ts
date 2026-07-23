@@ -10,7 +10,13 @@ import {
   requireSchoolAccessIfSession,
 } from "../middleware/schoolScope.js";
 import { createPublicSchoolDataLimiter } from "../middleware/publicSchoolDataLimiter.js";
-import { createPeriodSchema, periodIdSchema, updatePeriodSchema } from "../schemas/period.js";
+import {
+  createPeriodSchema,
+  isValidTimeRange,
+  PERIOD_TIME_ORDER_MESSAGE,
+  periodIdSchema,
+  updatePeriodSchema,
+} from "../schemas/period.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -113,6 +119,18 @@ router.patch(
     if (!existing) {
       res.status(404).json({ message: "Period not found" });
       return;
+    }
+
+    const isChangingTimes = req.body.startTime !== undefined || req.body.endTime !== undefined;
+
+    if (isChangingTimes) {
+      const mergedStartTime = req.body.startTime ?? existing.startTime;
+      const mergedEndTime = req.body.endTime ?? existing.endTime;
+
+      if (!isValidTimeRange(mergedStartTime, mergedEndTime)) {
+        res.status(422).json({ message: PERIOD_TIME_ORDER_MESSAGE });
+        return;
+      }
     }
 
     const updated = await prisma.period.update({

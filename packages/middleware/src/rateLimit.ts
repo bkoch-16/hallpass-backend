@@ -106,12 +106,25 @@ export function createGeneralLimiter(options: RateLimiterOptions = {}) {
   });
 }
 
+/** Normalizes req.body.email (trim + lowercase) the same way for both auth limiters, else "". */
+function normalizedEmail(req: Request): string {
+  return typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+}
+
 /**
- * Auth endpoint limiter: keys per target account (req.body.email, lowercased
- * and trimmed) so credential-stuffing against one account can't be spread
- * across IPs, falling back to per-IP keying when no email is present.
- * Requires express.json() to run first. Defaults to 10 requests per
- * 15-minute window per key.
+ * Auth endpoint limiter: keys per (target account, source IP) pair so a
+ * single IP spraying credential-stuffing attempts at one account is capped,
+ * falling back to per-IP keying when no email is present. Requires
+ * express.json() to run first. Defaults to 10 requests per 15-minute window
+ * per key.
+ *
+ * Previously keyed on email alone, which let an attacker submit junk
+ * credentials for a victim's email from anywhere and 429-lock that victim's
+ * own sign-in attempts (account-lockout griefing) — see tech-debt.md. Keying
+ * on (email, IP) means a griefer only exhausts their own IP's bucket for that
+ * email; the victim's legitimate attempts from their own IP get an
+ * independent counter. See createAuthAccountLimiter for the complementary
+ * pure-email backstop against an attacker who rotates source IPs.
  */
 export function createAuthLimiter(options: RateLimiterOptions = {}) {
   return rateLimit({
@@ -121,10 +134,80 @@ export function createAuthLimiter(options: RateLimiterOptions = {}) {
     legacyHeaders: false,
     message: { message: "Too many requests" },
     keyGenerator: (req: Request) => {
-      const email =
-        typeof req.body?.email === "string"
-          ? req.body.email.trim().toLowerCase()
-          : "";
+      const email = normalizedEmail(req);
+      return email
+        ? `email:${email}|ip:${ipKeyGenerator(req.ip ?? "")}`
+        : ipKeyGenerator(req.ip ?? "");
+    },
+    ...storeOverrides(options),
+  });
+}
+
+export interface AuthAccountLimiterOptions extends RateLimiterOptions {
+  /**
+   * Whether a successful (2xx) response is excluded from the shared per-email
+   * budget. Defaults to true: for sign-in/sign-up, success is a real signal
+   * (the request was legitimate) so it shouldn't erode the backstop. Pass
+   * false for routes whose handler always returns 2xx by design regardless of
+   * outcome (e.g. request-password-reset's anti-enumeration response), where
+   * a "successful" response carries no signal and must count toward the
+   * budget like everything else, or the cap never engages.
+   */
+  skipSuccessfulRequests?: boolean;
+}
+
+/**
+ * Auth account limiter: keys purely on the target account (req.body.email,
+ * normalized the same way as createAuthLimiter), falling back to per-IP
+ * keying when no email is present. Requires express.json() to run first.
+ *
+ * This is the distributed-attack backstop for createAuthLimiter's per-(email,
+ * IP) bucket: an attacker rotating source IPs gets a fresh per-IP counter
+ * from createAuthLimiter each time, but still shares this single per-email
+ * counter across all of those IPs, capping the aggregate attempts against one
+ * account regardless of how many IPs are used.
+ *
+ * Intentionally LOOSER than createAuthLimiter's default (30 vs. 10 per
+ * 15-minute window) so legitimate users who sign in from multiple networks
+ * (e.g. home + mobile data) aren't penalized for normal behavior — it's meant
+ * to catch distributed abuse, not everyday multi-IP usage.
+ *
+ * Only failed attempts count toward this budget by default
+ * (skipSuccessfulRequests) so a correct sign-in doesn't erode it. This
+ * narrows, but does not eliminate, the residual self-DoS: an attacker who
+ * front-loads `limit` failed attempts from rotating IPs still causes the
+ * account owner's very next attempt to be blocked, since express-rate-limit's
+ * block decision precedes knowledge of that request's own outcome. Raises
+ * attacker cost (must supply `limit` genuinely-failed requests, not just
+ * `limit` requests of any kind) rather than closing the lockout class
+ * entirely — see tech-debt.md.
+ */
+export function createAuthAccountLimiter(options: AuthAccountLimiterOptions = {}) {
+  return rateLimit({
+    windowMs: options.windowMs ?? FIFTEEN_MINUTES_MS,
+    limit: options.limit ?? 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { message: "Too many requests" },
+    // Only failed (>= 400) responses count toward the shared per-email
+    // budget by default; a real successful sign-in/sign-up is refunded
+    // afterward so it can't itself erode the backstop's budget (previously
+    // ANY request, success or failure, counted permanently). This does NOT
+    // eliminate the residual lockout window: express-rate-limit decides to
+    // block *before* it knows whether the current request would succeed
+    // (store.increment() runs, then totalHits is compared to limit, then
+    // next()/handler() is chosen — see index.cjs:845-942), so once an
+    // attacker's own failed attempts have already pushed the counter to
+    // `limit`, the very next request against this key — including the real
+    // owner's, even if it would have succeeded — is still blocked pre-flight.
+    // See the docstring above for the residual-risk framing. See
+    // AuthAccountLimiterOptions.skipSuccessfulRequests for the opt-out used
+    // by routes whose handler always returns 2xx (e.g.
+    // request-password-reset's anti-enumeration design, where a "successful"
+    // response carries no signal about whether the request was legitimate).
+    skipSuccessfulRequests: options.skipSuccessfulRequests ?? true,
+    keyGenerator: (req: Request) => {
+      const email = normalizedEmail(req);
       return email ? `email:${email}` : ipKeyGenerator(req.ip ?? "");
     },
     ...storeOverrides(options),

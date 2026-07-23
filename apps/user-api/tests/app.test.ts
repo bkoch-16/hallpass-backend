@@ -164,17 +164,22 @@ describe("app rate-limit store wiring", () => {
     expect(mockRedisStore).not.toHaveBeenCalled();
   });
 
-  it("wires general + auth RedisStores namespaced under REDIS_PREFIX outside the test env", async () => {
+  it("wires general + auth + auth-account + auth-account-reset RedisStores namespaced under REDIS_PREFIX outside the test env", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("REDIS_URL", "redis://localhost:6379");
     vi.stubEnv("REDIS_PREFIX", "test");
 
     await import("../src/app.js");
 
-    expect(mockRedisStore).toHaveBeenCalledTimes(2);
+    expect(mockRedisStore).toHaveBeenCalledTimes(4);
     const prefixes = mockRedisStore.mock.calls.map(
       (c) => (c[0] as { prefix: string }).prefix,
     );
-    expect(prefixes).toEqual(["test:rl:user-api:general:", "test:rl:user-api:auth:"]);
+    expect(prefixes).toEqual([
+      "test:rl:user-api:general:",
+      "test:rl:user-api:auth:",
+      "test:rl:user-api:auth-account:",
+      "test:rl:user-api:auth-account-reset:",
+    ]);
   });
 });
