@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-22T00:22:46.195Z",
+  "generatedAt": "2026-07-23T16:39:21.940Z",
   "files": {
     "packages/db/prisma/schema.prisma": {
       "blobSha": "771d3f85761d43a2408ed526d045bf02c546bff4",
       "summary": "Defines the PostgreSQL database schema for the HallPass application using Prisma ORM. Models include multi-tenant hierarchy (District → School → User), authentication tables (Session, Account, Verification) compatible with better-auth's serial ID requirement, scheduling (ScheduleType, Period, SchoolCalendar), hall pass management (Pass, Destination, PassPolicy), and role-based access (STUDENT, TEACHER, ADMIN, SUPER_ADMIN, SERVICE). The Pass model has a critical partial unique index (one_active_pass_per_student) that exists only in a migration and cannot be expressed in the Prisma schema — developers must manually remove any auto-generated DROP INDEX for it in new migrations. Soft deletes use a nullable deletedAt column on most models except Pass, which uses terminal statuses instead. Key enums (Role, PassStatus, PolicyInterval) drive application logic across multiple services."
     },
     "apps/user-api/src/app.ts": {
-      "blobSha": "167c1e1c85546d00963b52a6d3ced0e1c1f898e7",
-      "summary": "Express application setup for the user-api service. Configures helmet, CORS, HTTP logging, JSON parsing, health check endpoint (exempt from rate limiting), and Redis-backed rate limiting with separate general and auth limiters. Routes better-auth endpoints under /api/auth/* with a strict auth limiter on credential-sensitive POST routes, and mounts the user CRUD router at /api/users. Falls back to in-memory rate limiting when Redis is unavailable or in test mode. Uses middleware from @hallpass/express-middleware throughout."
+      "blobSha": "9eb6f2f6a3b27f026ce0f5d1812bf8be675eb802",
+      "summary": "Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and a multi-layered rate-limiting strategy (general, auth per-IP+email, and auth per-account) backed by Redis in production or in-memory in test. Auth routes under `/api/auth/*` are delegated to a better-auth handler via `toNodeHandler`, with specific rate-limit policies for email sign-in/sign-up, password reset (always counts toward budget since handler returns 200 regardless), and password change endpoints. User routes are mounted at `/api/users`, followed by 404 and error-handling middleware. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`; local modules `auth`, `env`, and `userRouter`. Developers modifying this file should understand the two-layer auth rate-limiting design (per-IP+email strict cap vs. per-email-only backstop) and that each Redis rate-limit store instance must be unique (cannot be shared across limiters)."
     },
     "apps/user-api/src/auth.ts": {
       "blobSha": "7b5a3e79e7528f1ae644bb38102f550b914abc7e",

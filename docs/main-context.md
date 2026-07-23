@@ -1,6 +1,6 @@
 # Codebase Context — main
 
-_Generated: 2026-07-22T00:22:46.195Z — 19 files indexed_
+_Generated: 2026-07-23T16:39:21.940Z — 19 files indexed_
 
 ## File Summaries
 
@@ -30,7 +30,7 @@ Multi-stage Docker build for the user-api Express service, based on node:22-alpi
 
 ### `apps/user-api/src/app.ts`
 
-Express application setup for the user-api service. Configures helmet, CORS, HTTP logging, JSON parsing, health check endpoint (exempt from rate limiting), and Redis-backed rate limiting with separate general and auth limiters. Routes better-auth endpoints under /api/auth/* with a strict auth limiter on credential-sensitive POST routes, and mounts the user CRUD router at /api/users. Falls back to in-memory rate limiting when Redis is unavailable or in test mode. Uses middleware from @hallpass/express-middleware throughout.
+Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and a multi-layered rate-limiting strategy (general, auth per-IP+email, and auth per-account) backed by Redis in production or in-memory in test. Auth routes under `/api/auth/*` are delegated to a better-auth handler via `toNodeHandler`, with specific rate-limit policies for email sign-in/sign-up, password reset (always counts toward budget since handler returns 200 regardless), and password change endpoints. User routes are mounted at `/api/users`, followed by 404 and error-handling middleware. Key dependencies include shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`; local modules `auth`, `env`, and `userRouter`. Developers modifying this file should understand the two-layer auth rate-limiting design (per-IP+email strict cap vs. per-email-only backstop) and that each Redis rate-limit store instance must be unique (cannot be shared across limiters).
 
 ### `apps/user-api/src/auth.ts`
 
