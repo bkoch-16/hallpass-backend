@@ -96,12 +96,29 @@ export async function createUserWithCredential(
     }
     throw err;
   }
-  await ctx.internalAdapter.linkAccount({
-    userId: String(user.id),
-    providerId: "credential",
-    accountId: String(user.id),
-    password: hash,
-  });
+  try {
+    await ctx.internalAdapter.linkAccount({
+      userId: String(user.id),
+      providerId: "credential",
+      accountId: String(user.id),
+      password: hash,
+    });
+  } catch (err) {
+    // createUser and linkAccount aren't in one transaction — better-auth's
+    // internalAdapter has no cross-call transaction API. Without this,
+    // a failure here leaves an orphaned User row with no credential Account
+    // (can never log in) that also permanently occupies the email.
+    try {
+      await ctx.internalAdapter.deleteUser(String(user.id));
+    } catch (cleanupErr) {
+      throw new AggregateError(
+        [err, cleanupErr],
+        "Failed to link account and failed to roll back the created user",
+        { cause: cleanupErr },
+      );
+    }
+    throw err;
+  }
   return { ...user, id: Number(user.id) };
 }
 
