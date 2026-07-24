@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createSchoolSchema, listSchoolsSchema, schoolIdSchema, updateSchoolSchema } from "../schemas/school.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const router = Router({ mergeParams: true });
 
@@ -135,21 +136,23 @@ router.delete(
       return;
     }
 
-    const passRef = await prisma.pass.findFirst({
-      where: { schoolId: school.id, status: { in: IN_FLIGHT_PASS_STATUSES } },
-    });
-
-    if (passRef) {
-      res.status(409).json({ message: "Cannot delete: school has in-flight passes" });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.pass.findFirst({ where: { schoolId: school.id, status: { in: IN_FLIGHT_PASS_STATUSES } } }),
+        "Cannot delete: school has in-flight passes",
+      )
+    ) {
       return;
     }
 
-    const userRef = await prisma.user.findFirst({
-      where: { schoolId: school.id, deletedAt: null },
-    });
-
-    if (userRef) {
-      res.status(409).json({ message: "Cannot delete: school has active users" });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.user.findFirst({ where: { schoolId: school.id, deletedAt: null } }),
+        "Cannot delete: school has active users",
+      )
+    ) {
       return;
     }
 

@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
 import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
 import { createDistrictSchema, districtIdSchema, listDistrictsSchema, updateDistrictSchema } from "../schemas/district.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const router = Router();
 
@@ -116,12 +117,13 @@ router.delete(
       return;
     }
 
-    const schoolRef = await prisma.school.findFirst({
-      where: { districtId: district.id, deletedAt: null },
-    });
-
-    if (schoolRef) {
-      res.status(409).json({ message: "Cannot delete: district has active schools" });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.school.findFirst({ where: { districtId: district.id, deletedAt: null } }),
+        "Cannot delete: district has active schools",
+      )
+    ) {
       return;
     }
 

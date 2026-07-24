@@ -18,6 +18,7 @@ import {
   periodListParamsSchema,
   updatePeriodSchema,
 } from "../schemas/period.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -166,12 +167,13 @@ router.delete(
       return;
     }
 
-    const passRef = await prisma.pass.findFirst({
-      where: { periodId: id, status: { in: IN_FLIGHT_PASS_STATUSES } },
-    });
-
-    if (passRef) {
-      res.status(409).json({ message: "Cannot delete: period has in-flight passes" });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.pass.findFirst({ where: { periodId: id, status: { in: IN_FLIGHT_PASS_STATUSES } } }),
+        "Cannot delete: period has in-flight passes",
+      )
+    ) {
       return;
     }
 
