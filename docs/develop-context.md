@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-24T01:58:32.571Z — 19 files indexed_
+_Generated: 2026-07-24T02:17:13.013Z — 19 files indexed_
 
 ## File Summaries
 
@@ -50,7 +50,7 @@ Entry point for the user-api service that loads environment variables via dotenv
 
 ### `apps/user-api/src/lib/pin.ts`
 
-Handles generation and collision-safe assignment of 6-digit PIN codes for student users, used by an external parent voice tool. Exports `generatePinCode()` (produces a random 6-digit string with no leading zero via `crypto.randomInt`) and `createUserWithPin<T>()` which wraps a creation callback, retrying up to 5 times on Prisma P2002 unique constraint violations specifically on the `pinCode` field. Non-STUDENT roles skip pin generation entirely (callback receives `undefined`). The `isPinCodeConflict` helper distinguishes pinCode collisions from email conflicts by inspecting Prisma error metadata, ensuring email uniqueness errors propagate unchanged.
+Provides utilities for generating and assigning unique 6-digit PIN codes to student users. Exports `generatePinCode()` which produces a random 6-digit string (no leading zero) and `createUserWithPin<T>()` which wraps a creation callback with retry logic for PIN uniqueness collisions. Only students receive PINs; non-student roles bypass PIN generation entirely. Uses `isPrismaError` from `@hallpass/express-middleware` to distinguish pinCode unique constraint violations (P2002) from other errors like email conflicts, retrying up to 5 times on pin collisions only. Developers modifying this should be aware that the retry loop is intentionally narrow — only Prisma P2002 errors on the `pinCode` field trigger a retry.
 
 ### `apps/user-api/src/middleware/auth.ts`
 
@@ -58,7 +58,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for user management in a school-based multi-tenant system. Exports a default Router with endpoints: GET /me (authenticated user profile with school info), GET / (cursor-paginated list with optional id-batch, role, and search filters), GET /:id, POST / (single user provisioning with temp password, PIN assignment, and invite email), POST /bulk (batch user creation with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft-delete with session revocation). Enforces role-based access control via requireAuth, requireRole, and requireSelfOrRole middleware, with a hierarchical role-rank system where SUPER_ADMIN has cross-school access while other roles are scoped to their schoolId. Uses better-auth for credential creation and set-password token generation, Prisma for database access with soft-delete pattern (deletedAt), and Zod-based validation middleware for body/params/query. Key design decisions: PIN assignment and invite email sending are non-fatal (errors are logged but don't fail the request), peer-role creation is allowed but peer modification/deletion is blocked, and bulk creation uses Promise.allSettled with batched concurrency to handle slow scrypt hashing gracefully.
+Defines the Express router for all user CRUD operations including GET /me, GET / (cursor-paginated list with optional id-batch and search), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency), PATCH /:id, and DELETE /:id (soft-delete). Implements role-based access control using `requireRole`, `requireSelfOrRole`, and `roleRank` from `@hallpass/express-middleware`, with SUPER_ADMIN having cross-school access while other roles are scoped to their own schoolId. User provisioning generates a temporary password via `createUserWithCredential` (better-auth), assigns a student PIN via `assignPin`, and sends an invite email — both PIN assignment and email sending are non-fatal (logged but swallowed) since the user row is already committed. Bulk creation throttles concurrency to `BULK_CONCURRENCY=8` to limit scrypt hashing load, and returns a `BulkUserResult` with per-entry error details. Delete is a soft-delete (sets `deletedAt`) followed by a best-effort session revocation. Key dependencies include `@hallpass/auth`, `@hallpass/db` (Prisma), `@hallpass/email`, validation schemas from `../schemas/user.js`, and the local `createUserWithPin` helper.
 
 ### `apps/user-api/src/schemas/user.ts`
 
