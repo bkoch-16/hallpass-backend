@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma, PassStatus } from "@hallpass/db";
+import { prisma, IN_FLIGHT_PASS_STATUSES } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { DestinationResponse } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
@@ -8,6 +8,7 @@ import { validateBody, validateParams } from "@hallpass/express-middleware";
 import { requireSchoolAccess } from "../middleware/schoolScope.js";
 import { createDestinationSchema, destinationIdSchema, updateDestinationSchema } from "../schemas/destination.js";
 import { schoolParamSchema } from "../schemas/school.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const router = Router({ mergeParams: true });
 
@@ -112,12 +113,13 @@ router.delete(
       return;
     }
 
-    const passRef = await prisma.pass.findFirst({
-      where: { destinationId: id, status: { in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE] } },
-    });
-
-    if (passRef) {
-      res.status(409).json({ message: "Cannot delete: destination has in-flight passes" });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.pass.findFirst({ where: { destinationId: id, status: { in: IN_FLIGHT_PASS_STATUSES } } }),
+        "Cannot delete: destination has in-flight passes",
+      )
+    ) {
       return;
     }
 

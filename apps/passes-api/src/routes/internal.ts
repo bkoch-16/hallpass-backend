@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { prisma, PassStatus } from "@hallpass/db";
+import { prisma, PassStatus, IN_FLIGHT_PASS_STATUSES } from "@hallpass/db";
 import { scheduleLocalExpiry, expirePass } from "../lib/expiry.js";
 import {
   reconcileSlots,
@@ -30,7 +30,7 @@ router.post("/reconcile-expiry", requireInternalSecret, async (_req, res) => {
     const batch = await prisma.pass.findMany({
       where: {
         status: {
-          in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE],
+          in: IN_FLIGHT_PASS_STATUSES,
         },
       },
       include: {

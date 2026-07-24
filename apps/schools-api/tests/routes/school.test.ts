@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { passStatusMock, inFlightPassStatusesMock } from "../utils/passStatusMock.js";
 import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
@@ -7,6 +8,8 @@ const { mockGetSession } = vi.hoisted(() => ({
 }));
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
+  IN_FLIGHT_PASS_STATUSES: inFlightPassStatusesMock,
   prisma: {
     user: { findFirst: vi.fn() },
     school: {
@@ -15,6 +18,7 @@ vi.mock("@hallpass/db", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    pass: { findFirst: vi.fn() },
     $queryRaw: vi.fn(),
   },
 }));
@@ -38,6 +42,7 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  pass: { findFirst: ReturnType<typeof vi.fn> };
 };
 
 interface FakeUser {
@@ -293,7 +298,9 @@ describe("PATCH /api/schools/:id", () => {
 describe("DELETE /api/schools/:id", () => {
   it("soft deletes school and returns 204", async () => {
     authenticateAs(fakeSuperAdmin);
+    mockPrisma.user.findFirst.mockResolvedValueOnce(fakeSuperAdmin).mockResolvedValueOnce(null);
     mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.school.update.mockResolvedValue({ ...fakeSchool, deletedAt: new Date() });
 
     const res = await request(server).delete("/api/schools/1");
@@ -321,5 +328,31 @@ describe("DELETE /api/schools/:id", () => {
     const res = await request(server).delete("/api/schools/1");
 
     expect(res.status).toBe(403);
+  });
+
+  it("returns 409 and does not delete when school has in-flight passes", async () => {
+    authenticateAs(fakeSuperAdmin);
+    mockPrisma.user.findFirst.mockResolvedValueOnce(fakeSuperAdmin);
+    mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
+    mockPrisma.pass.findFirst.mockResolvedValue({ id: 1, status: "ACTIVE" });
+
+    const res = await request(server).delete("/api/schools/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: school has in-flight passes" });
+    expect(mockPrisma.school.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 and does not delete when school has active users", async () => {
+    authenticateAs(fakeSuperAdmin);
+    mockPrisma.user.findFirst.mockResolvedValueOnce(fakeSuperAdmin).mockResolvedValueOnce(fakeAdmin);
+    mockPrisma.school.findFirst.mockResolvedValue(fakeSchool);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
+
+    const res = await request(server).delete("/api/schools/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: school has active users" });
+    expect(mockPrisma.school.update).not.toHaveBeenCalled();
   });
 });

@@ -33,6 +33,8 @@ import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  await prisma.pass.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.period.deleteMany();
   await prisma.scheduleType.deleteMany();
   await prisma.user.deleteMany();
@@ -40,6 +42,8 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await prisma.pass.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.period.deleteMany();
   await prisma.scheduleType.deleteMany();
   await prisma.user.deleteMany();
@@ -80,6 +84,29 @@ async function seedUser(overrides: Partial<{
       name: "Test User",
       role: overrides.role ?? "STUDENT",
       schoolId: overrides.schoolId ?? null,
+    },
+  });
+}
+
+async function seedDestination(schoolId: number) {
+  return prisma.destination.create({ data: { schoolId, name: "Library" } });
+}
+
+async function seedPass(
+  schoolId: number,
+  destinationId: number,
+  studentId: number,
+  status: "PENDING" | "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "DENIED" | "EXPIRED",
+  periodId: number,
+) {
+  return prisma.pass.create({
+    data: {
+      schoolId,
+      destinationId,
+      studentId,
+      requesterId: studentId,
+      status,
+      periodId,
     },
   });
 }
@@ -254,4 +281,51 @@ describe("DELETE .../periods/:id (integration)", () => {
     );
     expect(res.body.map((p: { id: number }) => p.id)).not.toContain(period.id);
   });
+
+  it.each(["PENDING", "WAITING", "ACTIVE"] as const)(
+    "returns 409 and does not delete when a %s pass references the period",
+    async (status) => {
+      const school = await seedSchool();
+      const st = await seedScheduleType(school.id);
+      const period = await seedPeriod(st.id, school.id, 0);
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT" });
+      await seedPass(school.id, dest.id, student.id, status, period.id);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/schedule-types/${st.id}/periods/${period.id}`,
+      );
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ message: "Cannot delete: period has in-flight passes" });
+
+      const inDb = await prisma.period.findUnique({ where: { id: period.id } });
+      expect(inDb?.deletedAt).toBeNull();
+    },
+  );
+
+  it.each(["COMPLETED", "CANCELLED", "DENIED", "EXPIRED"] as const)(
+    "returns 204 when only a %s (terminal) pass references the period",
+    async (status) => {
+      const school = await seedSchool();
+      const st = await seedScheduleType(school.id);
+      const period = await seedPeriod(st.id, school.id, 0);
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT" });
+      await seedPass(school.id, dest.id, student.id, status, period.id);
+      const admin = await seedUser({ role: "ADMIN", schoolId: school.id });
+      authenticateAs(admin);
+
+      const res = await request(server).delete(
+        `/api/schools/${school.id}/schedule-types/${st.id}/periods/${period.id}`,
+      );
+
+      expect(res.status).toBe(204);
+
+      const inDb = await prisma.period.findUnique({ where: { id: period.id } });
+      expect(inDb?.deletedAt).not.toBeNull();
+    },
+  );
 });

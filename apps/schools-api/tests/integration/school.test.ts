@@ -24,12 +24,16 @@ import { prisma } from "@hallpass/db";
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  await prisma.pass.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
   await prisma.district.deleteMany();
 });
 
 afterAll(async () => {
+  await prisma.pass.deleteMany();
+  await prisma.destination.deleteMany();
   await prisma.user.deleteMany();
   await prisma.school.deleteMany();
   await prisma.district.deleteMany();
@@ -64,6 +68,27 @@ async function seedUser(overrides: Partial<{
       name: "Test User",
       role: overrides.role ?? "STUDENT",
       schoolId: overrides.schoolId ?? null,
+    },
+  });
+}
+
+async function seedDestination(schoolId: number, name = "Library") {
+  return prisma.destination.create({ data: { schoolId, name } });
+}
+
+async function seedPass(
+  schoolId: number,
+  destinationId: number,
+  studentId: number,
+  status: "PENDING" | "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "DENIED" | "EXPIRED",
+) {
+  return prisma.pass.create({
+    data: {
+      schoolId,
+      destinationId,
+      studentId,
+      requesterId: studentId,
+      status,
     },
   });
 }
@@ -235,4 +260,58 @@ describe("DELETE /api/schools/:id (integration)", () => {
 
     expect(res.body.data.map((s: { id: number }) => s.id)).not.toContain(school.id);
   });
+
+  it("returns 409 and does not delete when school has active users", async () => {
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    const school = await seedSchool({ name: "Has Users" });
+    await seedUser({ role: "TEACHER", schoolId: school.id });
+    authenticateAs(superAdmin);
+
+    const res = await request(server).delete(`/api/schools/${school.id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: school has active users" });
+
+    const inDb = await prisma.school.findUnique({ where: { id: school.id } });
+    expect(inDb?.deletedAt).toBeNull();
+  });
+
+  it.each(["PENDING", "WAITING", "ACTIVE"] as const)(
+    "returns 409 and does not delete when a %s pass belongs to the school",
+    async (status) => {
+      const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+      const school = await seedSchool({ name: "Has Passes" });
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT" });
+      await seedPass(school.id, dest.id, student.id, status);
+      authenticateAs(superAdmin);
+
+      const res = await request(server).delete(`/api/schools/${school.id}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ message: "Cannot delete: school has in-flight passes" });
+
+      const inDb = await prisma.school.findUnique({ where: { id: school.id } });
+      expect(inDb?.deletedAt).toBeNull();
+    },
+  );
+
+  it.each(["COMPLETED", "CANCELLED", "DENIED", "EXPIRED"] as const)(
+    "returns 204 when only a %s (terminal) pass belongs to the school",
+    async (status) => {
+      const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+      const school = await seedSchool({ name: "Terminal Passes" });
+      const dest = await seedDestination(school.id);
+      const student = await seedUser({ role: "STUDENT" });
+      await seedPass(school.id, dest.id, student.id, status);
+      authenticateAs(superAdmin);
+
+      const res = await request(server).delete(`/api/schools/${school.id}`);
+
+      expect(res.status).toBe(204);
+
+      const inDb = await prisma.school.findUnique({ where: { id: school.id } });
+      expect(inDb?.deletedAt).not.toBeNull();
+    },
+  );
 });

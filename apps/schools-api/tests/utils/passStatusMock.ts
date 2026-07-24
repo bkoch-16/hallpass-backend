@@ -7,3 +7,9 @@ export const passStatusMock = {
   DENIED: "DENIED",
   EXPIRED: "EXPIRED",
 } as const;
+
+export const inFlightPassStatusesMock = [
+  passStatusMock.PENDING,
+  passStatusMock.WAITING,
+  passStatusMock.ACTIVE,
+];

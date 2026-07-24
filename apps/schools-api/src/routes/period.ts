@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, IN_FLIGHT_PASS_STATUSES } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { PeriodResponse } from "@hallpass/types";
 import { requireAuth, requireAuthOrApiKey } from "../middleware/auth.js";
@@ -18,6 +18,7 @@ import {
   periodListParamsSchema,
   updatePeriodSchema,
 } from "../schemas/period.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -163,6 +164,16 @@ router.delete(
 
     if (!existing) {
       res.status(404).json({ message: "Period not found" });
+      return;
+    }
+
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.pass.findFirst({ where: { periodId: id, status: { in: IN_FLIGHT_PASS_STATUSES } } }),
+        "Cannot delete: period has in-flight passes",
+      )
+    ) {
       return;
     }
 
