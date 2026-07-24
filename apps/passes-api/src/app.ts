@@ -1,13 +1,9 @@
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import { logger, httpLogger } from "@hallpass/logger";
+import { logger } from "@hallpass/logger";
 import {
-  createHealthRoute,
+  createBaseApp,
   notFound,
   createErrorHandler,
   createGeneralLimiter,
-  corsOptions,
   createRedisRateLimitStore,
 } from "@hallpass/express-middleware";
 import { env } from "./env.js";
@@ -15,20 +11,7 @@ import { redis } from "./lib/redis.js";
 import passesRouter from "./routes/passes.js";
 import internalRouter from "./routes/internal.js";
 
-const app = express();
-
-app.set("trust proxy", 1);
-
-app.use(helmet());
-
-app.use(cors(corsOptions(env)));
-app.options("/*splat", cors(corsOptions(env)));
-
-app.use(httpLogger);
-app.use(express.json());
-
-// Registered before the rate limiter so LB/uptime probes are never 429'd
-app.get("/health", createHealthRoute("passes-api"));
+const app = createBaseApp("passes-api", env);
 
 // Redis-backed store so limits aggregate across instances and survive
 // restarts; keys are namespaced under REDIS_PREFIX (shared Upstash DB).

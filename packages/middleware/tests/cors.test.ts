@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCorsOrigins, corsOptions } from "../src/cors";
+import { parseCorsOrigins, corsOptions, resolveTrustedOrigins } from "../src/cors";
 
 /**
  * Pins the exact semantics of apps/passes-api/src/lib/cors.ts:
@@ -81,5 +81,25 @@ describe("corsOptions", () => {
   it("passes origin straight through from parseCorsOrigins (list)", () => {
     const env = { CORS_ORIGIN: "http://localhost:5173,https://app.example.com" };
     expect(corsOptions(env).origin).toEqual(parseCorsOrigins(env));
+  });
+});
+
+describe("resolveTrustedOrigins", () => {
+  it('returns undefined for a wildcard CORS_ORIGIN (better-auth rejects "*")', () => {
+    expect(resolveTrustedOrigins({ CORS_ORIGIN: "*" })).toBeUndefined();
+  });
+
+  it("returns a single-element array for one origin", () => {
+    expect(resolveTrustedOrigins({ CORS_ORIGIN: "http://localhost:5173" })).toEqual([
+      "http://localhost:5173",
+    ]);
+  });
+
+  it("returns a parsed array for a comma-separated origin list", () => {
+    expect(
+      resolveTrustedOrigins({
+        CORS_ORIGIN: "http://localhost:5173,https://app.example.com",
+      }),
+    ).toEqual(["http://localhost:5173", "https://app.example.com"]);
   });
 });

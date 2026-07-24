@@ -219,10 +219,16 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  validateBody(createUserSchema),
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  validateBody(createUserSchema),
   async (req: Request, res: Response) => {
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
     const targetRole: UserRole = req.body.role ?? UserRole.STUDENT;
     // `>` not `>=`: an ADMIN may create peer ADMINs. Only PATCH/DELETE on an
     // existing peer account is blocked — creation is intentionally looser.
@@ -277,6 +283,12 @@ router.post(
   async (req: Request, res: Response) => {
     const users: Array<{ email: string; name: string; role?: UserRole }> = req.body;
     const callerRank = roleRank(req.user!.role);
+    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
+
+    if (!isSuperAdmin && req.user!.schoolId === null) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
 
     // `>` not `>=`: same intentional peer-creation allowance as POST /.
     for (const u of users) {
@@ -286,7 +298,6 @@ router.post(
       }
     }
 
-    const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const results: PromiseSettledResult<unknown>[] = new Array(users.length);
 
     // scrypt hashing is deliberately slow — throttle to a small pool rather than

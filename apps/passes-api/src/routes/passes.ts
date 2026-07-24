@@ -9,7 +9,7 @@ import {
 } from "@hallpass/types";
 import { logger } from "@hallpass/logger";
 import { requireAuth } from "../middleware/auth.js";
-import { requireSchool } from "../middleware/requireSchool.js";
+import { requireSchoolMembership } from "../middleware/requireSchoolMembership.js";
 import {
   requireMinRole,
   roleRank,
@@ -56,7 +56,7 @@ const router = Router({ mergeParams: true });
 router.post(
   "/",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   validateBody(createPassBody),
   async (req: Request, res: Response) => {
     const user = req.user!;
@@ -289,7 +289,7 @@ router.post(
 router.get(
   "/",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   validateQuery(listPassesQuery),
   async (req: Request, res: Response) => {
     const user = req.user!;
@@ -340,7 +340,7 @@ router.get(
 
 // GET /passes/parent-lookup — external voice-AI agent verifies a parent via
 // student PIN and retrieves that student's recent pass activity. New trust
-// boundary for an external caller with no session: no requireAuth/requireSchool.
+// boundary for an external caller with no session: no requireAuth/requireSchoolMembership.
 // Registered BEFORE /:id or Express's greedy param matcher would swallow this path.
 const pinLookupLimiter = createPinLookupLimiter();
 
@@ -411,7 +411,7 @@ router.get(
 router.get(
   "/:id",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   validateParams(passIdParams),
   async (req: Request, res: Response) => {
     const user = req.user!;
@@ -440,7 +440,7 @@ router.get(
 router.post(
   "/:id/approve",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   requireMinRole(UserRole.TEACHER),
   validateParams(passIdParams),
   validateBody(approvePassBody),
@@ -547,7 +547,7 @@ router.post(
 router.post(
   "/:id/deny",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   requireMinRole(UserRole.TEACHER),
   validateParams(passIdParams),
   validateBody(denyPassBody),
@@ -602,7 +602,7 @@ router.post(
 router.post(
   "/:id/return",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   validateParams(passIdParams),
   async (req: Request, res: Response) => {
     const user = req.user!;
@@ -672,7 +672,7 @@ router.post(
 router.post(
   "/:id/cancel",
   requireAuth,
-  requireSchool,
+  requireSchoolMembership,
   validateParams(passIdParams),
   async (req: Request, res: Response) => {
     const user = req.user!;

@@ -17,14 +17,11 @@
     "@hallpass/express-middleware": "workspace:*",
     "@hallpass/logger": "workspace:*",
     "@hallpass/types": "workspace:*",
-    "cors": "^2.8.6",
     "dotenv": "latest",
     "express": "^5.2.1",
-    "helmet": "^8.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "latest",
     "@types/node": "latest",
     "@types/supertest": "^6.0.3",

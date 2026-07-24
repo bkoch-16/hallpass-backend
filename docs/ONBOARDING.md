@@ -42,40 +42,26 @@ Two supporting constraints:
   dependency graph acyclic.
 
 So `POST /api/users` now yields a usable login, not just a directory record.
-Self-signup + promote (below) remains a valid alternative for one-off admins.
 
 ---
 
 ## Current supported flow — school admins
 
-Onboard a school admin with **self-signup + promote**. It uses only endpoints
-that already exist and are tested, and no plaintext password ever passes through
-our API.
+Onboard a school admin via **API provisioning**: a super-admin (or an admin,
+within their own school) calls `POST /api/users` with `{ "role": "ADMIN",
+... }`. This returns a one-time `tempPassword` and, per "Bulk student
+delivery" below, automatically emails the new admin a 7-day set-password
+invite link — so the temp password never has to be delivered out of band.
 
-1. **Admin self-signs-up.** They hit `POST /api/auth/sign-up/email` (the app's
-   normal sign-up screen) with their school email and a password they choose.
-   This creates the `User` + `Account` correctly. They land as a `STUDENT` with
-   no `schoolId`.
-2. **Super-admin promotes them.** `PATCH /api/users/:id` with
-   `{ "role": "ADMIN", "schoolId": <id> }`. The target-rank guard on PATCH
-   (`user.ts:259`) permits this: the target is a `STUDENT` (rank 0) and the
-   caller is `SUPER_ADMIN` (rank 3), and only a super-admin may set `schoolId`.
+Self-signup (`POST /api/auth/sign-up/email`) is not part of this flow:
+`emailAndPassword.disableSignUp: true` (`packages/auth/src/index.ts`) rejects
+it with `BAD_REQUEST` for everyone, admins included. See `docs/AUTH.md`.
 
-In practice: *"Sign up in the app with your school email, then tell me — I'll
-grant you admin."*
-
-**Why this over API provisioning for admins:** admins are rare and provisioned
-one at a time by a super-admin, so the coordination cost is trivial and the
-payoff is no temp password to hand around and no credential that stays valid
-forever — the admin owns their own password from the first moment. API
-provisioning (`POST /api/users`) is now a working alternative, but it hands back
-a one-time `tempPassword` that must be delivered out of band and stays valid
-until changed.
-
-**Limits:**
-- Relies on open sign-up (currently `emailAndPassword.enabled = true`, no
-  allowlist).
-- Does **not** scale to bulk student onboarding — see below.
+**Bootstrapping the very first super-admin:** since self-signup is fully
+disabled, there's no in-product path to create the first account. Dev/demo
+environments seed one via `packages/db/prisma/seed.ts`, which calls
+`createUserWithCredential` directly for a `superadmin@gohallhero.com`
+account. There is no documented production bootstrap path yet.
 
 ---
 

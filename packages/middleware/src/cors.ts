@@ -25,3 +25,15 @@ export function corsOptions(env: { CORS_ORIGIN: string }): {
     credentials: env.CORS_ORIGIN !== "*",
   };
 }
+
+/**
+ * Trusted origins for better-auth's CSRF-origin check: undefined when
+ * CORS_ORIGIN is the wildcard "*" (better-auth's trustedOrigins only accepts
+ * a concrete list, never a wildcard), else the same parsed list corsOptions()
+ * uses.
+ */
+export function resolveTrustedOrigins(env: {
+  CORS_ORIGIN: string;
+}): string[] | undefined {
+  return env.CORS_ORIGIN === "*" ? undefined : (parseCorsOrigins(env) as string[]);
+}
