@@ -4,7 +4,7 @@ import { UserRole } from "@hallpass/types";
 import type { SchoolResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery, paginate } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery, paginate, isPrismaError } from "@hallpass/express-middleware";
 import { createSchoolSchema, listSchoolsSchema, schoolIdSchema, updateSchoolSchema } from "../schemas/school.js";
 import { blockIfExists } from "../lib/deleteGuard.js";
 
@@ -57,7 +57,7 @@ router.post(
       });
       res.status(201).json(toSchoolResponse(school));
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+      if (isPrismaError(err, "P2003")) {
         res.status(400).json({ message: "Invalid districtId" });
         return;
       }
@@ -110,7 +110,7 @@ router.patch(
       });
       res.json(toSchoolResponse(updated));
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+      if (isPrismaError(err, "P2003")) {
         res.status(400).json({ message: "Invalid districtId" });
         return;
       }
