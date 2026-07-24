@@ -704,6 +704,19 @@ describe("POST /api/users", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("returns 403 when a null-schoolId admin tries to create a user", async () => {
+    const orphanedAdmin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: null };
+    authenticateAs(orphanedAdmin);
+
+    const res = await request(server)
+      .post("/api/users")
+      .send({ email: "new@test.com", name: "New User" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ message: "Forbidden" });
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/users/bulk", () => {
@@ -935,6 +948,19 @@ describe("POST /api/users/bulk", () => {
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ message: "Internal server error" });
+  });
+
+  it("returns 403 when a null-schoolId admin tries to bulk create users, without processing any", async () => {
+    const orphanedAdmin = { ...fakeUser, id: 3, role: "ADMIN", schoolId: null };
+    authenticateAs(orphanedAdmin);
+
+    const res = await request(server)
+      .post("/api/users/bulk")
+      .send([{ email: "a@test.com", name: "A" }, { email: "b@test.com", name: "B" }]);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ message: "Forbidden" });
+    expect(mockCreateUserWithCredential).not.toHaveBeenCalled();
   });
 });
 
