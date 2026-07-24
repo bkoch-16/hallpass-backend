@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma, PassStatus } from "@hallpass/db";
+import { prisma, IN_FLIGHT_PASS_STATUSES } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { SchoolResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
@@ -136,7 +136,7 @@ router.delete(
     }
 
     const passRef = await prisma.pass.findFirst({
-      where: { schoolId: school.id, status: { in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE] } },
+      where: { schoolId: school.id, status: { in: IN_FLIGHT_PASS_STATUSES } },
     });
 
     if (passRef) {

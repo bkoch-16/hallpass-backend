@@ -19,6 +19,11 @@ vi.mock("../../src/lib/redis.js", async () => {
 
 vi.mock("@hallpass/db", () => ({
   PassStatus: passStatusMock,
+  IN_FLIGHT_PASS_STATUSES: [
+    passStatusMock.PENDING,
+    passStatusMock.WAITING,
+    passStatusMock.ACTIVE,
+  ],
   prisma: {
     user: { findFirst: vi.fn() },
     scheduleType: { findFirst: vi.fn() },

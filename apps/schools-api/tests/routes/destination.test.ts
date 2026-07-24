@@ -9,6 +9,11 @@ const { mockGetSession } = vi.hoisted(() => ({
 
 vi.mock("@hallpass/db", () => ({
   PassStatus: passStatusMock,
+  IN_FLIGHT_PASS_STATUSES: [
+    passStatusMock.PENDING,
+    passStatusMock.WAITING,
+    passStatusMock.ACTIVE,
+  ],
   prisma: {
     user: { findFirst: vi.fn() },
     school: { findFirst: vi.fn() },
