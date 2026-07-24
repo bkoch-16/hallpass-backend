@@ -13,23 +13,21 @@
     "@hallpass/db": "workspace:*",
     "@hallpass/logger": "workspace:*",
     "@hallpass/types": "workspace:*",
+    "cors": "^2.8.6",
+    "helmet": "^8.1.0",
     "ioredis": "^5.10.0",
     "rate-limit-redis": "^4.3.1",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "cors": "^2.8.6",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.2.1",
-    "helmet": "^8.1.0"
+    "express-rate-limit": "^8.2.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
-    "helmet": "^8.1.0",
     "@types/node": "^25.5.0",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.2.2",

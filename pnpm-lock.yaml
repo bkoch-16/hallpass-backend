@@ -325,6 +325,12 @@ importers:
       '@hallpass/types':
         specifier: workspace:*
         version: link:../types
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
+      helmet:
+        specifier: ^8.1.0
+        version: 8.1.0
       ioredis:
         specifier: 5.10.0
         version: 5.10.0
@@ -347,18 +353,12 @@ importers:
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
-      cors:
-        specifier: ^2.8.6
-        version: 2.8.6
       express:
         specifier: ^5.2.1
         version: 5.2.1
       express-rate-limit:
         specifier: ^8.2.1
         version: 8.2.1(express@5.2.1)
-      helmet:
-        specifier: ^8.1.0
-        version: 8.1.0
       supertest:
         specifier: ^7.2.2
         version: 7.2.2
