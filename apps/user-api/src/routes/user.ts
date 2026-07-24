@@ -219,8 +219,8 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  validateBody(createUserSchema),
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  validateBody(createUserSchema),
   async (req: Request, res: Response) => {
     const isSuperAdmin = req.user!.role === UserRole.SUPER_ADMIN;
     const targetRole: UserRole = req.body.role ?? UserRole.STUDENT;
