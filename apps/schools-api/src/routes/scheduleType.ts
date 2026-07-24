@@ -16,6 +16,7 @@ import {
   updateScheduleTypeSchema,
 } from "../schemas/scheduleType.js";
 import { schoolParamSchema } from "../schemas/school.js";
+import { blockIfExists } from "../lib/deleteGuard.js";
 
 const publicSchoolDataLimiter = createPublicSchoolDataLimiter();
 
@@ -149,17 +150,13 @@ router.delete(
       return;
     }
 
-    const calendarRef = await prisma.schoolCalendar.findFirst({
-      where: { scheduleTypeId: id },
-    });
-
-    if (calendarRef) {
-      res
-        .status(409)
-        .json({
-          message:
-            "Cannot delete: schedule type is referenced by calendar entries",
-        });
+    if (
+      await blockIfExists(
+        res,
+        () => prisma.schoolCalendar.findFirst({ where: { scheduleTypeId: id } }),
+        "Cannot delete: schedule type is referenced by calendar entries",
+      )
+    ) {
       return;
     }
 
