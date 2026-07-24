@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-24T02:17:13.013Z — 19 files indexed_
+_Generated: 2026-07-24T16:44:52.512Z — 19 files indexed_
 
 ## File Summaries
 
@@ -30,11 +30,11 @@ Dockerfile for the user-api service, building a Node.js 22 Alpine image with pnp
 
 ### `apps/user-api/src/app.ts`
 
-Express application setup and configuration for the user-api service. Configures middleware stack including helmet, CORS, HTTP logging, JSON parsing, health checks, and a multi-layered rate-limiting strategy (general, auth per-IP+email, and auth per-account) backed by Redis in production or in-memory in test. Auth routes under `/api/auth/*` are delegated to better-auth via `toNodeHandler`, while `/api/users` routes use a dedicated router. Rate limiting is carefully split: email-based auth routes get both an IP+email limiter and an account-level limiter (with skip-successful-requests), while password-reset gets a separate account limiter that counts all requests since the endpoint always returns 200. Relies on shared packages (`@hallpass/auth`, `@hallpass/logger`, `@hallpass/express-middleware`) and local modules (`auth`, `env`, `routes/user`). Developers modifying this file should understand the intentional ordering of middleware (health before rate limiters, auth limiters before the auth handler) and the anti-enumeration design decisions documented in comments.
+Entry point for the user-api Express application. Configures and mounts rate limiters (general, auth, and account-level) with Redis-backed stores (falling back to in-memory in test or when Redis is unavailable), routes auth requests to better-auth via `toNodeHandler`, and mounts the user router at `/api/users`. Rate limiting follows a two-layer defense: per-(email, IP) auth limiter and per-email account limiter, with a special variant for password-reset that counts all requests (since the endpoint always returns 200). Depends on shared packages `@hallpass/auth`, `@hallpass/logger`, and `@hallpass/express-middleware`. Exports the configured Express app as the default export. Developers modifying this file should understand the rate-limit layering strategy and the Redis store namespacing convention (`REDIS_PREFIX:rl:user-api:<suffix>:`).
 
 ### `apps/user-api/src/auth.ts`
 
-Initializes and exports the better-auth instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Configures the auth system with Prisma, base URL, secret, trusted CORS origins, and a password-reset email callback that uses the `@hallpass/email` package via SES. Trusted origins are derived from `parseCorsOrigins` and only passed as a concrete array (not wildcard). Errors during reset email sending are logged but not re-thrown, preventing auth flow disruption.
+Configures and exports the better-auth instance for the user-api service by calling `createAuth` from `@hallpass/auth`. Wires up Prisma as the database adapter, trusted origins from env, and a `sendResetPassword` hook that sends a password-reset email using the shared `@hallpass/email` template and the service's `emailSender`. Errors during email sending are caught and logged rather than propagated. The exported `auth` object is used by both the auth route handler in `app.ts` and the user router for server-side token minting.
 
 ### `apps/user-api/src/email.ts`
 
@@ -58,7 +58,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Defines the Express router for all user CRUD operations including GET /me, GET / (cursor-paginated list with optional id-batch and search), GET /:id, POST / (single create), POST /bulk (batch create with throttled concurrency), PATCH /:id, and DELETE /:id (soft-delete). Implements role-based access control using `requireRole`, `requireSelfOrRole`, and `roleRank` from `@hallpass/express-middleware`, with SUPER_ADMIN having cross-school access while other roles are scoped to their own schoolId. User provisioning generates a temporary password via `createUserWithCredential` (better-auth), assigns a student PIN via `assignPin`, and sends an invite email — both PIN assignment and email sending are non-fatal (logged but swallowed) since the user row is already committed. Bulk creation throttles concurrency to `BULK_CONCURRENCY=8` to limit scrypt hashing load, and returns a `BulkUserResult` with per-entry error details. Delete is a soft-delete (sets `deletedAt`) followed by a best-effort session revocation. Key dependencies include `@hallpass/auth`, `@hallpass/db` (Prisma), `@hallpass/email`, validation schemas from `../schemas/user.js`, and the local `createUserWithPin` helper.
+Defines the Express router for `/api/users` with full CRUD plus bulk creation. Exports routes: `GET /me`, `GET /` (cursor-paginated with optional `ids`, `role`, `q` filters), `GET /:id`, `POST /` (provision single user with temp password, pin assignment, and invite email), `POST /bulk` (batch user creation with concurrency-throttled scrypt hashing), `PATCH /:id`, and `DELETE /:id` (soft-delete with session revocation). Enforces role-based access control using `requireAuth`, `requireRole`, `requireSelfOrRole`, and `roleRank` with a convention that admins can create peers but cannot modify/delete users at or above their own rank. Uses Zod validation via `validateBody`/`validateParams`/`validateQuery` and shared schemas. Pin assignment and invite emails are non-fatal — failures are logged but don't block the response. The `DELETE` endpoint performs a soft-delete (`deletedAt`) and eagerly revokes better-auth sessions. Depends on `@hallpass/auth` for `createUserWithCredential` and `createSetPasswordToken`, `@hallpass/db` for Prisma, and `@hallpass/types` for response types.
 
 ### `apps/user-api/src/schemas/user.ts`
 
