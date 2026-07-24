@@ -26,7 +26,8 @@ export {
 } from "./rateLimit.js";
 export { baseEnvSchema, rateLimitEnvSchema } from "./env.js";
 export { createRateLimitRedis, createRedisRateLimitStore, createRequiredRedis } from "./redis.js";
-export { parseCorsOrigins, corsOptions } from "./cors.js";
+export { parseCorsOrigins, corsOptions, resolveTrustedOrigins } from "./cors.js";
+export { createBaseApp } from "./baseApp.js";
 export { createTestServer, type TestServerHandle, fakeRedisRateLimitCall } from "./testing.js";
 export { paginate } from "./pagination.js";
 export { isPrismaError } from "./prismaError.js";
