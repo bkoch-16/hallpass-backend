@@ -57,6 +57,12 @@ async function seedUser(overrides: Partial<{
   });
 }
 
+async function seedSchool(districtId: number | null = null, name = "Test School") {
+  return prisma.school.create({
+    data: { name, ...(districtId !== null ? { districtId } : {}) },
+  });
+}
+
 function authenticateAs(user: { id: number }) {
   mockGetSession.mockResolvedValue({ user: { id: user.id }, session: {} });
 }
@@ -251,5 +257,35 @@ describe("DELETE /api/districts/:id (integration)", () => {
     const res = await request(server).delete(`/api/districts/${d.id}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it("returns 409 and does not delete when district has active schools", async () => {
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    const district = await seedDistrict("Has Schools");
+    await seedSchool(district.id);
+    authenticateAs(superAdmin);
+
+    const res = await request(server).delete(`/api/districts/${district.id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: district has active schools" });
+
+    const inDb = await prisma.district.findUnique({ where: { id: district.id } });
+    expect(inDb?.deletedAt).toBeNull();
+  });
+
+  it("soft-deletes district when its only school is already soft-deleted", async () => {
+    const superAdmin = await seedUser({ role: "SUPER_ADMIN" });
+    const district = await seedDistrict("Only Deleted Schools");
+    const school = await seedSchool(district.id);
+    await prisma.school.update({ where: { id: school.id }, data: { deletedAt: new Date() } });
+    authenticateAs(superAdmin);
+
+    const res = await request(server).delete(`/api/districts/${district.id}`);
+
+    expect(res.status).toBe(204);
+
+    const inDb = await prisma.district.findUnique({ where: { id: district.id } });
+    expect(inDb?.deletedAt).not.toBeNull();
   });
 });

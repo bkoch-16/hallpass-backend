@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { passStatusMock } from "../utils/passStatusMock.js";
 import { createTestServer } from "@hallpass/express-middleware";
 
 const { mockGetSession } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ vi.mock("../../src/lib/redis.js", async () => {
 });
 
 vi.mock("@hallpass/db", () => ({
+  PassStatus: passStatusMock,
   prisma: {
     user: { findFirst: vi.fn() },
     scheduleType: { findFirst: vi.fn() },
@@ -26,6 +28,7 @@ vi.mock("@hallpass/db", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    pass: { findFirst: vi.fn() },
     $queryRaw: vi.fn(),
   },
 }));
@@ -50,6 +53,7 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  pass: { findFirst: ReturnType<typeof vi.fn> };
 };
 
 interface FakeUser {
@@ -419,6 +423,7 @@ describe(`DELETE ${BASE}/:id`, () => {
   it("soft deletes period and returns 204", async () => {
     authenticateAs(fakeAdmin);
     mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
+    mockPrisma.pass.findFirst.mockResolvedValue(null);
     mockPrisma.period.update.mockResolvedValue({ ...fakePeriod, deletedAt: new Date() });
 
     const res = await request(server).delete(`${BASE}/1`);
@@ -437,6 +442,18 @@ describe(`DELETE ${BASE}/:id`, () => {
     const res = await request(server).delete(`${BASE}/99999`);
 
     expect(res.status).toBe(404);
+    expect(mockPrisma.period.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 and does not delete when period has in-flight passes", async () => {
+    authenticateAs(fakeAdmin);
+    mockPrisma.period.findFirst.mockResolvedValue(fakePeriod);
+    mockPrisma.pass.findFirst.mockResolvedValue({ id: 1, status: "WAITING" });
+
+    const res = await request(server).delete(`${BASE}/1`);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: period has in-flight passes" });
     expect(mockPrisma.period.update).not.toHaveBeenCalled();
   });
 

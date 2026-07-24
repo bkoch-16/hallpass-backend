@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, PassStatus } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { SchoolResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
@@ -132,6 +132,24 @@ router.delete(
 
     if (!school) {
       res.status(404).json({ message: "School not found" });
+      return;
+    }
+
+    const passRef = await prisma.pass.findFirst({
+      where: { schoolId: school.id, status: { in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE] } },
+    });
+
+    if (passRef) {
+      res.status(409).json({ message: "Cannot delete: school has in-flight passes" });
+      return;
+    }
+
+    const userRef = await prisma.user.findFirst({
+      where: { schoolId: school.id, deletedAt: null },
+    });
+
+    if (userRef) {
+      res.status(409).json({ message: "Cannot delete: school has active users" });
       return;
     }
 

@@ -15,6 +15,7 @@ vi.mock("@hallpass/db", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    school: { findFirst: vi.fn() },
     $queryRaw: vi.fn(),
   },
 }));
@@ -38,6 +39,7 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  school: { findFirst: ReturnType<typeof vi.fn> };
 };
 
 interface FakeUser {
@@ -289,6 +291,7 @@ describe("DELETE /api/districts/:id", () => {
   it("soft deletes district and returns 204", async () => {
     authenticateAs(fakeSuperAdmin);
     mockPrisma.district.findFirst.mockResolvedValue(fakeDistrict);
+    mockPrisma.school.findFirst.mockResolvedValue(null);
     mockPrisma.district.update.mockResolvedValue({ ...fakeDistrict, deletedAt: new Date() });
 
     const res = await request(server).delete("/api/districts/10");
@@ -307,6 +310,18 @@ describe("DELETE /api/districts/:id", () => {
     const res = await request(server).delete("/api/districts/9999");
 
     expect(res.status).toBe(404);
+    expect(mockPrisma.district.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 and does not delete when district has active schools", async () => {
+    authenticateAs(fakeSuperAdmin);
+    mockPrisma.district.findFirst.mockResolvedValue(fakeDistrict);
+    mockPrisma.school.findFirst.mockResolvedValue({ id: 1, districtId: 10 });
+
+    const res = await request(server).delete("/api/districts/10");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Cannot delete: district has active schools" });
     expect(mockPrisma.district.update).not.toHaveBeenCalled();
   });
 });

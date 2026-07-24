@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "@hallpass/db";
+import { prisma, PassStatus } from "@hallpass/db";
 import { UserRole } from "@hallpass/types";
 import type { PeriodResponse } from "@hallpass/types";
 import { requireAuth, requireAuthOrApiKey } from "../middleware/auth.js";
@@ -163,6 +163,15 @@ router.delete(
 
     if (!existing) {
       res.status(404).json({ message: "Period not found" });
+      return;
+    }
+
+    const passRef = await prisma.pass.findFirst({
+      where: { periodId: id, status: { in: [PassStatus.PENDING, PassStatus.WAITING, PassStatus.ACTIVE] } },
+    });
+
+    if (passRef) {
+      res.status(409).json({ message: "Cannot delete: period has in-flight passes" });
       return;
     }
 

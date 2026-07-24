@@ -8,11 +8,6 @@ Known-and-accepted trade-offs are listed at the bottom so they don't get re-repo
 
 ## 1. Web-app blockers
 
-### 🟠 Pass responses are ID-only with no expansion mechanism
-`PassResponse` carries `studentId`/`destinationId`/`approverId` with no names. A live pass board joins across services client-side; socket events (`emitPassEvent`) also carry the bare row, so realtime updates trigger lookup fetches.
-
-**Fix:** an `?include=` option, or denormalize `studentName`/`destinationName` into the pass payload (REST + socket).
-
 ### 🟡 Socket event/room contract is not exported
 The 7 event names and room conventions are inline string literals in `passes.ts`/`lib/slots.ts`/`lib/expiry.ts`, documented only in `docs/SCHEMA_PLAN.md:529-546`. A frontend has nothing to import.
 
@@ -50,14 +45,7 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 
 ---
 
-## 3. Correctness
-
-### 🟡 Delete-protection is inconsistent across the hierarchy
-Destination delete blocks on in-flight passes; scheduleType delete blocks on calendar refs; school and district soft-deletes have no guards — a school with ACTIVE passes and enrolled users can be deleted, stranding its users. Decide the invariant and apply uniformly.
-
----
-
-## 4. DRY / drift
+## 3. DRY / drift
 
 ### 🟡 Service bootstrap duplication — mostly fixed, remainder is small
 Since the last audit, env schemas (`baseEnvSchema`), CORS options, health route, error handler, limiter factories, and the RedisStore helper all moved into `@hallpass/express-middleware`. What's left: `auth.ts` is byte-identical ×2 (schools-api/passes-api), and each `app.ts` still hand-repeats the same helmet/CORS/httpLogger/json/health/limiter/notFound/errorHandler ordering (~40 lines ×3). A `createBaseApp(serviceName, env)` would close it out; low urgency now.
@@ -89,8 +77,7 @@ Mark the stale sections as historical or update them — cheaper than a support 
 
 ## Suggested priority
 
-1. `PassResponse` expansion mechanism (§1) before the SPA builds a live pass board — the highest-leverage remaining web-app blocker.
-2. Delete-protection invariant (§3) and the remaining DRY items opportunistically.
+1. Remaining DRY items (§3) opportunistically.
 
 ---
 

@@ -116,6 +116,15 @@ router.delete(
       return;
     }
 
+    const schoolRef = await prisma.school.findFirst({
+      where: { districtId: district.id, deletedAt: null },
+    });
+
+    if (schoolRef) {
+      res.status(409).json({ message: "Cannot delete: district has active schools" });
+      return;
+    }
+
     await prisma.district.update({
       where: { id: Number(req.params.id) },
       data: { deletedAt: new Date() },
