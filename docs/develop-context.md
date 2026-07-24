@@ -1,6 +1,6 @@
 # Codebase Context — develop
 
-_Generated: 2026-07-23T19:47:59.334Z — 19 files indexed_
+_Generated: 2026-07-24T01:58:32.571Z — 19 files indexed_
 
 ## File Summaries
 
@@ -58,7 +58,7 @@ Exports a `requireAuth` Express middleware created via the `createRequireAuth` f
 
 ### `apps/user-api/src/routes/user.ts`
 
-Express router implementing full CRUD for users with cursor-paginated listing, bulk creation, and a `/me` endpoint. Enforces role-based access control via `requireAuth`, `requireRole`, and `requireSelfOrRole` middleware, with hierarchical role checks using `roleRank` to prevent privilege escalation. User provisioning (POST `/` and POST `/bulk`) creates credentials via `createUserWithCredential`, assigns student PIN codes, and sends invite emails — all with non-fatal error handling so that downstream failures (pin, email) never roll back an already-committed user row. Bulk creation throttles concurrency (`BULK_CONCURRENCY = 8`) to avoid overwhelming scrypt hashing. Deletion is soft-delete (`deletedAt`) with a best-effort session revocation. Super-admins bypass school scoping; other roles are constrained to their own `schoolId`. Request validation uses Zod schemas from `../schemas/user.js` and `@hallpass/types`.
+Express router implementing full CRUD for user management in a school-based multi-tenant system. Exports a default Router with endpoints: GET /me (authenticated user profile with school info), GET / (cursor-paginated list with optional id-batch, role, and search filters), GET /:id, POST / (single user provisioning with temp password, PIN assignment, and invite email), POST /bulk (batch user creation with throttled concurrency of 8), PATCH /:id, and DELETE /:id (soft-delete with session revocation). Enforces role-based access control via requireAuth, requireRole, and requireSelfOrRole middleware, with a hierarchical role-rank system where SUPER_ADMIN has cross-school access while other roles are scoped to their schoolId. Uses better-auth for credential creation and set-password token generation, Prisma for database access with soft-delete pattern (deletedAt), and Zod-based validation middleware for body/params/query. Key design decisions: PIN assignment and invite email sending are non-fatal (errors are logged but don't fail the request), peer-role creation is allowed but peer modification/deletion is blocked, and bulk creation uses Promise.allSettled with batched concurrency to handle slow scrypt hashing gracefully.
 
 ### `apps/user-api/src/schemas/user.ts`
 
