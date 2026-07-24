@@ -4,7 +4,7 @@ import { UserRole } from "@hallpass/types";
 import type { SchoolResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery, paginate } from "@hallpass/express-middleware";
 import { createSchoolSchema, listSchoolsSchema, schoolIdSchema, updateSchoolSchema } from "../schemas/school.js";
 import { blockIfExists } from "../lib/deleteGuard.js";
 
@@ -34,9 +34,7 @@ router.get(
       select: SCHOOL_SELECT,
     });
 
-    const hasMore = schools.length > limit;
-    const data = hasMore ? schools.slice(0, limit) : schools;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(schools, limit);
 
     res.json({ data: data.map(toSchoolResponse), nextCursor } satisfies CursorPage<SchoolResponse>);
   },

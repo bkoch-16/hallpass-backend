@@ -28,3 +28,4 @@ export { baseEnvSchema, rateLimitEnvSchema } from "./env.js";
 export { createRateLimitRedis, createRedisRateLimitStore, createRequiredRedis } from "./redis.js";
 export { parseCorsOrigins, corsOptions } from "./cors.js";
 export { createTestServer, type TestServerHandle, fakeRedisRateLimitCall } from "./testing.js";
+export { paginate } from "./pagination.js";

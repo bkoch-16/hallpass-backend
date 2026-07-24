@@ -4,7 +4,7 @@ import { UserRole } from "@hallpass/types";
 import type { DistrictResponse, CursorPage } from "@hallpass/types";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery, paginate } from "@hallpass/express-middleware";
 import { createDistrictSchema, districtIdSchema, listDistrictsSchema, updateDistrictSchema } from "../schemas/district.js";
 import { blockIfExists } from "../lib/deleteGuard.js";
 
@@ -34,9 +34,7 @@ router.get(
       select: DISTRICT_SELECT,
     });
 
-    const hasMore = districts.length > limit;
-    const data = hasMore ? districts.slice(0, limit) : districts;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(districts, limit);
 
     res.json({ data: data.map(toDistrictResponse), nextCursor } satisfies CursorPage<DistrictResponse>);
   },

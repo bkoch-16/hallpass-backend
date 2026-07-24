@@ -9,7 +9,7 @@ import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult, M
 import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery, paginate } from "@hallpass/express-middleware";
 import { createUserWithPin } from "../lib/pin.js";
 import { emailSender, resetPasswordUrl } from "../email.js";
 import {
@@ -178,9 +178,7 @@ router.get(
       select: USER_SELECT,
     });
 
-    const hasMore = users.length > take;
-    const data = hasMore ? users.slice(0, take) : users;
-    const nextCursor = hasMore ? String(data[data.length - 1].id) : null;
+    const { data, nextCursor } = paginate(users, take);
 
     res.json({ data: data.map(toUserResponse), nextCursor } satisfies CursorPage<UserResponse>);
   },

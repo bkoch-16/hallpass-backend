@@ -20,6 +20,7 @@ import {
   validateBody,
   validateParams,
   validateQuery,
+  paginate,
 } from "@hallpass/express-middleware";
 import {
   createPassBody,
@@ -38,7 +39,6 @@ import {
 import { emitPassEvent } from "../lib/socket.js";
 import { scheduleLocalExpiry } from "../lib/expiry.js";
 import { PASS_SELECT, toPassResponse } from "../lib/passResponse.js";
-import { paginate } from "../lib/pagination.js";
 import {
   periodEndDate,
   getTodayInTimezone,
