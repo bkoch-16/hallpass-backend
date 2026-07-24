@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { prisma, PassStatus, type Prisma } from "@hallpass/db";
+import { prisma, PassStatus } from "@hallpass/db";
 import {
   UserRole,
   type CursorPage,
@@ -37,6 +37,7 @@ import {
 } from "../lib/slots.js";
 import { emitPassEvent } from "../lib/socket.js";
 import { scheduleLocalExpiry } from "../lib/expiry.js";
+import { PASS_SELECT, toPassResponse } from "../lib/passResponse.js";
 import { paginate } from "../lib/pagination.js";
 import {
   periodEndDate,
@@ -48,37 +49,6 @@ import { resolveSchedule } from "@hallpass/schedule";
 import { env } from "../env.js";
 
 const router = Router({ mergeParams: true });
-
-const PASS_SELECT = {
-  id: true,
-  schoolId: true,
-  studentId: true,
-  requesterId: true,
-  destinationId: true,
-  periodId: true,
-  approverId: true,
-  denierId: true,
-  cancellerId: true,
-  status: true,
-  note: true,
-  approverNote: true,
-  denierNote: true,
-  requestedAt: true,
-  approvedAt: true,
-  activatedAt: true,
-  returnedAt: true,
-  cancelledAt: true,
-  deniedAt: true,
-  expiredAt: true,
-} as const;
-
-type PassRow = Prisma.PassGetPayload<{ select: typeof PASS_SELECT }>;
-
-// PassRow is derived from PASS_SELECT, so this passthrough is where the
-// compiler verifies the select list matches the PassResponse wire contract.
-function toPassResponse(pass: PassRow): PassResponse {
-  return pass;
-}
 
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -256,7 +226,7 @@ router.post(
         }
         throw err;
       }
-      emitPassEvent(pass, "pass:requested");
+      emitPassEvent(toPassResponse(pass), "pass:requested");
     } else {
       const slotClaimed =
         (await claimPassSlots(
@@ -304,7 +274,10 @@ router.post(
         }
         throw err;
       }
-      emitPassEvent(pass, slotClaimed ? "pass:approved" : "pass:waiting");
+      emitPassEvent(
+        toPassResponse(pass),
+        slotClaimed ? "pass:approved" : "pass:waiting",
+      );
     }
 
     scheduleLocalExpiry(
@@ -569,9 +542,9 @@ router.post(
     });
 
     if (updated.status === PassStatus.ACTIVE) {
-      emitPassEvent(updated, "pass:approved");
+      emitPassEvent(toPassResponse(updated), "pass:approved");
     } else if (updated.status === PassStatus.WAITING) {
-      emitPassEvent(updated, "pass:waiting");
+      emitPassEvent(toPassResponse(updated), "pass:waiting");
     }
 
     res.json(toPassResponse(updated));
@@ -627,7 +600,7 @@ router.post(
       select: PASS_SELECT,
     });
 
-    emitPassEvent(updated, "pass:denied");
+    emitPassEvent(toPassResponse(updated), "pass:denied");
 
     res.json(toPassResponse(updated));
   },
@@ -682,7 +655,7 @@ router.post(
       select: PASS_SELECT,
     });
 
-    emitPassEvent(updated, "pass:returned");
+    emitPassEvent(toPassResponse(updated), "pass:returned");
 
     // The return already succeeded — a slot bookkeeping failure must not turn
     // the response into a 500; reconcile-expiry recovers the counter
@@ -754,7 +727,7 @@ router.post(
       select: PASS_SELECT,
     });
 
-    emitPassEvent(updated, "pass:cancelled");
+    emitPassEvent(toPassResponse(updated), "pass:cancelled");
 
     res.json(toPassResponse(updated));
   },

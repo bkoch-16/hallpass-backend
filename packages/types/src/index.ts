@@ -105,12 +105,18 @@ export interface PassResponse {
   id: number;
   schoolId: number;
   studentId: number;
+  studentName: string | null;
   requesterId: number;
+  requesterName: string | null;
   destinationId: number;
+  destinationName: string;
   periodId: number | null;
   approverId: number | null;
+  approverName: string | null;
   denierId: number | null;
+  denierName: string | null;
   cancellerId: number | null;
+  cancellerName: string | null;
   status: PassStatus;
   note: string | null;
   approverNote: string | null;

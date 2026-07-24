@@ -3,6 +3,7 @@ import { prisma, PassStatus } from "@hallpass/db";
 import { releaseAndPromote, releasePassSlots, getMaxActivePasses } from "./slots.js";
 import { calendarDate, getTodayInTimezone } from "./time.js";
 import { emitPassEvent } from "./socket.js";
+import { PASS_SELECT, toPassResponse } from "./passResponse.js";
 
 // setTimeout stores the delay in a 32-bit int; anything larger fires immediately.
 // Passes always expire same-day so this is only a footgun guard — beyond the
@@ -81,8 +82,11 @@ export async function expirePass(passId: number): Promise<void> {
       data: { status: PassStatus.EXPIRED, expiredAt: new Date() },
     });
     if (count === 0) return;
-    const updated = await prisma.pass.findUniqueOrThrow({ where: { id: passId } });
-    emitPassEvent(updated, "pass:expired");
+    const updated = await prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+      select: PASS_SELECT,
+    });
+    emitPassEvent(toPassResponse(updated), "pass:expired");
     return;
   }
 
@@ -96,8 +100,11 @@ export async function expirePass(passId: number): Promise<void> {
         data: { status: PassStatus.COMPLETED, returnedAt: new Date() },
       });
       if (count === 0) return;
-      const updated = await prisma.pass.findUniqueOrThrow({ where: { id: passId } });
-      emitPassEvent(updated, "pass:returned");
+      const updated = await prisma.pass.findUniqueOrThrow({
+        where: { id: passId },
+        select: PASS_SELECT,
+      });
+      emitPassEvent(toPassResponse(updated), "pass:returned");
       // Do not promote on the last period — there are no more periods today for a WAITING
       // student to be active in, and their own expiry job won't fire again.
       // Release both counters but do not promote (no more periods today)
@@ -113,8 +120,11 @@ export async function expirePass(passId: number): Promise<void> {
         data: { status: PassStatus.EXPIRED, expiredAt: new Date() },
       });
       if (count === 0) return;
-      const updated = await prisma.pass.findUniqueOrThrow({ where: { id: passId } });
-      emitPassEvent(updated, "pass:expired");
+      const updated = await prisma.pass.findUniqueOrThrow({
+        where: { id: passId },
+        select: PASS_SELECT,
+      });
+      emitPassEvent(toPassResponse(updated), "pass:expired");
       await releaseAndPromote(pass.schoolId, pass.destinationId, maxOccupancy);
     }
   }

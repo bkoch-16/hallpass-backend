@@ -207,7 +207,14 @@ describe("expirePass — PENDING pass", () => {
       periodId: 2,
       period: { endTime: "15:00", scheduleTypeId: 5 },
     };
-    const updatedPass = { ...pass, status: "EXPIRED", expiredAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "EXPIRED",
+      expiredAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -219,7 +226,10 @@ describe("expirePass — PENDING pass", () => {
       where: { id: 10, status: { in: ["PENDING", "WAITING"] } },
       data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 10, status: "EXPIRED", destinationName: "Library" }),
+      "pass:expired",
+    );
     expect(mockReleaseAndPromote).not.toHaveBeenCalled();
   });
 });
@@ -234,7 +244,14 @@ describe("expirePass — WAITING pass", () => {
       periodId: 2,
       period: { endTime: "15:00", scheduleTypeId: 5 },
     };
-    const updatedPass = { ...pass, status: "EXPIRED", expiredAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "EXPIRED",
+      expiredAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -246,7 +263,10 @@ describe("expirePass — WAITING pass", () => {
       where: { id: 11, status: { in: ["PENDING", "WAITING"] } },
       data: expect.objectContaining({ status: "EXPIRED" }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 11, status: "EXPIRED", destinationName: "Library" }),
+      "pass:expired",
+    );
   });
 });
 
@@ -261,7 +281,14 @@ describe("expirePass — ACTIVE pass", () => {
       period: { endTime: "15:00", scheduleTypeId: 5 },
       destination: { maxOccupancy: 10 },
     };
-    const updatedPass = { ...pass, status: "COMPLETED", returnedAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "COMPLETED",
+      returnedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...pass.destination, name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -277,7 +304,10 @@ describe("expirePass — ACTIVE pass", () => {
       where: { id: 20, status: "ACTIVE" },
       data: expect.objectContaining({ status: "COMPLETED", returnedAt: expect.any(Date) }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:returned");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 20, status: "COMPLETED", destinationName: "Library" }),
+      "pass:returned",
+    );
     expect(mockReleasePassSlots).toHaveBeenCalledWith(1, null, 5, 10);
     expect(mockReleaseAndPromote).not.toHaveBeenCalled();
   });
@@ -292,7 +322,14 @@ describe("expirePass — ACTIVE pass", () => {
       period: { endTime: "10:00", scheduleTypeId: 5 },
       destination: { maxOccupancy: 10 },
     };
-    const updatedPass = { ...pass, status: "EXPIRED", expiredAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "EXPIRED",
+      expiredAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...pass.destination, name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -310,7 +347,10 @@ describe("expirePass — ACTIVE pass", () => {
       where: { id: 21, status: "ACTIVE" },
       data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 21, status: "EXPIRED", destinationName: "Library" }),
+      "pass:expired",
+    );
     expect(mockReleaseAndPromote).toHaveBeenCalledWith(1, 5, 10);
     // gte so a back-to-back period starting exactly at endTime counts as "later"
     expect(mockPeriodFindMany).toHaveBeenCalledWith(
@@ -330,7 +370,14 @@ describe("expirePass — ACTIVE pass", () => {
       period: { endTime: "09:50", scheduleTypeId: 5 },
       destination: { maxOccupancy: 10 },
     };
-    const updatedPass = { ...pass, status: "EXPIRED", expiredAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "EXPIRED",
+      expiredAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...pass.destination, name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -348,7 +395,10 @@ describe("expirePass — ACTIVE pass", () => {
       where: { id: 22, status: "ACTIVE" },
       data: expect.objectContaining({ status: "EXPIRED", expiredAt: expect.any(Date) }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:expired");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 22, status: "EXPIRED", destinationName: "Library" }),
+      "pass:expired",
+    );
     expect(mockReleaseAndPromote).toHaveBeenCalledWith(1, 5, 10);
   });
 
@@ -362,7 +412,14 @@ describe("expirePass — ACTIVE pass", () => {
       period: null,
       destination: { maxOccupancy: null },
     };
-    const updatedPass = { ...pass, status: "COMPLETED", returnedAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "COMPLETED",
+      returnedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...pass.destination, name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });
@@ -374,7 +431,10 @@ describe("expirePass — ACTIVE pass", () => {
       where: { id: 22, status: "ACTIVE" },
       data: expect.objectContaining({ status: "COMPLETED" }),
     });
-    expect(mockEmitPassEvent).toHaveBeenCalledWith(updatedPass, "pass:returned");
+    expect(mockEmitPassEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 22, status: "COMPLETED", destinationName: "Library" }),
+      "pass:returned",
+    );
   });
 
   it("uses the fired-at time, not current time, for calendar lookup", async () => {
@@ -387,7 +447,14 @@ describe("expirePass — ACTIVE pass", () => {
       period: { endTime: "15:00", scheduleTypeId: 5 },
       destination: { maxOccupancy: 10 },
     };
-    const updatedPass = { ...pass, status: "COMPLETED", returnedAt: new Date() };
+    const updatedPass = {
+      ...pass,
+      status: "COMPLETED",
+      returnedAt: new Date(),
+      student: { name: "Fake Student" },
+      requester: { name: "Fake Requester" },
+      destination: { ...pass.destination, name: "Library" },
+    };
 
     mockPassFindUnique.mockResolvedValue(pass);
     mockPassUpdateMany.mockResolvedValue({ count: 1 });

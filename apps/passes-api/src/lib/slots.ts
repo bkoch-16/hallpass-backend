@@ -2,6 +2,7 @@ import { prisma, PassStatus, type Prisma } from "@hallpass/db";
 import { env } from "../env.js";
 import { redis } from "./redis.js";
 import { emitPassEvent } from "./socket.js";
+import { PASS_SELECT, toPassResponse } from "./passResponse.js";
 
 const SLOT_TTL_SECONDS = 86400;
 
@@ -233,9 +234,12 @@ export async function promoteFromQueue(
         continue;
       }
 
-      const promoted = await prisma.pass.findUniqueOrThrow({ where: { id: candidate.id } });
+      const promoted = await prisma.pass.findUniqueOrThrow({
+        where: { id: candidate.id },
+        select: PASS_SELECT,
+      });
       // Same event as a direct approval — SCHEMA_PLAN defines no separate promotion event
-      emitPassEvent(promoted, "pass:approved");
+      emitPassEvent(toPassResponse(promoted), "pass:approved");
       return; // exactly one promotion per freed slot
     }
 
