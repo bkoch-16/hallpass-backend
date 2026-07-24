@@ -21,6 +21,7 @@ import {
   validateParams,
   validateQuery,
   paginate,
+  isPrismaError,
 } from "@hallpass/express-middleware";
 import {
   createPassBody,
@@ -49,15 +50,6 @@ import { resolveSchedule } from "@hallpass/schedule";
 import { env } from "../env.js";
 
 const router = Router({ mergeParams: true });
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    err !== null &&
-    typeof err === "object" &&
-    "code" in err &&
-    err.code === "P2002"
-  );
-}
 
 // POST /passes — students create their own pass (PENDING); TEACHER+ create a
 // pass on behalf of a student (auto-approved: ACTIVE, or WAITING when full)
@@ -220,7 +212,7 @@ router.post(
           select: PASS_SELECT,
         });
       } catch (err: unknown) {
-        if (isUniqueViolation(err)) {
+        if (isPrismaError(err, "P2002")) {
           res.status(409).json({ message: "Active pass already exists" });
           return;
         }
@@ -268,7 +260,7 @@ router.post(
             );
           }
         }
-        if (isUniqueViolation(err)) {
+        if (isPrismaError(err, "P2002")) {
           res.status(409).json({ message: "Active pass already exists" });
           return;
         }

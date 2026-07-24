@@ -50,9 +50,6 @@ Frontend devs can't spin up the realtime API locally the way they can the other 
 ### 🟡 Service bootstrap duplication — mostly fixed, remainder is small
 Since the last audit, env schemas (`baseEnvSchema`), CORS options, health route, error handler, limiter factories, and the RedisStore helper all moved into `@hallpass/express-middleware`. What's left: `auth.ts` is byte-identical ×2 (schools-api/passes-api), and each `app.ts` still hand-repeats the same helmet/CORS/httpLogger/json/health/limiter/notFound/errorHandler ordering (~40 lines ×3). A `createBaseApp(serviceName, env)` would close it out; low urgency now.
 
-### 🟡 Prisma error-code sniffing reimplemented four ways
-`isUniqueViolation` (`passes.ts:81`), `isDuplicateEmailError` (`user.ts:88`), `isPinCodeConflict` (`apps/user-api/src/lib/pin.ts:14`), and inline P2003 checks ×3 (user PATCH, school create, school PATCH). One shared `isPrismaError(err, code, target?)` in the middleware package.
-
 ### 🟡 Naming and ordering nits
 `requireSchool` (passes-api) vs `requireSchoolAccess` (schools-api) are different contracts with confusingly similar names; middleware order flips between routes (`validateBody` before `requireRole` on `POST /users`, after on `/bulk`).
 

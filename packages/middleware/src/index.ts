@@ -29,3 +29,4 @@ export { createRateLimitRedis, createRedisRateLimitStore, createRequiredRedis } 
 export { parseCorsOrigins, corsOptions } from "./cors.js";
 export { createTestServer, type TestServerHandle, fakeRedisRateLimitCall } from "./testing.js";
 export { paginate } from "./pagination.js";
+export { isPrismaError } from "./prismaError.js";

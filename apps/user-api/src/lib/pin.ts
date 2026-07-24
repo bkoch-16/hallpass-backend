@@ -1,22 +1,12 @@
 import { randomInt } from "node:crypto";
 import { UserRole } from "@hallpass/types";
+import { isPrismaError } from "@hallpass/express-middleware";
 
 // Students are looked up by PIN by the external parent voice tool, so every
 // student needs a unique pinCode. Six digits with no leading zero keeps it
 // unambiguous when read aloud or entered on a keypad.
 export function generatePinCode(): string {
   return String(randomInt(100_000, 1_000_000));
-}
-
-// A pinCode collision on the User_pinCode_key unique index surfaces as a P2002
-// with pinCode in meta.target. Distinguish it from an email collision so we
-// retry only pin generation and never mask an email conflict.
-function isPinCodeConflict(err: unknown): boolean {
-  if (!err || typeof err !== "object" || (err as { code?: string }).code !== "P2002") {
-    return false;
-  }
-  const target = (err as { meta?: { target?: unknown } }).meta?.target;
-  return Array.isArray(target) ? target.includes("pinCode") : target === "pinCode";
 }
 
 const MAX_PIN_ATTEMPTS = 5;
@@ -36,7 +26,10 @@ export async function createUserWithPin<T>(
     try {
       return await create(generatePinCode());
     } catch (err) {
-      if (isPinCodeConflict(err)) {
+      // A pinCode collision on the User_pinCode_key unique index surfaces as a
+      // P2002 with pinCode in meta.target. Distinguish it from an email
+      // collision so we retry only pin generation and never mask an email conflict.
+      if (isPrismaError(err, "P2002", "pinCode")) {
         continue;
       }
       throw err;

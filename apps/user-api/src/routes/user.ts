@@ -9,7 +9,7 @@ import type { UserResponse, ProvisionUserResponse, CursorPage, BulkUserResult, M
 import { auth } from "../auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole, requireSelfOrRole, roleRank } from "@hallpass/express-middleware";
-import { validateBody, validateParams, validateQuery, paginate } from "@hallpass/express-middleware";
+import { validateBody, validateParams, validateQuery, paginate, isPrismaError } from "@hallpass/express-middleware";
 import { createUserWithPin } from "../lib/pin.js";
 import { emailSender, resetPasswordUrl } from "../email.js";
 import {
@@ -99,10 +99,7 @@ const BULK_CONCURRENCY = 8;
 // EmailInUseError internally, but keep the raw P2002 check here too as a
 // defense-in-depth backstop in case that translation is ever bypassed.
 function isDuplicateEmailError(err: unknown): boolean {
-  return (
-    err instanceof EmailInUseError ||
-    (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002")
-  );
+  return err instanceof EmailInUseError || isPrismaError(err, "P2002");
 }
 
 // GET /me — must come before /:id
@@ -398,7 +395,7 @@ router.patch(
       });
       res.json(toUserResponse(updated));
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "code" in err && err.code === "P2003") {
+      if (isPrismaError(err, "P2003")) {
         res.status(400).json({ message: "Invalid schoolId" });
         return;
       }
